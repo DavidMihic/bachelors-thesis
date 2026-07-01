@@ -1,0 +1,23 @@
+# generated USD (regenerated from URDF)
+assets/*.usd
+assets/*.usda
+
+# meshes
+robot/meshes/
+
+# trainings
+logs/
+*.pt
+*.mp4
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# LaTeX build
+*.aux
+*.log
+*.out
+*.pdf
+*.synctex.gz
