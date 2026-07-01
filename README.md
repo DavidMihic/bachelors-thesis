@@ -9,3 +9,24 @@ U radu je potrebno:
 - modelirati i implementirati dva različita pristupa upravljanju sustavom (klasični pristup temeljen na modelu i pristup temeljen na učenju),
 - definirati i implementirati odgovarajuću reprezentaciju stanja, akcije i kriterija uspješnosti za odabrani pristup učenja,
 - analizirati i usporediti performanse implementiranih metoda s obzirom na učinkovitost i robusnost sustava.
+
+
+## Setup
+USD file se generira iz URDF-a pomoću Isaac Sim alata.
+
+```
+conda activate isaacsim
+cd ~/IsaacLab
+./isaaclab.sh -p scripts/tools/convert_urdf.py 
+<repo>/robot/urdf/iiwa7.urdf <repo>/assets/iiwa7.usd 
+--merge-joints --joint-stiffness 0 --joint-damping 0
+```
+
+## Structure
+- `code/iiwa_rl/` — RL scripts (Isaac Lab tasks, configs)
+- `robot/`
+    - `urdf/` — cleaned iiwa URDF
+    - `xacro/` — original xacro sources
+    - `meshes/iiwa7/` — STL meshes
+- `assets/` — generated USD (local only)
+- `latex/` — LaTeX source

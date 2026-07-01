@@ -2,9 +2,6 @@
 assets/*.usd
 assets/*.usda
 
-# meshes
-robot/meshes/
-
 # trainings
 logs/
 *.pt
