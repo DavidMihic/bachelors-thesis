@@ -23,9 +23,16 @@ import argparse
 from isaacsim import SimulationApp
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--usd_path", type=str, required=True, help="Putanja do kmr_iiwa.usd")
+parser.add_argument(
+    "--usd_path", type=str, required=True, help="Putanja do kmr_iiwa.usd"
+)
 parser.add_argument("--headless", action="store_true", help="Pokreni bez GUI-ja")
-parser.add_argument("--sim_steps", type=int, default=120, help="Broj fizickih koraka za sanity-check pad pod gravitacijom")
+parser.add_argument(
+    "--sim_steps",
+    type=int,
+    default=120,
+    help="Broj fizickih koraka za sanity-check pad pod gravitacijom",
+)
 args = parser.parse_args()
 
 simulation_app = SimulationApp({"headless": args.headless})
@@ -45,15 +52,23 @@ def print_stage_structure(stage: Usd.Stage):
     print("=" * 70)
     for prim in stage.Traverse():
         prim_type = prim.GetTypeName()
-        if prim_type in ("PhysicsFixedJoint", "PhysicsRevoluteJoint", "PhysicsPrismaticJoint"):
+        if prim_type in (
+            "PhysicsFixedJoint",
+            "PhysicsRevoluteJoint",
+            "PhysicsPrismaticJoint",
+        ):
             joint_api = UsdPhysics.Joint(prim)
             body0_rel = joint_api.GetBody0Rel().GetTargets()
             body1_rel = joint_api.GetBody1Rel().GetTargets()
             parent = body0_rel[0] if body0_rel else "?"
             child = body1_rel[0] if body1_rel else "?"
-            print(f"  [JOINT:{prim_type.replace('Physics', '').replace('Joint','')}] "
-                  f"{prim.GetPath()}  ({parent} -> {child})")
-        elif prim.HasAPI(UsdPhysics.RigidBodyAPI) or prim.HasAPI(UsdPhysics.ArticulationRootAPI):
+            print(
+                f"  [JOINT:{prim_type.replace('Physics', '').replace('Joint','')}] "
+                f"{prim.GetPath()}  ({parent} -> {child})"
+            )
+        elif prim.HasAPI(UsdPhysics.RigidBodyAPI) or prim.HasAPI(
+            UsdPhysics.ArticulationRootAPI
+        ):
             tags = []
             if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
                 tags.append("ARTICULATION_ROOT")
@@ -63,12 +78,18 @@ def print_stage_structure(stage: Usd.Stage):
     print("=" * 70 + "\n")
 
 
-def print_mount_offset(stage: Usd.Stage, base_prim_path="/kmr_iiwa/base_link", iiwa_prim_path="/kmr_iiwa/iiwa_link_1"):
+def print_mount_offset(
+    stage: Usd.Stage,
+    base_prim_path="/kmr_iiwa/base_link",
+    iiwa_prim_path="/kmr_iiwa/iiwa_link_1",
+):
     base_prim = stage.GetPrimAtPath(base_prim_path)
     iiwa_prim = stage.GetPrimAtPath(iiwa_prim_path)
     if not base_prim.IsValid() or not iiwa_prim.IsValid():
-        print(f"[WARN] Nisam nasao ocekivane prim pathove ({base_prim_path}, {iiwa_prim_path}) "
-              f"- provjeri stvarne nazive u stageu gore i azuriraj ovu funkciju.")
+        print(
+            f"[WARN] Nisam nasao ocekivane prim pathove ({base_prim_path}, {iiwa_prim_path}) "
+            f"- provjeri stvarne nazive u stageu gore i azuriraj ovu funkciju."
+        )
         return
     base_xform = UsdGeom.Xformable(base_prim)
     iiwa_xform = UsdGeom.Xformable(iiwa_prim)
@@ -107,18 +128,28 @@ def main():
         print(f"[OK] Nazivi jointova: {robot.dof_names}")
     except Exception as e:
         print(f"[WARN] Nisam uspio automatski uhvatiti Articulation na /base_link: {e}")
-        print("       Nastavljam samo s fizickom simulacijom bez eksplicitnog articulation handlea.")
+        print(
+            "       Nastavljam samo s fizickom simulacijom bez eksplicitnog articulation handlea."
+        )
 
-    print(f"\n[SIM] Pokrecem {args.sim_steps} fizickih koraka bez kontrole jointova "
-          f"(sanity-check da se robot ne raspadne pod gravitacijom)...")
+    print(
+        f"\n[SIM] Pokrecem {args.sim_steps} fizickih koraka bez kontrole jointova "
+        f"(sanity-check da se robot ne raspadne pod gravitacijom)..."
+    )
     for i in range(args.sim_steps):
         world.step(render=not args.headless)
 
-    print("[SIM] Gotovo. Ako je robot i dalje u jednom komadu i stoji na podu, geometrija/fizika je OK.")
-    print("      Ako se raspao/eksplodirao, provjeri self-collision, collision meseve i inertial vrijednosti.")
+    print(
+        "[SIM] Gotovo. Ako je robot i dalje u jednom komadu i stoji na podu, geometrija/fizika je OK."
+    )
+    print(
+        "      Ako se raspao/eksplodirao, provjeri self-collision, collision meseve i inertial vrijednosti."
+    )
 
     if not args.headless:
-        print("\n[INFO] GUI ostaje otvoren - pogledaj scenu rucno, zatvori prozor kad zavrsis.")
+        print(
+            "\n[INFO] GUI ostaje otvoren - pogledaj scenu rucno, zatvori prozor kad zavrsis."
+        )
         while simulation_app.is_running():
             world.step(render=True)
 

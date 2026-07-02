@@ -16,6 +16,11 @@ __pycache__/
 *.pyc
 .venv/
 
+# ros2
+code/ros2_ws/build
+code/ros2_ws/install
+code/ros2_ws/log
+
 # LaTeX build
 *.aux
 *.log
