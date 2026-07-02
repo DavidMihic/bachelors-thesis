@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<robot name="kmr_iiwa" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- kmr_base.xacro already pulls in materials.xacro internally,
+       so we don't include it again here (avoids duplicate <material> tags). -->
+  <xacro:include filename="kmr_base.xacro"/>
+  <xacro:include filename="iiwa7.xacro"/>
+
+  <xacro:arg name="hardware_interface" default="PositionJointInterface"/>
+  <xacro:arg name="robot_name" default="iiwa"/>
+
+  <!-- ==================================================================
+       Mount offset: where the iiwa base flange sits on top of the KMR
+       platform, measured from base_link origin (floor level, footprint
+       center, see kmr_base.xacro) using SolidWorks Measure tool.
+       ================================================================== -->
+  <xacro:property name="iiwa_mount_x" value="0.363"/>
+  <xacro:property name="iiwa_mount_y" value="-0.184"/>
+  <xacro:property name="iiwa_mount_z" value="${kmr_height}"/>
+
+  <xacro:iiwa7 hardware_interface="$(arg hardware_interface)"
+               robot_name="$(arg robot_name)"
+               parent="base_link">
+    <origin xyz="${iiwa_mount_x} ${iiwa_mount_y} ${iiwa_mount_z}" rpy="0 0 0"/>
+  </xacro:iiwa7>
+
+</robot>

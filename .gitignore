@@ -1,6 +1,10 @@
 # generated USD (regenerated from URDF)
 assets/*.usd
 assets/*.usda
+assets/configuration/
+assets/configuration/*
+assets/.asset_hash
+assets/config.yaml
 
 # trainings
 logs/

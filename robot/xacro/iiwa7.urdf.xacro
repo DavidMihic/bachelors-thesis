@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <robot name="iiwa7" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <!-- Import Rviz colors -->
-  <xacro:include filename="/home/david/robot_assets/urdf_flat/materials.xacro" />
+  <xacro:include filename="materials.xacro" />
   <!--Import the lbr iiwa macro -->
-  <xacro:include filename="/home/david/robot_assets/urdf_flat/iiwa7.xacro"/>
+  <xacro:include filename="iiwa7.xacro"/>
   
   <xacro:arg name="hardware_interface" default="PositionJointInterface"/>
   <xacro:arg name="robot_name" default="iiwa"/>

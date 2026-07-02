@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ==================================================================
+       KMR (KUKA Mobile Robot) base
+       - base_link origin is at floor level, centered in the footprint,
+         X axis pointing towards the iiwa mounting side (as measured in
+         SolidWorks / from the STEP file).
+       - Wheels are fused into the base mesh (kinematic base motion only,
+         no per-wheel joints/physics).
+       ================================================================== -->
+
+  <xacro:include filename="../xacro/materials.xacro"/>
+
+  <xacro:property name="kmr_mass" value="390.0"/>
+
+  <!-- Bounding-box dimensions used only for the inertia approximation,
+       NOT for collision geometry. Measure from SolidWorks (footprint + height). -->
+  <xacro:property name="kmr_length" value="1.08"/> <!-- m, X direction -->
+  <xacro:property name="kmr_width"  value="0.63"/> <!-- m, Y direction -->
+  <xacro:property name="kmr_height" value="0.70"/> <!-- m, Z direction -->
+
+  <xacro:property name="kmr_mesh_body"
+                   value="../meshes/kmr_base/kmr_base_body.stl"/>
+  <xacro:property name="kmr_mesh_skirt"
+                   value="../meshes/kmr_base/kmr_base_skirt.stl"/>
+
+  <!-- base_link -->
+  <link name="base_link">
+
+    <!-- grey main body -->
+    <visual>
+      <origin xyz="-0.54 -0.315 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${kmr_mesh_body}" scale="1 1 1"/>
+      </geometry>
+      <material name="Grey">
+        <color rgba="0.3 0.3 0.3 1.0"/>
+      </material>
+    </visual>
+
+    <!-- orange bottom skirt -->
+    <visual>
+      <origin xyz="-0.54 -0.315 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${kmr_mesh_skirt}" scale="1 1 1"/>
+      </geometry>
+      <material name="Orange">
+        <color rgba="${255/255} ${108/255} ${10/255} 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 ${kmr_height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${kmr_length} ${kmr_width} ${kmr_height}"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 ${kmr_height/2}" rpy="0 0 0"/>
+      <mass value="${kmr_mass}"/>
+      <!-- Solid-box inertia approximation -->
+      <inertia
+        ixx="${kmr_mass/12.0 * (kmr_width*kmr_width + kmr_height*kmr_height)}" ixy="0.0" ixz="0.0"
+        iyy="${kmr_mass/12.0 * (kmr_length*kmr_length + kmr_height*kmr_height)}" iyz="0.0"
+        izz="${kmr_mass/12.0 * (kmr_length*kmr_length + kmr_width*kmr_width)}"/>
+    </inertial>
+
+  </link>
+
+  <!-- Optional: base_footprint at ground level, base_link elevated.
+       Useful if you want a clean planar joint to "world"/"odom" for the
+       kinematic Twist-driven motion in Isaac Sim. Uncomment if needed.
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  -->
+
+</robot>
