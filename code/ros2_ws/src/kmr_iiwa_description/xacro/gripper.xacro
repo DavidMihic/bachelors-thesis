@@ -1,0 +1,147 @@
+<?xml version="1.0"?>
+<!--
+  KMR iiwa — dvoprsti četveroprsti linearni gripper za otvaranje vrata
+  ======================================================================
+  Geometrija izmjerena direktno iz STL mesheva (gripper_base.stl, gripper_finger.stl).
+  STL jedinice: METRI (nije potreban scale atribut).
+
+  Koordinatni okvir gripper_base:
+    - ishodište = centar prirubne plohe diska (dodirna ploha s iiwa_link_ee)
+    - +Z prema prstima (smjer alata), disk Ø63 z=0..10mm, ploča 85x85 z=15..35mm
+    - utori (4x): dubina 10mm (z=25..35), širina 15mm, duljina 40mm,
+      trake y∈[±17.5,±32.5]mm, utori x∈[±2.5,±42.5]mm
+
+  Prsti (4x isti mesh):
+    - hvat se zatvara duž osi X baze; šipka/kvaka leži duž osi Y baze
+    - hod po prstu: 0..25mm; q=0 = POTPUNO OTVOREN (stopalo na vanjskom kraju utora),
+      q=0.025 = POTPUNO ZATVOREN (namjerni preklop ~1.5mm sa šipkom Ø28 u centru)
+    - unutarnji luk kuke: r=14.45mm, centar na z=74.85mm iznad prirubnice
+      (= visina osi šipke u hvatu = z gripper_tcp okvira)
+
+  F/T očitanje: gripper_wrist_joint (fixed, iiwa_link_ee -> gripper_base)
+    -> get_measured_joint_forces() na tom zglobu u Isaac Simu.
+
+  VAŽNO ZA convert_urdf.py / Isaac Sim import:
+    1. Collision mesheva prstiju MORA se aproksimirati kao "convexDecomposition"
+       (NE default convex hull — hull bi zatvorio usta kuke i hvat ne bi radio).
+       Isaac Lab: UrdfConverterCfg(..., collider_type="convex_decomposition")
+       ili u GUI importeru: Collision From -> Convex Decomposition.
+    2. Self-collision ostaviti ISKLJUČEN (default) — stopala prstiju kližu
+       kroz utore baze s kontaktom geometrija (parent-child parovi su filtrirani).
+    3. Trenje: nakon konverzije dodati UsdPhysics.MaterialAPI na collision
+       prime prstiju (staticFriction>=1.2, dynamicFriction>=1.0) I na kvake
+       vrata — vidi napomenu u handoff dokumentu.
+
+  Mase/inercije: izračunate iz mesheva uz gustoću aluminija 2700 kg/m3
+  (trimesh, watertight meshevi). Ukupno: 0.442 + 4x0.031 = 0.564 kg.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kmr_gripper">
+
+  <xacro:macro name="kmr_gripper" params="parent:=iiwa_link_ee mesh_path:=../meshes/gripper *origin">
+
+    <material name="gripper_grey">
+      <color rgba="0.35 0.35 0.38 1.0"/>
+    </material>
+    <material name="gripper_orange">
+      <color rgba="0.85 0.35 0.05 1.0"/>
+    </material>
+
+    <!-- ================= BAZA ================= -->
+    <link name="gripper_base">
+      <inertial>
+        <origin xyz="0 0 0.019417" rpy="0 0 0"/>
+        <mass value="0.4416"/>
+        <inertia ixx="2.4758e-04" iyy="2.5395e-04" izz="4.2682e-04"
+                 ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${mesh_path}/gripper_base.stl"/>
+        </geometry>
+        <material name="gripper_grey"/>
+      </visual>
+      <!-- collision primitivima: disk (0..15mm, pokriva i skošenje) + ploča (15..35mm) -->
+      <collision>
+        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.0315" length="0.015"/>
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.025" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.085 0.085 0.020"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- zglob na kojem se čita sila/moment -->
+    <joint name="gripper_wrist_joint" type="fixed">
+      <xacro:insert_block name="origin"/>
+      <parent link="${parent}"/>
+      <child link="gripper_base"/>
+    </joint>
+
+    <!-- ================= PRSTI ================= -->
+    <!-- raspored: 1:(+X,+Y)  2:(+X,-Y)  3:(-X,+Y)  4:(-X,-Y)
+         prsti 1 i 3 su nasuprotni par u traci y=+25mm, 2 i 4 u traci y=-25mm -->
+    <xacro:macro name="kmr_gripper_finger" params="index ox oy yaw mesh_path">
+      <link name="gripper_finger_${index}">
+        <inertial>
+          <origin xyz="0.000568 0.027399 0.0075" rpy="0 0 0"/>
+          <mass value="0.0306"/>
+          <inertia ixx="1.0324e-05" iyy="1.1200e-06" izz="1.0298e-05"
+                   ixy="-2.631e-07" ixz="0.0" iyz="0.0"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="${mesh_path}/gripper_finger.stl"/>
+          </geometry>
+          <material name="gripper_orange"/>
+        </visual>
+        <!-- mesh collision: OBAVEZNO convexDecomposition pri importu (konkavna kuka) -->
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="${mesh_path}/gripper_finger.stl"/>
+          </geometry>
+        </collision>
+      </link>
+      <joint name="gripper_finger_${index}_joint" type="prismatic">
+        <origin xyz="${ox} ${oy} 0.025" rpy="${pi/2} 0 ${yaw}"/>
+        <parent link="gripper_base"/>
+        <child link="gripper_finger_${index}"/>
+        <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
+        <axis xyz="-1 0 0"/>
+        <limit lower="0.0" upper="0.025" effort="30.0" velocity="0.1"/>
+        <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
+        <dynamics damping="10.0" friction="0.0"/>
+      </joint>
+    </xacro:macro>
+
+    <xacro:kmr_gripper_finger index="1" ox="0.035"  oy="0.0325"  yaw="0"     mesh_path="${mesh_path}"/>
+    <xacro:kmr_gripper_finger index="2" ox="0.035"  oy="-0.0175" yaw="0"     mesh_path="${mesh_path}"/>
+    <xacro:kmr_gripper_finger index="3" ox="-0.035" oy="0.0175"  yaw="${pi}" mesh_path="${mesh_path}"/>
+    <xacro:kmr_gripper_finger index="4" ox="-0.035" oy="-0.0325" yaw="${pi}" mesh_path="${mesh_path}"/>
+
+    <!-- ================= TCP ================= -->
+    <!-- referentna točka: os šipke u hvatu (centar unutarnjeg luka kuka pri q=0.025) -->
+    <link name="gripper_tcp"/>
+    <joint name="gripper_tcp_joint" type="fixed">
+      <origin xyz="0 0 0.07485" rpy="0 0 0"/>
+      <parent link="gripper_base"/>
+      <child link="gripper_tcp"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Primjer korištenja u kmr_iiwa lancu:
+  <xacro:include filename="$(find kmr_iiwa_description)/xacro/gripper.xacro"/>
+  <xacro:kmr_gripper parent="iiwa_link_ee">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:kmr_gripper>
+  -->
+
+</robot>

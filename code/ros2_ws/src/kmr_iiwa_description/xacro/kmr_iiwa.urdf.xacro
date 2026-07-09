@@ -4,6 +4,7 @@
   <!-- kmr_base.xacro already pulls in materials.xacro internally,
        so we don't include it again here (avoids duplicate <material> tags). -->
   <xacro:include filename="kmr_base.xacro"/>
+  <xacro:include filename="gripper.xacro"/>
   <xacro:include filename="iiwa7.xacro"/>
 
   <xacro:arg name="hardware_interface" default="PositionJointInterface"/>
@@ -23,5 +24,9 @@
                parent="base_link">
     <origin xyz="${iiwa_mount_x} ${iiwa_mount_y} ${iiwa_mount_z}" rpy="0 0 0"/>
   </xacro:iiwa7>
+
+  <xacro:kmr_gripper parent="iiwa_link_ee" mesh_path="../meshes/gripper">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:kmr_gripper>
 
 </robot>
