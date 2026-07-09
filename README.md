@@ -23,10 +23,13 @@ cd ~/IsaacLab
 ```
 
 ## Structure
-- `code/iiwa_rl/` — RL scripts (Isaac Lab tasks, configs)
-- `robot/`
-    - `urdf/` — cleaned iiwa URDF
-    - `xacro/` — original xacro sources
-    - `meshes/iiwa7/` — STL meshes
-- `assets/` — generated USD (local only)
+- `code/`
+    - `iiwa7/` — RL scripts (Isaac Lab tasks, configs)
+    - `ros2_ws/`
+        - `kmr_iiwa_description`
+            - `urdf/` — cleaned URDF
+            - `xacro/` — original xacro sources
+            - `meshes/` — STL meshes
+        - `kmr_iiwa_sim_bridge` — ROS2 bridge for IsaacSim
+- `assets/` — generated USD
 - `latex/` — LaTeX source
