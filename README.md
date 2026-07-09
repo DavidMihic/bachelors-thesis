@@ -1,6 +1,6 @@
 # Razvoj i evaluacija metode upravljanja mobilnim manipulatorom u interakciji s okolinom.
 
-U ovom zadatku razmatra se problem autonomne interakcije mobilnog manipulatora s okolinom kroz zadatke koji uključuju uspostavu i održavanje kontakta s objektima te izvođenje koordiniranih manipulacijskih radnji. naglasak je na integraciji percepcije, procjene stanja i upravljanja u jedinstveni sustav sposoban za izvršavanje višefaznih zadataka u nepoznatim ili djelomično poznatim uvjetima. Cilj rada je razviti i eksperimentalno evaluirati metodologiju upravljanja koja omogućuje robotu donošenje odluka i generiranje gibanja na temelju više senzorskih podataka, uzimajući u obzir mehanička svojstva okoline i interakcijske sile.
+U ovom zadatku razmatra se problem autonomne interakcije mobilnog manipulatora s okolinom kroz zadatke koji uključuju uspostavu i održavanje kontakta s objektima te izvođenje koordiniranih manipulacijskih radnji. Naglasak je na integraciji percepcije, procjene stanja i upravljanja u jedinstveni sustav sposoban za izvršavanje višefaznih zadataka u nepoznatim ili djelomično poznatim uvjetima. Cilj rada je razviti i eksperimentalno evaluirati metodologiju upravljanja koja omogućuje robotu donošenje odluka i generiranje gibanja na temelju više senzorskih podataka, uzimajući u obzir mehanička svojstva okoline i interakcijske sile.
 
 U radu je potrebno:
 - istražiti postojeće pristupe upravljanju mobilnim manipulatorima u zadacima koji uključuju fizičku interakciju s objektima,
