@@ -10,21 +10,9 @@ U radu je potrebno:
 - definirati i implementirati odgovarajuću reprezentaciju stanja, akcije i kriterija uspješnosti za odabrani pristup učenja,
 - analizirati i usporediti performanse implementiranih metoda s obzirom na učinkovitost i robusnost sustava.
 
-
-## Setup
-USD file se generira iz URDF-a pomoću Isaac Sim alata.
-
-```
-conda activate isaacsim
-cd ~/IsaacLab
-./isaaclab.sh -p scripts/tools/convert_urdf.py 
-<repo>/robot/urdf/iiwa7.urdf <repo>/assets/iiwa7.usd 
---merge-joints --joint-stiffness 0 --joint-damping 0
-```
-
 ## Structure
 - `code/`
-    - `iiwa7/` — RL scripts (Isaac Lab tasks, configs)
+    - `iiwa_rl/` — RL scripts (Isaac Lab tasks, configs)
     - `ros2_ws/`
         - `kmr_iiwa_description`
             - `urdf/` — cleaned URDF
