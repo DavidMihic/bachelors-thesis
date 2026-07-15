@@ -1,0 +1,158 @@
+<?xml version="1.0"?>
+<!--
+  KMR iiwa — RealSense D435 + mount (X-nosač na "zrcalnom" bolt-krugu ruke)
+  ==========================================================================
+  Geometrija izmjerena/izračunata direktno iz STL mesheva
+  (camera_mount.stl, D435.stl). STL jedinice: METRI.
+
+  camera_mount_link (X-nosač, 4 kraka + centralni boss):
+    - 4x provrt Ø13.3mm na bolt-krugu R=108.000mm (std=0.0000mm -> savršeno
+      kružno unutar preciznosti mesha), IDENTIČNO kao rupe kojima se iiwa
+      montira na bazu (isti Ø13.3mm, isti R=108.000mm) — mount koristi
+      "zrcalni" (mirror, y>0) raspored istih 4 rupa na bazi, prazan jer ga
+      ruka ne koristi. Provjereno protiv stvarne geometrije baze
+      (kmr_base_body.stl): X-stupci rupa (287.3mm / 440.0mm od
+      base_link ishodišta) identični su onima kod iiwa mounta — čisti Y-shift,
+      bez rotacije, dakle simetrija kvadrata čini orijentaciju mesha
+      nebitnom (4-fold C4 simetrija potvrđena: svi radijusi jednaki).
+    - mesh lokalni frame: X,Z = footprint (0..177.735mm), Y = debljina/visina
+      (0..25mm, "gore"). Transformacija mesh->link: rotacija oko X za +90°
+      (mesh_Y -> link_Z), translacija tako da bolt-circle centar padne u
+      link ishodište (numerički provjereno, vidi komentar kod <visual>).
+    - Masa/inercija: izračunate iz mesha (trimesh) uz gustoću PETG
+      1270 kg/m3 (najčešći materijal za print ovakvih nosača.
+      Volumen=151.93 cm^3 -> masa=192.9 g.
+
+  camera_link (RealSense D435, body/REP-103 konvencija: X naprijed, Z gore):
+    - Referentna točka = os tripod navoja na donjoj plohi kamere (mjereno
+      iz D435.stl: lokalno (44.91, y=0.65~donja ploha, 10.11) mm, tj.
+      gotovo točno na sredini širine 90mm).
+    - masa = 72g (Intel D400 datasheet, potvrđeno), inercija = box aprox.
+      (90x25x25mm) — dovoljno precizno, kamera je zanemarive mase naspram
+      mounta/ruke (vidi handoff dok. §4).
+    - ⚠️ PLACEHOLDER: `camera_boss_top_z` (visina vrha bossa iznad ravnine
+      4 rupe) i pretpostavka da kamera sjedi FLAT (0° tilt, tripod-hole
+      centriran na os bossa, gleda +X) — potvrđeno FOV proračunom da radi
+      za ciljani raspon detekcije 1.0-1.5m (RGB V-FOV=42.5°, margina
+      4.6-9.9°). Kad popraviš boss, samo update-aj `camera_boss_top_z`.
+    - ⚠️ Nisam potvrdio koji kraj Z-osi mesha D435.stl je "prednji" (lens)
+      strana — pretpostavljam standardnu orijentaciju (dugi rub = lijevo-
+      desno baseline, kratki rub = naprijed-natrag). Provjeri vizualno u
+      SolidWorxu prije finalne montaže, ili mi reci pa ću ispraviti rpy.
+
+  camera_color_optical_frame — TF konvencija po §5 handoff dokumenta:
+    body (X naprijed, Z gore) -> optical (Z naprijed, X desno, Y dolje),
+    fiksna rotacija (-90°, 0°, -90°). Standardna realsense-ros konvencija.
+
+  Isaac Sim import: oba mesha (mount, kamera) su konveksna/jednostavna —
+  default convex hull collision je dovoljan, NE treba convexDecomposition
+  (za razliku od gripper prstiju).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kmr_camera">
+
+  <xacro:macro name="kmr_camera_mount" params="parent:=base_link mesh_path:=../meshes/camera *origin">
+
+    <material name="camera_mount_grey">
+      <color rgba="0.25 0.25 0.27 1.0"/>
+    </material>
+    <material name="camera_black">
+      <color rgba="0.05 0.05 0.06 1.0"/>
+    </material>
+
+    <!-- ⚠️ PLACEHOLDER dok se boss ne poveća za navoj (vidi header) -->
+    <xacro:property name="camera_boss_top_z" value="0.025"/>
+
+    <!-- ================= X-NOSAČ (camera_mount_link) ================= -->
+    <link name="camera_mount_link">
+      <inertial>
+        <!-- centar mase iz trimesh (PETG 1270 kg/m3), u link frameu -->
+        <origin xyz="0 0 0.00752" rpy="0 0 0"/>
+        <mass value="0.1929"/>
+        <inertia ixx="4.4320e-04" iyy="4.4320e-04" izz="8.7906e-04"
+                 ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+      <visual>
+        <!-- transformacija mesh(X,Y=debljina,Z) -> link(X,Y,Z=gore):
+             rotacija +90° oko X, translacija da bolt-circle centar
+             (mesh lokalno X=88.87mm,Z=88.78mm) padne u link ishodište.
+             Numerički provjereno: sve 4 rupe slijeću na (+/-76.37,+/-76.37,~0)mm. -->
+        <origin xyz="-0.08887 0.08878 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <mesh filename="${mesh_path}/camera_mount.stl"/>
+        </geometry>
+        <material name="camera_mount_grey"/>
+      </visual>
+      <!-- collision: jednostavna kutija, mount je konveksan, mesh nepotreban -->
+      <collision>
+        <origin xyz="0 0 0.0075" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.17774 0.17774 0.015"/>
+        </geometry>
+      </collision>
+      <collision>
+        <!-- boss -->
+        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.003" length="0.010"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="camera_mount_joint" type="fixed">
+      <xacro:insert_block name="origin"/>
+      <parent link="${parent}"/>
+      <child link="camera_mount_link"/>
+    </joint>
+
+    <!-- ================= KAMERA (camera_link, body frame) ================= -->
+    <!-- ishodište = os tripod navoja na donjoj plohi D435 -->
+    <link name="camera_link">
+      <inertial>
+        <!-- box aprox. 90x25x25mm, centar geometrije ~12.5mm iznad mounting točke -->
+        <origin xyz="0 0 0.0125" rpy="0 0 0"/>
+        <mass value="0.072"/>
+        <inertia ixx="5.235e-05" iyy="7.500e-06" izz="5.235e-05"
+                 ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+      <visual>
+        <origin xyz="-0.01011 -0.04491 -0.00065" rpy="${pi/2} 0 ${pi/2}"/>
+        <geometry>
+          <mesh filename="${mesh_path}/D435.stl"/>
+        </geometry>
+        <material name="camera_black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.0125" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.025 0.090 0.025"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="camera_joint" type="fixed">
+      <origin xyz="0 0 ${camera_boss_top_z}" rpy="0 0 0"/>
+      <parent link="camera_mount_link"/>
+      <child link="camera_link"/>
+    </joint>
+
+    <!-- ================= OPTICAL FRAME (§5 handoff dokumenta) ================= -->
+    <link name="camera_color_optical_frame"/>
+    <joint name="camera_color_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+      <parent link="camera_link"/>
+      <child link="camera_color_optical_frame"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Primjer korištenja u kmr_iiwa lancu:
+  <xacro:include filename="$(find kmr_iiwa_description)/xacro/camera_mount.xacro"/>
+  <xacro:property name="camera_mount_x" value="0.363674"/>
+  <xacro:property name="camera_mount_y" value="0.183911"/>
+  <xacro:property name="camera_mount_z" value="${kmr_height}"/>
+  <xacro:kmr_camera_mount parent="base_link" mesh_path="../meshes/camera">
+    <origin xyz="${camera_mount_x} ${camera_mount_y} ${camera_mount_z}" rpy="0 0 0"/>
+  </xacro:kmr_camera_mount>
+  -->
+
+</robot>
