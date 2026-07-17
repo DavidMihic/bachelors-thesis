@@ -116,14 +116,30 @@
   </joint>
 
   <!-- ===================== APRILTAG ANCHORS ===================== -->
-  <material name="tag_white"><color rgba="0.95 0.95 0.95 1"/></material>
+  <material name="door_tag_material">
+    <color rgba="1 1 1 1"/>
+    <texture filename="door_tag_id0_tag36h11.png"/>
+  </material>
+  <material name="handle_tag_a_material">
+    <color rgba="1 1 1 1"/>
+    <texture filename="handle_tag_a_id0_tag16h5.png"/>
+  </material>
+  <material name="handle_tag_b_material">
+    <color rgba="1 1 1 1"/>
+    <texture filename="handle_tag_b_id1_tag16h5.png"/>
+  </material>
 
   <!-- Big tag, door center. Normal = +X (rpy rotates local Z -> world +X). -->
   <link name="door_tag_center">
     <visual>
-      <geometry><box size="0.08 0.08 0.001"/></geometry>
-      <material name="tag_white"/>
+      <geometry><mesh filename="../meshes/tags/tag_quad.obj" scale="0.08 0.08 1"/></geometry>
+      <material name="door_tag_material"/>
     </visual>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" iyy="1e-8" izz="1e-8" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
   <joint name="door_tag_center_joint" type="fixed">
     <parent link="door_leaf"/>
@@ -134,9 +150,14 @@
   <!-- Small tags, lever ends (lever now spans local Y: -0.16..0, radius 0.014). -->
   <link name="handle_tag_a">
     <visual>
-      <geometry><box size="0.025 0.025 0.001"/></geometry>
-      <material name="tag_white"/>
+      <geometry><mesh filename="../meshes/tags/tag_quad.obj" scale="0.025 0.025 1"/></geometry>
+      <material name="handle_tag_a_material"/>
     </visual>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" iyy="1e-8" izz="1e-8" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
   <joint name="handle_tag_a_joint" type="fixed">
     <parent link="handle_lever"/>
@@ -146,9 +167,14 @@
 
   <link name="handle_tag_b">
     <visual>
-      <geometry><box size="0.025 0.025 0.001"/></geometry>
-      <material name="tag_white"/>
+      <geometry><mesh filename="../meshes/tags/tag_quad.obj" scale="0.025 0.025 1"/></geometry>
+      <material name="handle_tag_b_material"/>
     </visual>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" iyy="1e-8" izz="1e-8" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
   <joint name="handle_tag_b_joint" type="fixed">
     <parent link="handle_lever"/>

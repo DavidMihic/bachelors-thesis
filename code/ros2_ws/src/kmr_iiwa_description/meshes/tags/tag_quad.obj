@@ -1,0 +1,15 @@
+# tag_quad.obj — jednostavna ravna pločica 1x1 (jedinična), +Z gleda "naprijed"
+# (lokalna normala +Z), UV eksplicitno 0-1 preko cijele plohe.
+# Koristi se za sva 3 AprilTag anchora (door_tag_center, handle_tag_a, handle_tag_b) —
+# stvarna veličina se postiže preko <mesh scale="W H 1"/> u URDF-u, isto kao stari
+# box pristup, samo bez implicitnog cube-UV problema.
+v -0.5 -0.5 0.0
+v  0.5 -0.5 0.0
+v  0.5  0.5 0.0
+v -0.5  0.5 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+vn 0.0 0.0 1.0
+f 1/1/1 2/2/1 3/3/1 4/4/1
