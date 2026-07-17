@@ -119,4 +119,45 @@
     <origin xyz="0.02 0.65 1.0" rpy="0 0 0"/>
   </joint>
 
+  <!-- ===================== APRILTAG ANCHORS ===================== -->
+  <material name="tag_white"><color rgba="0.95 0.95 0.95 1"/></material>
+
+  <!-- Big tag, door center - identical door_leaf geometry as revolute door. -->
+  <link name="door_tag_center">
+    <visual>
+      <geometry><box size="0.08 0.08 0.001"/></geometry>
+      <material name="tag_white"/>
+    </visual>
+  </link>
+  <joint name="door_tag_center_joint" type="fixed">
+    <parent link="door_leaf"/>
+    <child link="door_tag_center"/>
+    <origin xyz="0.021 0.425 1.0" rpy="0 1.5708 0"/>
+  </joint>
+
+  <!-- Small tags, grip bar ends (bar centered at local x=0.07, spans z: -0.125..0.125). -->
+  <link name="handle_tag_a">
+    <visual>
+      <geometry><box size="0.025 0.025 0.001"/></geometry>
+      <material name="tag_white"/>
+    </visual>
+  </link>
+  <joint name="handle_tag_a_joint" type="fixed">
+    <parent link="handle"/>
+    <child link="handle_tag_a"/>
+    <origin xyz="0.086 0 -0.11" rpy="0 1.5708 0"/>
+  </joint>
+
+  <link name="handle_tag_b">
+    <visual>
+      <geometry><box size="0.025 0.025 0.001"/></geometry>
+      <material name="tag_white"/>
+    </visual>
+  </link>
+  <joint name="handle_tag_b_joint" type="fixed">
+    <parent link="handle"/>
+    <child link="handle_tag_b"/>
+    <origin xyz="0.086 0 0.11" rpy="0 1.5708 0"/>
+  </joint>
+
 </robot>
