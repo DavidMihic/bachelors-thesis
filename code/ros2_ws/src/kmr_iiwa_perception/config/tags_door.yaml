@@ -1,0 +1,25 @@
+# AprilTag detekcija - veliki tag na sredini vrata.
+# Zaseban node od handle tagova jer apriltag_ros podrzava samo JEDNU
+# familiju po node instanci (family je singularna vrijednost, ne lista).
+#
+# NAPOMENA na strukturu: detector.* i tag.* MORAJU biti ugnijezdeni pod tim
+# kljucevima (ne ravni tag_ids/tag_frames/threads/decimate...) - potvrdjeno
+# direktno preko `ros2 param dump`, stara ravna shema se tiho ignorira bez greske.
+apriltag_door:
+  apriltag_door:
+    ros__parameters:
+      image_transport: raw
+      family: 36h11
+      size: 0.08
+      max_hamming: 0
+      detector:
+        threads: 1
+        decimate: 1.0
+        blur: 0.0
+        refine: true
+        sharpening: 0.25
+        debug: false
+      tag:
+        ids: [0]
+        frames: ["door_tag_center"]
+        sizes: [0.08]

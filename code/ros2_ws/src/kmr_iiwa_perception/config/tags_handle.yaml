@@ -1,0 +1,19 @@
+# AprilTag detekcija - dva mala taga na krajevima kvake.
+apriltag_handle:
+  apriltag_handle:
+    ros__parameters:
+      image_transport: raw
+      family: 16h5
+      size: 0.025
+      max_hamming: 0
+      detector:
+        threads: 1
+        decimate: 1.0
+        blur: 0.0
+        refine: true
+        sharpening: 0.25
+        debug: false
+      tag:
+        ids: [0, 1]
+        frames: ["handle_tag_a", "handle_tag_b"]
+        sizes: [0.025, 0.025]
