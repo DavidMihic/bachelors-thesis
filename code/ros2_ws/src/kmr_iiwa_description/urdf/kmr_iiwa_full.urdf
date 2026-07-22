@@ -76,7 +76,13 @@
        Useful if you want a clean planar joint to "world"/"odom" for the
        kinematic Twist-driven motion in Isaac Sim. Uncomment if needed.
 
-  <link name="base_footprint"/>
+  <link name="base_footprint">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" ixy="0.0" ixz="0.0" iyy="1e-8" iyz="0.0" izz="1e-8"/>
+    </inertial>
+  </link>
 
   <joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint"/>
@@ -349,7 +355,12 @@
     <origin rpy="0 0 0" xyz="0 0 0.045"/>
   </joint>
   <link name="iiwa_link_ee">
-    </link>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" ixy="0.0" ixz="0.0" iyy="1e-8" iyz="0.0" izz="1e-8"/>
+    </inertial>
+  </link>
   <!-- Load Gazebo lib and set the robot namespace -->
   <!-- <gazebo>
       <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
@@ -647,7 +658,13 @@
   </joint>
   <!-- ================= TCP ================= -->
   <!-- referentna točka: os šipke u hvatu (centar unutarnjeg luka kuka pri q=0.025) -->
-  <link name="gripper_tcp"/>
+  <link name="gripper_tcp">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" ixy="0.0" ixz="0.0" iyy="1e-8" iyz="0.0" izz="1e-8"/>
+    </inertial>
+  </link>
   <joint name="gripper_tcp_joint" type="fixed">
     <origin rpy="0 0 0" xyz="0 0 0.07485"/>
     <parent link="gripper_base"/>
@@ -727,7 +744,16 @@
     <child link="camera_link"/>
   </joint>
   <!-- ================= OPTICAL FRAME (§5 handoff dokumenta) ================= -->
-  <link name="camera_color_optical_frame"/>
+  <link name="camera_color_optical_frame">
+    <!-- trivijalan inertial - bez ovoga URDF importer merge-a link u camera_link
+         (isti bug kao kod AprilTag anchora na vratima), pa add_camera_ros_graph.py
+         ne bi mogao naci "camera_color_optical_frame" kao zaseban prim. -->
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="1e-8" ixy="0.0" ixz="0.0" iyy="1e-8" iyz="0.0" izz="1e-8"/>
+    </inertial>
+  </link>
   <joint name="camera_color_optical_joint" type="fixed">
     <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0"/>
     <parent link="camera_link"/>
