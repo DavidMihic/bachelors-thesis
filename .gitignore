@@ -1,6 +1,4 @@
 # generated USD (regenerated from URDF)
-assets/configuration/
-assets/configuration/*
 assets/.asset_hash
 assets/config.yaml
 
