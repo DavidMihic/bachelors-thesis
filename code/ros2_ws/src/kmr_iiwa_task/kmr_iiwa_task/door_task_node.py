@@ -29,7 +29,7 @@ poruku svaki fizicki korak - nema failsafe timeouta. Zato ovaj node mora
 eksplicitno publishati nulti Twist cim TF postane nedostupan ili zastario
 (ne smije se osloniti na "prestani publishati pa ce robot stati"), i mora
 prestati publishati bilo sto, ukljucujuci nule, nakon zakljucavanja baze -
-vidi BASE_LOCKED granu u _tick().
+vidi _tick_base_locked().
 
 Sucelje:
   PUB  /cmd_vel (geometry_msgs/Twist), u base_link frameu (isto kao
@@ -150,7 +150,7 @@ class DoorTaskNode(Node):
         self.settle_counter = 0
         self.approach_start_time = None
         self._locked_stub_logged = False
-        self._last_tag_stamp_ns = None  # za staleness-check, vidi _tick()
+        self._last_tag_stamp_ns = None
 
         rate = self.get_parameter("control_rate_hz").value
         self.timer = self.create_timer(1.0 / rate, self._tick)
@@ -161,6 +161,58 @@ class DoorTaskNode(Node):
         )
 
     # ------------------------------------------------------------------ #
+    # Dispatch
+
+    def _tick(self):
+        if self.phase == Phase.WAITING_FOR_TAG:
+            self._tick_waiting_for_tag()
+        elif self.phase == Phase.APPROACHING:
+            self._tick_approaching()
+        elif self.phase == Phase.BASE_LOCKED:
+            self._tick_base_locked()
+
+    # ------------------------------------------------------------------ #
+    # Faze
+
+    def _tick_waiting_for_tag(self):
+        transform = self._get_fresh_tag_transform()
+        if transform is None:
+            self.get_logger().warn(
+                f"Nema TF za {self.door_tag_frame} - cekam...",
+                throttle_duration_sec=2.0,
+            )
+            return
+
+        self.phase = Phase.APPROACHING
+        self.approach_start_time = time.monotonic()
+        self.get_logger().info("Tag pronadjen. Pocinjem prilazak.")
+        self._drive_toward_tag(transform)
+
+    def _tick_approaching(self):
+        transform = self._get_fresh_tag_transform()
+        if transform is None:
+            self.get_logger().warn(
+                f"Izgubljen TF za {self.door_tag_frame} tijekom prilaska - "
+                "zaustavljam bazu dok se tag ne vrati.",
+                throttle_duration_sec=2.0,
+            )
+            return
+        self._drive_toward_tag(transform)
+
+    def _tick_base_locked(self):
+        # Baza se vise ne mice do kraja zadatka - namjerno ne publishamo bas
+        # nista ovdje (cak ni nule), da se ne otvori slucajni prozor gdje
+        # neka buduca izmjena doda logiku prije ovog returna i preskoci ga.
+        if not self._locked_stub_logged:
+            self.get_logger().info(
+                "Baza zakljucana na stajnoj tocki. Naredne faze (attach, "
+                "probing, otkljucavanje, procjena ogranicenja, impedancija) "
+                "nisu jos implementirane u ovom nodu."
+            )
+            self._locked_stub_logged = True
+
+    # ------------------------------------------------------------------ #
+    # Pomocne metode
 
     def _lookup_tag(self):
         try:
@@ -170,40 +222,17 @@ class DoorTaskNode(Node):
         except (LookupException, ConnectivityException, ExtrapolationException):
             return None
 
-    def _publish_zero_twist(self):
-        self.cmd_vel_pub.publish(Twist())
-
-    def _tick(self):
-        if self.phase == Phase.BASE_LOCKED:
-            # Baza se vise ne mice do kraja zadatka - namjerno ne publishamo
-            # bas nista ovdje (cak ni nule), da se ne otvori slucajni prozor
-            # gdje neka buduca izmjena doda logiku prije ovog returna i
-            # preskoci ga.
-            if not self._locked_stub_logged:
-                self.get_logger().info(
-                    "Baza zakljucana na stajnoj tocki. Naredne faze (attach, "
-                    "probing, otkljucavanje, procjena ogranicenja, "
-                    "impedancija) nisu jos implementirane u ovom nodu."
-                )
-                self._locked_stub_logged = True
-            return
-
+    def _get_fresh_tag_transform(self):
+        """Vrati svjez TF (base_frame -> door_tag_frame) ili None ako je
+        nedostupan ili zastario. U oba slucaja kad vraca None, vec je
+        publishala nulti Twist i resetirala settle_counter - pozivatelj
+        samo treba prekinuti obradu ovog ticka (i po zelji dodatno logirati
+        specifican razlog)."""
         transform = self._lookup_tag()
         if transform is None:
             self._publish_zero_twist()
             self.settle_counter = 0
-            if self.phase == Phase.WAITING_FOR_TAG:
-                self.get_logger().warn(
-                    f"Nema TF za {self.door_tag_frame} - cekam...",
-                    throttle_duration_sec=2.0,
-                )
-            else:
-                self.get_logger().warn(
-                    f"Izgubljen TF za {self.door_tag_frame} tijekom prilaska - "
-                    "zaustavljam bazu dok se tag ne vrati.",
-                    throttle_duration_sec=2.0,
-                )
-            return
+            return None
 
         stamp_ns = Time.from_msg(transform.header.stamp).nanoseconds
         if self._last_tag_stamp_ns is not None and stamp_ns == self._last_tag_stamp_ns:
@@ -215,14 +244,11 @@ class DoorTaskNode(Node):
                 "zaustavljam bazu dok ne stigne svjeza detekcija.",
                 throttle_duration_sec=2.0,
             )
-            return
+            return None
         self._last_tag_stamp_ns = stamp_ns
+        return transform
 
-        if self.phase == Phase.WAITING_FOR_TAG:
-            self.phase = Phase.APPROACHING
-            self.approach_start_time = time.monotonic()
-            self.get_logger().info("Tag pronadjen. Pocinjem prilazak.")
-
+    def _drive_toward_tag(self, transform):
         tx = transform.transform.translation.x
         ty = transform.transform.translation.y
 
@@ -259,23 +285,29 @@ class DoorTaskNode(Node):
         self.settle_counter = self.settle_counter + 1 if within_tolerance else 0
 
         if self.settle_counter >= self.settle_ticks_required:
-            self._publish_zero_twist()
-            elapsed = time.monotonic() - self.approach_start_time
-            self.get_logger().info(
-                f"Stajna tocka dosegnuta za {elapsed:.2f}s "
-                f"(err_x={err_x:+.3f}m, err_y={err_y:+.3f}m, "
-                f"err_yaw={math.degrees(err_yaw):+.2f}deg). Baza zakljucana."
-            )
-            self._append_log(
-                {
-                    "event": "approach_complete",
-                    "elapsed_sec": elapsed,
-                    "final_err_x_m": err_x,
-                    "final_err_y_m": err_y,
-                    "final_err_yaw_rad": err_yaw,
-                }
-            )
-            self.phase = Phase.BASE_LOCKED
+            self._lock_base(err_x, err_y, err_yaw)
+
+    def _lock_base(self, err_x, err_y, err_yaw):
+        self._publish_zero_twist()
+        elapsed = time.monotonic() - self.approach_start_time
+        self.get_logger().info(
+            f"Stajna tocka dosegnuta za {elapsed:.2f}s "
+            f"(err_x={err_x:+.3f}m, err_y={err_y:+.3f}m, "
+            f"err_yaw={math.degrees(err_yaw):+.2f}deg). Baza zakljucana."
+        )
+        self._append_log(
+            {
+                "event": "approach_complete",
+                "elapsed_sec": elapsed,
+                "final_err_x_m": err_x,
+                "final_err_y_m": err_y,
+                "final_err_yaw_rad": err_yaw,
+            }
+        )
+        self.phase = Phase.BASE_LOCKED
+
+    def _publish_zero_twist(self):
+        self.cmd_vel_pub.publish(Twist())
 
     def _append_log(self, entry: dict):
         entry = {"stamp_unix": time.time(), **entry}
