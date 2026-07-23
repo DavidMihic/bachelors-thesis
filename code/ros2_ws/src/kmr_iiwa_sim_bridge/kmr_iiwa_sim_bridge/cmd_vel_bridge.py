@@ -34,7 +34,13 @@ parser.add_argument(
 )
 parser.add_argument("--headless", action="store_true", help="Pokreni bez GUI-ja")
 parser.add_argument(
-    "--articulation_prim_path",
+    "--skip-ground-plane",
+    action="store_true",
+    help="Ne dodaji default ground plane - koristi ako ucitavas integracijsku "
+    "scenu (npr. build_integration_scene.py output) koja ga vec ima.",
+)
+parser.add_argument(
+    "--articulation-prim-path",
     type=str,
     default="/kmr_iiwa/base_link",
     help="Prim path root artikulacije (provjeri u check.py ispisu ako se razlikuje)",
@@ -50,6 +56,13 @@ simulation_app = SimulationApp({"headless": args.headless})
 import isaacsim.core.utils.stage as stage_utils  # noqa: E402
 from isaacsim.core.api import World  # noqa: E402
 from isaacsim.core.prims import Articulation  # noqa: E402
+from isaacsim.core.utils.extensions import enable_extension  # noqa: E402
+
+# Bez ovoga, standalone SimulationApp ne ucitava ROS2 bridge ekstenziju
+# automatski (GUI aplikacija je ima ukljucenu po defaultu) - kamera na
+# robotu se nece publishati preko ROS2 dok ovo ne prodje.
+enable_extension("isaacsim.ros2.bridge")
+simulation_app.update()
 
 # ROS2 se moze importati bilo kad, ali logicki grupiramo ovdje
 import rclpy  # noqa: E402
@@ -100,7 +113,8 @@ def main():
     stage_utils.open_stage(args.usd_path)
 
     world = World(stage_units_in_meters=1.0)
-    world.scene.add_default_ground_plane()
+    if not args.skip_ground_plane:
+        world.scene.add_default_ground_plane()
     world.reset()
 
     robot = Articulation(prim_paths_expr=args.articulation_prim_path, name="kmr_iiwa")
