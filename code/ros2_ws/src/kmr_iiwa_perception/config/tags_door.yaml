@@ -10,7 +10,7 @@ apriltag_door:
     ros__parameters:
       image_transport: raw
       family: 36h11
-      size: 0.08
+      size: 0.064
       max_hamming: 0
       detector:
         threads: 1
@@ -22,4 +22,4 @@ apriltag_door:
       tag:
         ids: [0]
         frames: ["door_tag_center"]
-        sizes: [0.08]
+        sizes: [0.064]
