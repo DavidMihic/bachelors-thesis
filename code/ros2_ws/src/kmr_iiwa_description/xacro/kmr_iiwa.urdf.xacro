@@ -7,6 +7,7 @@
   <xacro:include filename="gripper.xacro"/>
   <xacro:include filename="camera_mount.xacro"/>
   <xacro:include filename="iiwa7.xacro"/>
+  <xacro:include filename="kmr_iiwa_ros2_control.xacro"/>
 
   <xacro:arg name="hardware_interface" default="PositionJointInterface"/>
   <xacro:arg name="robot_name" default="iiwa"/>
@@ -37,5 +38,9 @@
   <xacro:kmr_camera_mount parent="base_link" mesh_path="../meshes/camera">
     <origin xyz="${camera_mount_x} ${camera_mount_y} ${camera_mount_z}" rpy="0 0 0"/>
   </xacro:kmr_camera_mount>
+
+  <xacro:kmr_iiwa_ros2_control
+      commands_topic="/isaac_joint_commands"
+      states_topic="/isaac_joint_states"/>
 
 </robot>

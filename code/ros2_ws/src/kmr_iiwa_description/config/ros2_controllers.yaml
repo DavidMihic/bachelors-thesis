@@ -1,0 +1,27 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+arm_controller:
+  ros__parameters:
+    joints:
+      - iiwa_joint_1
+      - iiwa_joint_2
+      - iiwa_joint_3
+      - iiwa_joint_4
+      - iiwa_joint_5
+      - iiwa_joint_6
+      - iiwa_joint_7
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_partial_joints_goal: true
+    allow_nonzero_velocity_at_trajectory_end: false
