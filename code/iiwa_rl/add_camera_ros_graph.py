@@ -24,19 +24,32 @@ import argparse
 
 from isaaclab.app import AppLauncher
 
-parser = argparse.ArgumentParser(description="Dodaje Camera prim + ROS2 Action Graph na robota nakon URDF->USD konverzije.")
-parser.add_argument("usd_path", type=str, help="Putanja do _base.usd (mijenja se in-place).")
-parser.add_argument("--camera-parent", type=str, default="camera_color_optical_frame",
-                     help="Ime linka na koji se Camera prim vjesa (mora vec postojati iz URDF-a).")
+parser = argparse.ArgumentParser(
+    description="Dodaje Camera prim + ROS2 Action Graph na robota nakon URDF->USD konverzije."
+)
+parser.add_argument(
+    "usd-path", type=str, help="Putanja do _base.usd (mijenja se in-place)."
+)
+parser.add_argument(
+    "--camera-parent",
+    type=str,
+    default="camera_color_optical_frame",
+    help="Ime linka na koji se Camera prim vjesa (mora vec postojati iz URDF-a).",
+)
 parser.add_argument("--rgb-topic", type=str, default="/camera/color/image_raw")
+parser.add_argument("--focal-length-mm", type=float, default=12.01)
 parser.add_argument("--info-topic", type=str, default="camera/color/camera_info")
 parser.add_argument("--frame-id", type=str, default="camera_color_optical_frame")
 parser.add_argument("--width", type=int, default=1280)
 parser.add_argument("--height", type=int, default=720)
-parser.add_argument("--tf-root-link", type=str, default="base_link",
-                     help="Root link cijelog robota - ako je articulation root, cijelo "
-                          "kinematicko stablo (base_link -> ... -> camera_color_optical_frame) "
-                          "se publisha na /tf_static+/tf automatski preko jednog node-a.")
+parser.add_argument(
+    "--tf-root-link",
+    type=str,
+    default="base_link",
+    help="Root link cijelog robota - ako je articulation root, cijelo "
+    "kinematicko stablo (base_link -> ... -> camera_color_optical_frame) "
+    "se publisha na /tf_static+/tf automatski preko jednog node-a.",
+)
 parser.add_argument("--tf-topic", type=str, default="tf")
 
 AppLauncher.add_app_launcher_args(parser)
@@ -73,22 +86,30 @@ def main():
     usd_context = omni.usd.get_context()
     success = usd_context.open_stage(args_cli.usd_path)
     if not success:
-        raise ValueError(f"Ne mogu otvoriti USD kroz omni.usd context: {args_cli.usd_path}")
+        raise ValueError(
+            f"Ne mogu otvoriti USD kroz omni.usd context: {args_cli.usd_path}"
+        )
     # stage load moze biti async - par update() poziva da se sigurno zavrsi prije
     # nego pocnemo editirati (isti pattern kao u sluzbenim Isaac Sim primjerima)
     for _ in range(5):
         simulation_app.update()
     stage = usd_context.get_stage()
     if stage is None:
-        raise ValueError("omni.usd context nema aktivan stage nakon open_stage - neocekivano.")
+        raise ValueError(
+            "omni.usd context nema aktivan stage nakon open_stage - neocekivano."
+        )
 
     parent = find_prim_by_name(stage, args_cli.camera_parent)
     if parent is None:
-        raise ValueError(f"Link '{args_cli.camera_parent}' ne postoji na stageu - provjeri ime/URDF.")
+        raise ValueError(
+            f"Link '{args_cli.camera_parent}' ne postoji na stageu - provjeri ime/URDF."
+        )
 
     tf_root = find_prim_by_name(stage, args_cli.tf_root_link)
     if tf_root is None:
-        raise ValueError(f"TF root link '{args_cli.tf_root_link}' ne postoji na stageu - provjeri ime.")
+        raise ValueError(
+            f"TF root link '{args_cli.tf_root_link}' ne postoji na stageu - provjeri ime."
+        )
 
     # Graph MORA biti unutar defaultPrim podstabla (npr. /kmr_iiwa/Graph/...), ne
     # kao sestrinski root-level prim (/Graph/...) - inace ga reference/payload arc
@@ -96,7 +117,9 @@ def main():
     # jer reference/payload povlaci SAMO podstablo defaultPrim-a.
     default_prim = stage.GetDefaultPrim()
     if not default_prim:
-        raise ValueError("Stage nema postavljen defaultPrim - ne mogu sigurno smjestiti Graph.")
+        raise ValueError(
+            "Stage nema postavljen defaultPrim - ne mogu sigurno smjestiti Graph."
+        )
     graph_path = default_prim.GetPath().AppendPath("Graph/ROS_Camera")
 
     camera_path = parent.GetPath().AppendChild(CAMERA_NAME)
@@ -117,7 +140,7 @@ def main():
 
     camera = UsdGeom.Camera.Define(stage, camera_path)
     camera.CreateClippingRangeAttr(Gf.Vec2f(0.01, 100))
-    camera.CreateFocalLengthAttr(15.13)
+    camera.CreateFocalLengthAttr(args_cli.focal_length_mm)
     camera.CreateFocusDistanceAttr(400.0)
     camera.CreateVerticalApertureAttr(11.79)
 
@@ -158,8 +181,14 @@ def main():
                 ("RunOnce.outputs:step", "RenderProduct.inputs:execIn"),
                 ("RenderProduct.outputs:execOut", "RGBPublish.inputs:execIn"),
                 ("RenderProduct.outputs:execOut", "CameraInfoPublish.inputs:execIn"),
-                ("RenderProduct.outputs:renderProductPath", "RGBPublish.inputs:renderProductPath"),
-                ("RenderProduct.outputs:renderProductPath", "CameraInfoPublish.inputs:renderProductPath"),
+                (
+                    "RenderProduct.outputs:renderProductPath",
+                    "RGBPublish.inputs:renderProductPath",
+                ),
+                (
+                    "RenderProduct.outputs:renderProductPath",
+                    "CameraInfoPublish.inputs:renderProductPath",
+                ),
                 ("Context.outputs:context", "RGBPublish.inputs:context"),
                 ("Context.outputs:context", "CameraInfoPublish.inputs:context"),
                 # TF tree - direktno na OnPlaybackTick, NE kroz RunOnce (treba se
@@ -186,7 +215,9 @@ def main():
             ],
         },
     )
-    print(f"ROS2 Action Graph kreiran na {graph_path} (kamera + TF tree od '{tf_root.GetPath()}')")
+    print(
+        f"ROS2 Action Graph kreiran na {graph_path} (kamera + TF tree od '{tf_root.GetPath()}')"
+    )
 
     stage.GetRootLayer().Save()
     print(f"\nSpremljeno u {args_cli.usd_path}")
