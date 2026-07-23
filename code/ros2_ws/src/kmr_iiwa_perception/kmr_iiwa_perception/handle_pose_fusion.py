@@ -3,9 +3,9 @@ handle_pose_fusion.py - spaja 2 nezavisna AprilTag TF-a (handle_tag_a,
 handle_tag_b, publishani preko apriltag_ros) u jedinstvenu 6D pozu hvatišta
 kvake, u base_link frameu.
 
-ARHITEKTURNA NAMJERA: ovo je JEDINI izlaz cijelog percepcijskog modula,
-6D poza hvatišta, ništa više.
-Klasifikacija tipa vrata (zakretna/klizna) namjerno NIJE ovdje - to radi kasniji modul iz
+ARHITEKTURNA NAMJERA: ovo je JEDINI izlaz cijelog percepcijskog modula (vidi
+originalni handoff dokument, §2) - 6D poza hvatišta, ništa više. Klasifikacija
+tipa vrata (zakretna/klizna) namjerno NIJE ovdje - to radi kasniji modul iz
 sila/momenata tijekom interakcije. Ovaj node ne zna niti treba znati koji je
 tip vrata u pitanju.
 
@@ -27,7 +27,8 @@ Sucelje:
   sadrzi kompletan lanac (kamera ekstrinsika iz URDF-a + apriltag_ros TF).
   PUB  /perception/handle_pose  (geometry_msgs/PoseStamped, frame_id=base_link)
 
-Objavljuje SAMO kad su oba taga trenutno vidljiva i svjeza (max_tag_age_sec) -
+Objavljuje SAMO kad su oba taga trenutno vidljiva u TF-u i njihovi stampovi
+medjusobno bliski (max_stamp_skew_sec) -
 namjerno konzervativno, bolje nista nego nepouzdana poza. Downstream (RL
 policy / MoveIt) treba zadrzati zadnju dobru pozu ako ovaj topic privremeno
 prestane objavljivati.
@@ -49,6 +50,7 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 
 
 def quat_to_rotmat(x: float, y: float, z: float, w: float) -> np.ndarray:
+    """Standardna kvaternion -> 3x3 rotacijska matrica konverzija."""
     n = x * x + y * y + z * z + w * w
     if n < 1e-12:
         return np.eye(3)
@@ -57,16 +59,15 @@ def quat_to_rotmat(x: float, y: float, z: float, w: float) -> np.ndarray:
     xx, xy, xz = x * X, x * Y, x * Z
     yy, yz, zz = y * Y, y * Z, z * Z
     wx, wy, wz = w * X, w * Y, w * Z
-    return np.array(
-        [
-            [1.0 - (yy + zz), xy - wz, xz + wy],
-            [xy + wz, 1.0 - (xx + zz), yz - wx],
-            [xz - wy, yz + wx, 1.0 - (xx + yy)],
-        ]
-    )
+    return np.array([
+        [1.0 - (yy + zz), xy - wz, xz + wy],
+        [xy + wz, 1.0 - (xx + zz), yz - wx],
+        [xz - wy, yz + wx, 1.0 - (xx + yy)],
+    ])
 
 
 def rotmat_to_quat(R: np.ndarray):
+    """3x3 rotacijska matrica -> kvaternion (x,y,z,w). Trace-based metoda."""
     tr = R[0, 0] + R[1, 1] + R[2, 2]
     if tr > 0.0:
         s = np.sqrt(tr + 1.0) * 2.0
@@ -112,18 +113,24 @@ class HandlePoseFusionNode(Node):
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("output_topic", "/perception/handle_pose")
         self.declare_parameter("publish_rate_hz", 10.0)
-        self.declare_parameter("max_tag_age_sec", 0.5)
-        self.declare_parameter(
-            "min_tag_distance_m", 0.05
-        )  # sanity granice - vidi napomenu
-        self.declare_parameter(
-            "max_tag_distance_m", 0.30
-        )  # pokriva oba tipa vrata (0.13 / 0.22m) s marginom
+        self.declare_parameter("max_stamp_skew_sec", 1.0)  # koliko A i B smiju biti
+                                                            # vremenski razmaknuti MEDJUSOBNO
+                                                            # (ne naspram node-ovog sata - vidi
+                                                            # napomenu kod _tick)
+        self.declare_parameter("min_tag_distance_m", 0.05)  # sanity granice - vidi napomenu
+        self.declare_parameter("max_tag_distance_m", 0.40)  # stvarne vrijednosti: 0.13m (revolute),
+                                                              # 0.22m (sliding) - potvrdjeno direktno
+                                                              # iz geometrije oba URDF-a. 0.40 daje
+                                                              # ~0.18m margine iznad veceg od ta dva,
+                                                              # dovoljno za AprilTag procjensku gresku
+                                                              # (opazeno do ~38% na 25mm tagu), a i dalje
+                                                              # hvata stvarno krive parove (npr. tagovi
+                                                              # s razlicitih vrata).
 
         self.tag_a_frame = self.get_parameter("tag_a_frame").value
         self.tag_b_frame = self.get_parameter("tag_b_frame").value
         self.base_frame = self.get_parameter("base_frame").value
-        self.max_tag_age = self.get_parameter("max_tag_age_sec").value
+        self.max_stamp_skew = self.get_parameter("max_stamp_skew_sec").value
         self.min_dist = self.get_parameter("min_tag_distance_m").value
         self.max_dist = self.get_parameter("max_tag_distance_m").value
 
@@ -142,23 +149,47 @@ class HandlePoseFusionNode(Node):
             f"{self.base_frame}, izlaz na {self.get_parameter('output_topic').value}"
         )
 
-    def _lookup_fresh(self, frame: str):
-        """Vrati TransformStamped ako postoji i nije stariji od max_tag_age, inace None."""
+    def _lookup_latest(self, frame: str):
+        """Vrati TransformStamped (najnoviji dostupan) ili None ako uopce ne postoji
+        u bufferu - NE provjeravamo "starost" naspram node-ovog vlastitog sata (nema
+        /clock topica u Isaac Simu, pa self.get_clock().now() pada na pravi zidni sat,
+        potpuno druga domena od TF stampova - svaka takva usporedba je besmislena).
+        Umjesto toga: tf2_ros.Buffer sam interno izbacuje prestare unose (cache_time),
+        a dodatnu provjeru "jesu li A i B iz istog trenutka" radimo u _tick usporedbom
+        njihovih stampova MEDJUSOBNO, ne naspram vanjskog sata."""
         try:
-            t = self.tf_buffer.lookup_transform(self.base_frame, frame, Time())
+            return self.tf_buffer.lookup_transform(self.base_frame, frame, Time())
         except (LookupException, ConnectivityException, ExtrapolationException):
             return None
-        stamp = Time.from_msg(t.header.stamp)
-        age = (self.get_clock().now() - stamp).nanoseconds / 1e9
-        if age > self.max_tag_age:
-            return None
-        return t
 
     def _tick(self):
-        t_a = self._lookup_fresh(self.tag_a_frame)
-        t_b = self._lookup_fresh(self.tag_b_frame)
+        t_a = self._lookup_latest(self.tag_a_frame)
+        t_b = self._lookup_latest(self.tag_b_frame)
         if t_a is None or t_b is None:
-            return  # namjerno tiho - oba taga moraju biti svjeza istovremeno
+            missing = []
+            if t_a is None:
+                missing.append(self.tag_a_frame)
+            if t_b is None:
+                missing.append(self.tag_b_frame)
+            self.get_logger().warn(
+                f"Nema TF za: {missing} (base_frame={self.base_frame}) - preskacem ciklus.",
+                throttle_duration_sec=2.0,
+            )
+            return
+
+        # Usporedba stampova A i B MEDJUSOBNO (ne naspram node-ovog sata - vidi
+        # napomenu u _lookup_latest) - hvata slucaj kad je jedan tag "zaglavljen"
+        # na staroj detekciji dok je drugi svjez.
+        stamp_a = Time.from_msg(t_a.header.stamp)
+        stamp_b = Time.from_msg(t_b.header.stamp)
+        skew = abs((stamp_a - stamp_b).nanoseconds) / 1e9
+        if skew > self.max_stamp_skew:
+            self.get_logger().warn(
+                f"Stampovi {self.tag_a_frame}/{self.tag_b_frame} razmaknuti {skew:.2f}s "
+                f"(> {self.max_stamp_skew}s) - preskacem ciklus.",
+                throttle_duration_sec=2.0,
+            )
+            return
 
         pos_a, R_a = transform_to_pos_rotmat(t_a)
         pos_b, R_b = transform_to_pos_rotmat(t_b)
@@ -180,9 +211,7 @@ class HandlePoseFusionNode(Node):
         z_avg = z_a + z_b
         z_avg_norm = np.linalg.norm(z_avg)
         if z_avg_norm < 1e-6:
-            self.get_logger().warn(
-                "Z-osi oba taga se ponistavaju (suprotne) - preskacem ciklus."
-            )
+            self.get_logger().warn("Z-osi oba taga se ponistavaju (suprotne) - preskacem ciklus.")
             return
         z_raw = z_avg / z_avg_norm
 
@@ -190,9 +219,7 @@ class HandlePoseFusionNode(Node):
         z_axis = z_raw - np.dot(z_raw, y_axis) * y_axis
         z_norm = np.linalg.norm(z_axis)
         if z_norm < 1e-6:
-            self.get_logger().warn(
-                "Degenerirana geometrija (Z paralelan s Y) - preskacem ciklus."
-            )
+            self.get_logger().warn("Degenerirana geometrija (Z paralelan s Y) - preskacem ciklus.")
             return
         z_axis /= z_norm
 
