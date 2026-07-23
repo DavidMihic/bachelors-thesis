@@ -26,16 +26,89 @@ import argparse
 
 from isaaclab.app import AppLauncher
 
-parser = argparse.ArgumentParser(description="Gradi integracijsku scenu (robot + vrata + ground plane) preko USD referenci.")
-parser.add_argument("--robot", type=str, required=True, help="Putanja do robot USD-a (npr. kmr_iiwa_full.usd).")
-parser.add_argument("--door", type=str, required=True, help="Putanja do vrata USD-a (revolute_door.usd ili sliding_door.usd).")
-parser.add_argument("--output", type=str, required=True, help="Putanja izlazne integracijske scene.")
-parser.add_argument("--door-offset", type=float, nargs=3, default=[2.5, 0.0, 0.0], metavar=("X", "Y", "Z"),
-                     help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X).")
-parser.add_argument("--door-yaw", type=float, default=180.0,
-                     help="Rotacija vrata oko Z (stupnjevi). Default 180 - vratina +X normala gleda nazad prema robotu.")
-parser.add_argument("--skip-ground-plane", action="store_true",
-                     help="Ne dodaji ground plane (npr. ako ga vec ima neka druga referencirana scena).")
+parser = argparse.ArgumentParser(
+    description="Gradi integracijsku scenu (robot + vrata + ground plane) preko USD referenci."
+)
+parser.add_argument(
+    "--robot",
+    type=str,
+    required=True,
+    help="Putanja do robot USD-a (npr. kmr_iiwa_full.usd).",
+)
+parser.add_argument(
+    "--door",
+    type=str,
+    required=True,
+    help="Putanja do vrata USD-a (revolute_door.usd ili sliding_door.usd).",
+)
+parser.add_argument(
+    "--output", type=str, required=True, help="Putanja izlazne integracijske scene."
+)
+parser.add_argument(
+    "--door-offset",
+    type=float,
+    nargs=3,
+    default=[2.5, 0.0, 0.0],
+    metavar=("X", "Y", "Z"),
+    help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X).",
+)
+parser.add_argument(
+    "--door-yaw",
+    type=float,
+    default=180.0,
+    help="Rotacija vrata oko Z (stupnjevi). Default 180 - vratina +X normala gleda nazad prema robotu.",
+)
+parser.add_argument(
+    "--skip-ground-plane",
+    action="store_true",
+    help="Ne dodaji ground plane (npr. ako ga vec ima neka druga referencirana scena).",
+)
+
+# --- Nasumican spawn baze ispred vrata ---
+# ARHITEKTURNA NAPOMENA: robot ostaje na cistom originu (nema smisla dirati
+# kmr_iiwa_full.usd niti ovu skriptinu "robot se referencira bez transformacije"
+# granu) - randomiziramo UMJESTO TOGA relativni offset/yaw vrata. Rezultat je
+# geometrijski identican (jedino relativna poza baza<->vrata ima fizikalno
+# znacenje u praznoj sceni), a --door-offset/--door-yaw ostaju kompatibilni sa
+# starim, ne-randomiziranim pozivima (default randomize=False).
+parser.add_argument(
+    "--randomize-spawn",
+    action="store_true",
+    help="Ako je postavljeno, --door-offset/--door-yaw se koriste kao BAZA na koju se "
+    "dodaje nasumican pomak iz raspona ispod (umjesto da se koriste doslovno).",
+)
+parser.add_argument(
+    "--spawn-seed",
+    type=int,
+    default=None,
+    help="Seed za nasumicni generator (reproducibilnost). Default None = nedeterministicko.",
+)
+parser.add_argument(
+    "--spawn-distance-range",
+    type=float,
+    nargs=2,
+    default=[1.8, 3.2],
+    metavar=("MIN", "MAX"),
+    help="Raspon udaljenosti (m, X-offset vrata) unutar kojeg spawnamo. PLACEHOLDER — "
+    "doc §3 trazi da ovo bude empirijski provjereno prema dometu detekcije "
+    "door_tag_center (80mm tag) s postojecom D435 konfiguracijom kamere "
+    "(add_camera_ros_graph.py), NE pretpostavljena vrijednost. Podesi nakon prvog testa.",
+)
+parser.add_argument(
+    "--spawn-lateral-range",
+    type=float,
+    nargs=2,
+    default=[-0.6, 0.6],
+    metavar=("MIN", "MAX"),
+    help="Raspon bocnog (Y) offseta vrata (m) - simulira lateralni pomak robota prema vratima.",
+)
+parser.add_argument(
+    "--spawn-yaw-jitter-deg",
+    type=float,
+    default=20.0,
+    help="+/- perturbacija oko --door-yaw (stupnjevi) - simulira kut prilaska koji nije "
+    "dead-on, tako da P/PD regulator iz faze prilaska (§3) ima sto korigirati.",
+)
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -43,10 +116,34 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+import json  # noqa: E402
 import math  # noqa: E402
 import os  # noqa: E402
+import random  # noqa: E402
 
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+from pxr import Gf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+
+
+def sample_spawn(args) -> tuple[list[float], float, dict]:
+    """Nasumicno izvuci (door_offset, door_yaw) oko zadane baze. Vraca i dict
+    s upotrijebljenim vrijednostima/seedom radi logiranja (vidi main())."""
+    rng = random.Random(args.spawn_seed)
+    distance = rng.uniform(*args.spawn_distance_range)
+    lateral = rng.uniform(*args.spawn_lateral_range)
+    yaw_jitter = rng.uniform(-args.spawn_yaw_jitter_deg, args.spawn_yaw_jitter_deg)
+
+    door_offset = [distance, lateral, args.door_offset[2]]
+    door_yaw = args.door_yaw + yaw_jitter
+
+    draw = {
+        "seed": args.spawn_seed,
+        "distance_m": distance,
+        "lateral_m": lateral,
+        "yaw_jitter_deg": yaw_jitter,
+        "resulting_door_offset": door_offset,
+        "resulting_door_yaw_deg": door_yaw,
+    }
+    return door_offset, door_yaw, draw
 
 
 def add_ground_plane(stage: Usd.Stage, parent_path: str = "/World"):
@@ -98,24 +195,44 @@ def main():
     # --- Robot: referenca na origin, bez dodatne transformacije ---
     robot_path = "/World/Robot"
     robot_prim = stage.DefinePrim(robot_path, "Xform")
-    robot_prim.GetReferences().AddReference(os.path.relpath(args_cli.robot, os.path.dirname(args_cli.output)))
+    robot_prim.GetReferences().AddReference(
+        os.path.relpath(args_cli.robot, os.path.dirname(args_cli.output))
+    )
     print(f"Robot referenciran na {robot_path} -> {args_cli.robot}")
 
-    # --- Vrata: referenca na zadanom offsetu/rotaciji ---
+    # --- §3: nasumican spawn (randomizira relativni offset/yaw vrata, robot
+    # ostaje neizmijenjen gore) - vidi sample_spawn() i napomenu uz argparse. ---
+    if args_cli.randomize_spawn:
+        door_offset, door_yaw, spawn_draw = sample_spawn(args_cli)
+        print(f"[RANDOMIZE-SPAWN] izvuceno: {spawn_draw}")
+        sidecar_path = args_cli.output + ".spawn.json"
+        with open(sidecar_path, "w") as f:
+            json.dump(spawn_draw, f, indent=2)
+        print(
+            f"[RANDOMIZE-SPAWN] zapisano u {sidecar_path} (za reprodukciju/analizu kasnije)"
+        )
+    else:
+        door_offset, door_yaw = args_cli.door_offset, args_cli.door_yaw
+
+    # --- Vrata: referenca na (eventualno randomiziranom) offsetu/rotaciji ---
     door_path = "/World/Door"
     door_prim = stage.DefinePrim(door_path, "Xform")
-    door_prim.GetReferences().AddReference(os.path.relpath(args_cli.door, os.path.dirname(args_cli.output)))
+    door_prim.GetReferences().AddReference(
+        os.path.relpath(args_cli.door, os.path.dirname(args_cli.output))
+    )
     door_xform = UsdGeom.Xformable(door_prim)
     door_xform.ClearXformOpOrder()  # door asset vec ima svoje xformOps iz vlastite
-                                     # konverzije - bez ovoga AddTranslateOp puca na
-                                     # "already exists in xformOpOrder"
-    door_xform.AddTranslateOp().Set(Gf.Vec3d(*args_cli.door_offset))
-    yaw_rad = math.radians(args_cli.door_yaw)
+    # konverzije - bez ovoga AddTranslateOp puca na
+    # "already exists in xformOpOrder"
+    door_xform.AddTranslateOp().Set(Gf.Vec3d(*door_offset))
+    yaw_rad = math.radians(door_yaw)
     door_xform.AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble).Set(
         Gf.Quatd(math.cos(yaw_rad / 2), Gf.Vec3d(0, 0, math.sin(yaw_rad / 2)))
     )
-    print(f"Vrata referencirana na {door_path} -> {args_cli.door} "
-          f"(offset={args_cli.door_offset}, yaw={args_cli.door_yaw}°)")
+    print(
+        f"Vrata referencirana na {door_path} -> {args_cli.door} "
+        f"(offset={door_offset}, yaw={door_yaw}°)"
+    )
 
     # --- Ground plane + physics scene ---
     if not args_cli.skip_ground_plane:
