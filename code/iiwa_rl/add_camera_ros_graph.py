@@ -33,6 +33,11 @@ parser.add_argument("--info-topic", type=str, default="camera/color/camera_info"
 parser.add_argument("--frame-id", type=str, default="camera_color_optical_frame")
 parser.add_argument("--width", type=int, default=1280)
 parser.add_argument("--height", type=int, default=720)
+parser.add_argument("--tf-root-link", type=str, default="base_link",
+                     help="Root link cijelog robota - ako je articulation root, cijelo "
+                          "kinematicko stablo (base_link -> ... -> camera_color_optical_frame) "
+                          "se publisha na /tf_static+/tf automatski preko jednog node-a.")
+parser.add_argument("--tf-topic", type=str, default="tf")
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -80,6 +85,10 @@ def main():
     parent = find_prim_by_name(stage, args_cli.camera_parent)
     if parent is None:
         raise ValueError(f"Link '{args_cli.camera_parent}' ne postoji na stageu - provjeri ime/URDF.")
+
+    tf_root = find_prim_by_name(stage, args_cli.tf_root_link)
+    if tf_root is None:
+        raise ValueError(f"TF root link '{args_cli.tf_root_link}' ne postoji na stageu - provjeri ime.")
 
     # Graph MORA biti unutar defaultPrim podstabla (npr. /kmr_iiwa/Graph/...), ne
     # kao sestrinski root-level prim (/Graph/...) - inace ga reference/payload arc
@@ -141,6 +150,8 @@ def main():
                 ("RenderProduct", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
                 ("RGBPublish", "isaacsim.ros2.bridge.ROS2CameraHelper"),
                 ("CameraInfoPublish", "isaacsim.ros2.bridge.ROS2CameraInfoHelper"),
+                ("IsaacClock", "isaacsim.core.nodes.IsaacReadSimulationTime"),
+                ("PublishTF", "isaacsim.ros2.bridge.ROS2PublishTransformTree"),
             ],
             keys.CONNECT: [
                 ("OnPlaybackTick.outputs:tick", "RunOnce.inputs:execIn"),
@@ -151,6 +162,11 @@ def main():
                 ("RenderProduct.outputs:renderProductPath", "CameraInfoPublish.inputs:renderProductPath"),
                 ("Context.outputs:context", "RGBPublish.inputs:context"),
                 ("Context.outputs:context", "CameraInfoPublish.inputs:context"),
+                # TF tree - direktno na OnPlaybackTick, NE kroz RunOnce (treba se
+                # publishati SVAKI tick, ne samo jednom kao render product setup)
+                ("OnPlaybackTick.outputs:tick", "PublishTF.inputs:execIn"),
+                ("Context.outputs:context", "PublishTF.inputs:context"),
+                ("IsaacClock.outputs:simulationTime", "PublishTF.inputs:timeStamp"),
             ],
             keys.SET_VALUES: [
                 ("RenderProduct.inputs:cameraPrim", [str(camera_path)]),
@@ -164,10 +180,13 @@ def main():
                 ("CameraInfoPublish.inputs:frameId", args_cli.frame_id),
                 ("CameraInfoPublish.inputs:nodeNamespace", ""),
                 ("CameraInfoPublish.inputs:topicName", args_cli.info_topic),
+                ("PublishTF.inputs:targetPrims", [str(tf_root.GetPath())]),
+                ("PublishTF.inputs:topicName", args_cli.tf_topic),
+                ("PublishTF.inputs:nodeNamespace", ""),
             ],
         },
     )
-    print(f"ROS2 Action Graph kreiran na {graph_path}")
+    print(f"ROS2 Action Graph kreiran na {graph_path} (kamera + TF tree od '{tf_root.GetPath()}')")
 
     stage.GetRootLayer().Save()
     print(f"\nSpremljeno u {args_cli.usd_path}")
