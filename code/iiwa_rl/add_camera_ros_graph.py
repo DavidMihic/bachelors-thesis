@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(
     description="Dodaje Camera prim + ROS2 Action Graph na robota nakon URDF->USD konverzije."
 )
 parser.add_argument(
-    "usd-path", type=str, help="Putanja do _base.usd (mijenja se in-place)."
+    "usd_path", type=str, help="Putanja do _base.usd (mijenja se in-place)."
 )
 parser.add_argument(
     "--camera-parent",
