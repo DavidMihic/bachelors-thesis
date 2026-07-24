@@ -21,9 +21,9 @@
   <xacro:property name="kmr_height" value="0.70"/> <!-- m, Z direction -->
 
   <xacro:property name="kmr_mesh_body"
-                   value="../meshes/kmr_base/kmr_base_body.stl"/>
+                   value="package://kmr_iiwa_description/meshes/kmr_base/kmr_base_body.stl"/>
   <xacro:property name="kmr_mesh_skirt"
-                   value="../meshes/kmr_base/kmr_base_skirt.stl"/>
+                   value="package://kmr_iiwa_description/meshes/kmr_base/kmr_base_skirt.stl"/>
 
   <!-- base_link -->
   <link name="base_link">

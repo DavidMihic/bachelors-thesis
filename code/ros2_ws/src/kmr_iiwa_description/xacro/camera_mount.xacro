@@ -29,18 +29,9 @@
       gotovo točno na sredini širine 90mm).
     - masa = 72g (Intel D400 datasheet, potvrđeno), inercija = box aprox.
       (90x25x25mm) — dovoljno precizno, kamera je zanemarive mase naspram
-      mounta/ruke (vidi handoff dok. §4).
-    - ⚠️ PLACEHOLDER: `camera_boss_top_z` (visina vrha bossa iznad ravnine
-      4 rupe) i pretpostavka da kamera sjedi FLAT (0° tilt, tripod-hole
-      centriran na os bossa, gleda +X) — potvrđeno FOV proračunom da radi
-      za ciljani raspon detekcije 1.0-1.5m (RGB V-FOV=42.5°, margina
-      4.6-9.9°). Kad popraviš boss, samo update-aj `camera_boss_top_z`.
-    - ⚠️ Nisam potvrdio koji kraj Z-osi mesha D435.stl je "prednji" (lens)
-      strana — pretpostavljam standardnu orijentaciju (dugi rub = lijevo-
-      desno baseline, kratki rub = naprijed-natrag). Provjeri vizualno u
-      SolidWorxu prije finalne montaže, ili mi reci pa ću ispraviti rpy.
+      mounta/ruke.
 
-  camera_color_optical_frame — TF konvencija po §5 handoff dokumenta:
+  camera_color_optical_frame — TF konvencija:
     body (X naprijed, Z gore) -> optical (Z naprijed, X desno, Y dolje),
     fiksna rotacija (-90°, 0°, -90°). Standardna realsense-ros konvencija.
 
@@ -59,7 +50,6 @@
       <color rgba="0.05 0.05 0.06 1.0"/>
     </material>
 
-    <!-- ⚠️ PLACEHOLDER dok se boss ne poveća za navoj (vidi header) -->
     <xacro:property name="camera_boss_top_z" value="0.025"/>
 
     <!-- ================= X-NOSAČ (camera_mount_link) ================= -->
@@ -135,7 +125,6 @@
       <child link="camera_link"/>
     </joint>
 
-    <!-- ================= OPTICAL FRAME (§5 handoff dokumenta) ================= -->
     <link name="camera_color_optical_frame"/>
     <joint name="camera_color_optical_joint" type="fixed">
       <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
