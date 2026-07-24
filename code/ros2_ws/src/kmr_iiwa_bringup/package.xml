@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>kmr_iiwa_bringup</name>
+  <version>0.0.1</version>
+  <description>Jedan launch file koji pokrece cijelu ROS2 stranu infrastrukture (sve osim cmd_vel_bridge.py, koji treba isaaclab.sh Python i ostaje rucno pokrenut)</description>
+  <maintainer email="david.mihic@gmail.com">David Mihić</maintainer>
+  <license>TODO: License declaration</license>
+
+  <exec_depend>kmr_iiwa_description</exec_depend>
+  <exec_depend>kmr_iiwa_moveit_config</exec_depend>
+  <exec_depend>kmr_iiwa_perception</exec_depend>
+  <exec_depend>kmr_iiwa_sim_bridge</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
