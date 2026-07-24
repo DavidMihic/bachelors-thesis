@@ -22,6 +22,8 @@ setup(
         ],
     },
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            "gripper_bridge = kmr_iiwa_sim_bridge.gripper_bridge:main",
+        ],
     },
 )
