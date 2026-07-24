@@ -30,21 +30,17 @@ def generate_launch_description():
     with open(urdf_path, "r") as f:
         robot_description_content = f.read()
 
-    # robot_state_publisher publisha TF (treba nam za RViz/MoveIt kasnije) i
-    # robot_description kao topic. ros2_control_node NAMJERNO ne cita s tog
-    # topica nego dobiva robot_description direktno kao parametar ispod -
-    # "pravi" nacin (topic) ima race condition ako robot_state_publisher i
-    # ros2_control_node startaju istovremeno (cesto se dogodi u launch fileu),
-    # jer poruka moze biti objavljena prije nego se pretplata uspostavi, a
-    # nikad se ne salje ponovno. Direktan parametar je pouzdaniji, samo
-    # generira (bezopasan) deprecation warning.
-    robot_state_publisher_node = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        output="screen",
-        parameters=[{"robot_description": robot_description_content}],
-    )
-
+    # NAPOMENA: robot_state_publisher NAMJERNO nije ovdje. Isaac Sim
+    # (add_camera_ros_graph.py, bakirano u USD) vec publisha TF za CIJELO
+    # kinematicko stablo od base_link nanize, ukljucujuci iiwa_link_1..7,
+    # direktno iz stvarnog stanja fizike, sa sim-time pecatima. Da smo ovdje
+    # takodjer pokrenuli robot_state_publisher, on bi NEOVISNO racunao i
+    # publishao TF za ISTE frameove iz /joint_states, sa svojim (wall-clock)
+    # satom - dva izvora, dvije vremenske domene, isti frameovi -> TF2
+    # "ignoring data from the past" konflikt (proslo iskustvo, vidi handoff
+    # razgovor). move_group dobiva URDF/SRDF direktno preko
+    # MoveItConfigsBuilder-a, ne treba robot_state_publisher-ov
+    # /robot_description topic.
     controller_manager_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
@@ -71,7 +67,6 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            robot_state_publisher_node,
             controller_manager_node,
             spawn_joint_state_broadcaster,
             spawn_arm_controller,
