@@ -1,0 +1,10 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: kmr_iiwa_description
+    relative_path: urdf/kmr_iiwa_full.urdf
+  srdf:
+    relative_path: config/kmr_iiwa.srdf
+  package_settings:
+    author_name: David Mihić
+    author_email: david.mihic@gmail.com
+    generated_timestamp: 1784885460

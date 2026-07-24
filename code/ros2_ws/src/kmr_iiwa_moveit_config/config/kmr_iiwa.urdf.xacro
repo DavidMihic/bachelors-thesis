@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kmr_iiwa">
+    <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
+
+    <!-- Import kmr_iiwa urdf file -->
+    <xacro:include filename="$(find kmr_iiwa_description)/urdf/kmr_iiwa_full.urdf" />
+</robot>
