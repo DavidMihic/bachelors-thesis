@@ -58,7 +58,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, Float32
 
 FINGER_JOINTS = [f"gripper_finger_{i}_joint" for i in range(1, 5)]
-STROKE = 0.025  # m; 0.0=otvoren, STROKE=zatvoren (isto kao URDF joint limit)
+STROKE = 0.026  # m; 0.0=otvoren, STROKE=zatvoren (isto kao URDF joint limit)
 
 
 class GripperBridgeNode(Node):
