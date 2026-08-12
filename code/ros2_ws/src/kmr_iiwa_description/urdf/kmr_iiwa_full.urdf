@@ -554,7 +554,7 @@
     <child link="gripper_finger_1"/>
     <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
     <axis xyz="-1 0 0"/>
-    <limit effort="30.0" lower="0.0" upper="0.025" velocity="0.1"/>
+    <limit effort="30.0" lower="0.0" upper="0.026" velocity="0.1"/>
     <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
     <dynamics damping="10.0" friction="0.0"/>
   </joint>
@@ -585,7 +585,7 @@
     <child link="gripper_finger_2"/>
     <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
     <axis xyz="-1 0 0"/>
-    <limit effort="30.0" lower="0.0" upper="0.025" velocity="0.1"/>
+    <limit effort="30.0" lower="0.0" upper="0.026" velocity="0.1"/>
     <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
     <dynamics damping="10.0" friction="0.0"/>
   </joint>
@@ -616,7 +616,7 @@
     <child link="gripper_finger_3"/>
     <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
     <axis xyz="-1 0 0"/>
-    <limit effort="30.0" lower="0.0" upper="0.025" velocity="0.1"/>
+    <limit effort="30.0" lower="0.0" upper="0.026" velocity="0.1"/>
     <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
     <dynamics damping="10.0" friction="0.0"/>
   </joint>
@@ -647,7 +647,7 @@
     <child link="gripper_finger_4"/>
     <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
     <axis xyz="-1 0 0"/>
-    <limit effort="30.0" lower="0.0" upper="0.025" velocity="0.1"/>
+    <limit effort="30.0" lower="0.0" upper="0.026" velocity="0.1"/>
     <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
     <dynamics damping="10.0" friction="0.0"/>
   </joint>

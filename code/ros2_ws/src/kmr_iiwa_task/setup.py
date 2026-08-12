@@ -24,8 +24,6 @@ setup(
     entry_points={
         "console_scripts": [
             "door_task_node = kmr_iiwa_task.door_task_node:main",
-            "pymoveit2_test = kmr_iiwa_task.pymoveit2_test:main",
-            "pymoveit2_pose_test = kmr_iiwa_task.pymoveit2_pose_test:main",
             "handle_approach_test = kmr_iiwa_task.handle_approach_test:main",
         ],
     },
