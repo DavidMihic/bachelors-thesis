@@ -104,9 +104,9 @@ GRASP_STANDOFF_M = 0
 # preklop ~1.5mm sa sipkom Ø28 u centru)" - nasa sipka je bas Ø28 (radius
 # 0.014, iz sliding_door.urdf "handle" linka), pa je 1.0 (potpuno zatvoren,
 # uz otpor) DIZAJNIRANI ocekivani ishod za ispravno uhvacenu sipku, ne
-# nesto na pola hoda. Malo popustanja (0.82, ne bas 1.0) za simulacijsku
+# nesto na pola hoda. Malo popustanja (0.90, ne bas 1.0) za simulacijsku
 # netocnost.
-GOOD_GRASP_MIN_FRACTION = 0.82
+GOOD_GRASP_MIN_FRACTION = 0.90
 
 # Ako PRVI pokusaj stane ispod ovoga, prsti su se zaustavili gotovo odmah -
 # ranije (prije kolizijskog objekta vrata) ovo je bio signal za trenutni
