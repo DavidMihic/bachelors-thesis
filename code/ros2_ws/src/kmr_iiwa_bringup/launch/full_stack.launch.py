@@ -17,6 +17,7 @@ Ukljuceno:
     da arm_controller stigne postati aktivan prije MoveIt-a
   - moveit_rviz_fixed.launch.py (opcionalno, launch_rviz:=true) - odgodjen
     8s da move_group vec bude gore
+  - tcp_wrench_estimator
 
 NAMJERNO izostavljeno (pokreni rucno, po potrebi):
   - cmd_vel_bridge.py - vidi gore, treba isaaclab.sh
@@ -84,6 +85,12 @@ def generate_launch_description():
         output="screen",
     )
 
+    tcp_wrench_estimator = Node(
+        package="kmr_iiwa_perception",
+        executable="tcp_wrench_estimator",
+        output="screen",
+    )
+
     gripper_bridge = Node(
         package="kmr_iiwa_sim_bridge",
         executable="gripper_bridge",
@@ -113,12 +120,15 @@ def generate_launch_description():
     )
     moveit_rviz_delayed = TimerAction(period=8.0, actions=[moveit_rviz])
 
-    return LaunchDescription([
-        launch_rviz_arg,
-        ros2_control,
-        apriltag,
-        handle_pose_fusion,
-        gripper_bridge,
-        move_group_delayed,
-        moveit_rviz_delayed,
-    ])
+    return LaunchDescription(
+        [
+            launch_rviz_arg,
+            ros2_control,
+            apriltag,
+            handle_pose_fusion,
+            tcp_wrench_estimator,
+            gripper_bridge,
+            move_group_delayed,
+            moveit_rviz_delayed,
+        ]
+    )
