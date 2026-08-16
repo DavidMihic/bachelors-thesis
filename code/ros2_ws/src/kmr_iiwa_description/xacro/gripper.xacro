@@ -115,7 +115,7 @@
         <child link="gripper_finger_${index}"/>
         <!-- os u lokalnom okviru prsta; +q = zatvaranje prema centru za sva 4 prsta -->
         <axis xyz="-1 0 0"/>
-        <limit lower="0.0" upper="0.026" effort="30.0" velocity="0.1"/>
+        <limit lower="0.0" upper="0.026" effort="200.0" velocity="0.1"/>
         <!-- damping se ionako pregazi actuator konfiguracijom u Isaac Labu -->
         <dynamics damping="10.0" friction="0.0"/>
       </joint>

@@ -20,38 +20,89 @@ import argparse
 
 from isaaclab.app import AppLauncher
 
-parser = argparse.ArgumentParser(description="URDF -> USD s punom kontrolom collision postavki.")
+parser = argparse.ArgumentParser(
+    description="URDF -> USD s punom kontrolom collision postavki."
+)
 parser.add_argument("input", type=str, help="Putanja do ulaznog URDF-a.")
 parser.add_argument("output", type=str, help="Putanja gdje spremiti USD.")
-parser.add_argument("--fix-base", action="store_true", default=False,
-                     help="Fiksiraj root link (koristi za standalone gripper test, NE za puni robot na omniMove bazi).")
-parser.add_argument("--merge-joints", action="store_true", default=False,
-                     help="Spaja fixed jointove. OPREZ: briše gripper_wrist_joint (F/T senzor) ako je uključeno.")
-parser.add_argument("--collider-type", type=str, default="convex_decomposition",
-                     choices=["convex_hull", "convex_decomposition"],
-                     help="convex_decomposition je OBAVEZAN za konkavnu geometriju kuke prsta.")
-parser.add_argument("--self-collision", action="store_true", default=False,
-                     help="Self-collision unutar articulation grafa. Default False (parent-child parovi su svejedno filtrirani).")
-parser.add_argument("--make-instanceable", action="store_true", default=False,
-                     help="USD scene-graph instancing (dijeli mesh izmedu 4 identicna prsta). "
-                          "Default False jer instance proxy prime NIJE moguce direktno bindati "
-                          "materijalom bez dodatnog resolvanja na prototype - vidi apply_gripper_friction.py.")
-parser.add_argument("--arm-stiffness", type=float, default=100000.0,
-                     help="Stiffness za iiwa_joint_1..7 (Nm/rad, prije internog deg-skaliranja). "
-                          "Default 100000 rekonstruiran iz tvog postojećeg kmr_iiwa.usd (bio je 'kruta ruka').")
-parser.add_argument("--arm-damping", type=float, default=5000.0,
-                     help="Damping za iiwa_joint_1..7. Default 5000, isto rekonstruirano iz kmr_iiwa.usd.")
-parser.add_argument("--arm-joint-pattern", type=str, default=r"^iiwa_joint_[1-7]$",
-                     help="Regex koji pogađa imena arm zglobova u URDF-u.")
-parser.add_argument("--gripper-stiffness", type=float, default=2000.0,
-                     help="Stiffness za gripper_finger_1..4_joint (N/m). NIJE rekonstruirano iz postojećeg "
-                          "filea kao arm vrijednosti - ovo je razuman početni pogodak za 25mm hod / "
-                          "30N effort limit, treba ga potvrditi promatranjem stiska u simulaciji.")
-parser.add_argument("--gripper-damping", type=float, default=100.0,
-                     help="Damping za gripper_finger_1..4_joint. Isto - početni pogodak, ne izmjerena vrijednost.")
-parser.add_argument("--gripper-joint-pattern", type=str, default=r"^gripper_finger_[1-4]_joint$",
-                     help="Regex koji pogađa imena gripper prismatic zglobova u URDF-u.")
-parser.add_argument("--joint-target-type", type=str, default="position", choices=["position", "velocity", "none"])
+parser.add_argument(
+    "--fix-base",
+    action="store_true",
+    default=False,
+    help="Fiksiraj root link (koristi za standalone gripper test, NE za puni robot na omniMove bazi).",
+)
+parser.add_argument(
+    "--merge-joints",
+    action="store_true",
+    default=False,
+    help="Spaja fixed jointove. OPREZ: briše gripper_wrist_joint (F/T senzor) ako je uključeno.",
+)
+parser.add_argument(
+    "--collider-type",
+    type=str,
+    default="convex_decomposition",
+    choices=["convex_hull", "convex_decomposition"],
+    help="convex_decomposition je OBAVEZAN za konkavnu geometriju kuke prsta.",
+)
+parser.add_argument(
+    "--self-collision",
+    action="store_true",
+    default=False,
+    help="Self-collision unutar articulation grafa. Default False (parent-child parovi su svejedno filtrirani).",
+)
+parser.add_argument(
+    "--make-instanceable",
+    action="store_true",
+    default=False,
+    help="USD scene-graph instancing (dijeli mesh izmedu 4 identicna prsta). "
+    "Default False jer instance proxy prime NIJE moguce direktno bindati "
+    "materijalom bez dodatnog resolvanja na prototype - vidi apply_gripper_friction.py.",
+)
+parser.add_argument(
+    "--arm-stiffness",
+    type=float,
+    default=100000.0,
+    help="Stiffness za iiwa_joint_1..7 (Nm/rad, prije internog deg-skaliranja). "
+    "Default 100000 rekonstruiran iz tvog postojećeg kmr_iiwa.usd (bio je 'kruta ruka').",
+)
+parser.add_argument(
+    "--arm-damping",
+    type=float,
+    default=5000.0,
+    help="Damping za iiwa_joint_1..7. Default 5000, isto rekonstruirano iz kmr_iiwa.usd.",
+)
+parser.add_argument(
+    "--arm-joint-pattern",
+    type=str,
+    default=r"^iiwa_joint_[1-7]$",
+    help="Regex koji pogađa imena arm zglobova u URDF-u.",
+)
+parser.add_argument(
+    "--gripper-stiffness",
+    type=float,
+    default=20000.0,
+    help="Stiffness za gripper_finger_1..4_joint (N/m). NIJE rekonstruirano iz postojećeg "
+    "filea kao arm vrijednosti - ovo je razuman početni pogodak za 26mm hod / "
+    "30N effort limit, treba ga potvrditi promatranjem stiska u simulaciji.",
+)
+parser.add_argument(
+    "--gripper-damping",
+    type=float,
+    default=100.0,
+    help="Damping za gripper_finger_1..4_joint. Isto - početni pogodak, ne izmjerena vrijednost.",
+)
+parser.add_argument(
+    "--gripper-joint-pattern",
+    type=str,
+    default=r"^gripper_finger_[1-4]_joint$",
+    help="Regex koji pogađa imena gripper prismatic zglobova u URDF-u.",
+)
+parser.add_argument(
+    "--joint-target-type",
+    type=str,
+    default="position",
+    choices=["position", "velocity", "none"],
+)
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -73,7 +124,9 @@ def main():
     dest_path = os.path.abspath(args_cli.output)
 
     if args_cli.merge_joints:
-        print("!! UPOZORENJE: --merge-joints je uključen — gripper_wrist_joint (F/T) ce biti spojen i nestat ce.")
+        print(
+            "!! UPOZORENJE: --merge-joints je uključen — gripper_wrist_joint (F/T) ce biti spojen i nestat ce."
+        )
 
     cfg = UrdfConverterCfg(
         asset_path=urdf_path,
