@@ -80,7 +80,7 @@ parser.add_argument(
 parser.add_argument(
     "--gripper-stiffness",
     type=float,
-    default=20000.0,
+    default=2000.0,
     help="Stiffness za gripper_finger_1..4_joint (N/m). NIJE rekonstruirano iz postojećeg "
     "filea kao arm vrijednosti - ovo je razuman početni pogodak za 26mm hod / "
     "30N effort limit, treba ga potvrditi promatranjem stiska u simulaciji.",
