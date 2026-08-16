@@ -24,6 +24,11 @@ Pokretanje:
 
 import argparse
 
+# Vrata podignuta iznad poda: donji brid door_leaf kolidera je na z=0
+# (kutija visine 2.0 centrirana na z=1.0), a GroundPlane je takodjer na
+# z=0 - dakle tocno se poklapaju i vrata stalno grebu po podu.
+DOOR_GROUND_CLEARANCE_M = 0.01
+
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(
@@ -48,9 +53,9 @@ parser.add_argument(
     "--door-offset",
     type=float,
     nargs=3,
-    default=[2.5, 0.0, 0.0],
+    default=[2.5, 0.0, DOOR_GROUND_CLEARANCE_M],
     metavar=("X", "Y", "Z"),
-    help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X).",
+    help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X) i 1 mm iznad poda (trenje).",
 )
 parser.add_argument(
     "--door-yaw",
