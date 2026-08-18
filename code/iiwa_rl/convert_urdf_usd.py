@@ -80,15 +80,18 @@ parser.add_argument(
 parser.add_argument(
     "--gripper-stiffness",
     type=float,
-    default=2000.0,
-    help="Stiffness za gripper_finger_1..4_joint (N/m). NIJE rekonstruirano iz postojećeg "
-    "filea kao arm vrijednosti - ovo je razuman početni pogodak za 26mm hod / "
-    "30N effort limit, treba ga potvrditi promatranjem stiska u simulaciji.",
+    default=20000.0,
+    help="Stiffness za gripper_finger_1..4_joint (N/m). IZMJERENO, ne pogodak: "
+    "pri 2000 N/m i effort limitu 30 N prst dosegne maksimum tek pri 15mm "
+    "popustanja, pa se pri vucenju vrata prsti otvore do kraja hoda. Pri "
+    "vucenju silu nose samo DVA prsta (jedan par radi protiv svog pogona), "
+    "pa 20000 daje 160 N po milimetru popustanja - dvostruko vise od sile "
+    "kojom baza vuce.",
 )
 parser.add_argument(
     "--gripper-damping",
     type=float,
-    default=100.0,
+    default=200.0,
     help="Damping za gripper_finger_1..4_joint. Isto - početni pogodak, ne izmjerena vrijednost.",
 )
 parser.add_argument(
