@@ -1,33 +1,22 @@
 """
-add_door_collision.py - dodaje PANEL VRATA kao kolizijski objekt u MoveIt
-planning scenu. Ovo popravlja temeljni problem otkriven analizom - Scene
-Objects panel u RViz je bio prazan, sto znaci da RRT/MoveIt CIJELO VRIJEME
-nije znao da vrata postoje, pa nije imao poticaj ih izbjegavati. Sva
-prijasnja "divlja putanja" ponasanja (STANDOFF, brzina, path constraints,
-hill-climbing) rjesavala su simptome dok je pravi uzrok bio ovaj.
+add_door_collision.py - dodaje panel vrata kao kolizijski objekt u MoveIt
+planning scenu, tako da planer izbjegava vrata umjesto da prolazi kroz njih.
 
-Geometrija (provjereno u izvoru, sliding_door.urdf):
-  - door_leaf collision box: size 0.04 x 0.85 x 2.0, centriran na lokalni
+Geometrija (iz sliding_door.urdf):
+  - door_leaf collision box: 0.04 x 0.85 x 2.0, centriran na lokalni
     (0, 0.425, 1.0) relativno na door_leaf
-  - door_tag_center: lokalni (0.021, 0.425, 1.0) relativno na door_leaf
-    (iz ranijeg rada u ovom projektu)
-  - Znaci: centar panela = door_tag_center + lokalni offset (-0.021, 0, 0)
+  - door_tag_center: lokalni (0.021, 0.425, 1.0)
+  - dakle centar panela = door_tag_center + lokalni offset (-0.021, 0, 0)
 
-Koristimo door_tag_center-ovu TF ORIJENTACIJU za kutiju - to je AprilTag
-procjena (ima poznati sum), ALI za sigurnosnu zonu to je prihvatljivo:
-generozno podstavljamo dimenzije (COLLISION_PADDING_DEPTH_M,
-COLLISION_PADDING_WIDTH_HEIGHT_M - razliciti po osi, vidi te konstante) da
-pokrijemo i
-poziciju i orijentacijsku netocnost. Ovo NIJE precizan grasp cilj (gdje bi
-sum bio problem), nego namjerno konzervativna "ne prilazi ovome" zona.
+Orijentacija kutije gradi se oko poznate vertikale, a iz tag orijentacije se
+uzima samo smjer prema vratima. Tag ima oko 20 stupnjeva odstupanja u nagibu,
+sto bi inace polozilo kutiju na bok.
 
-NAPOMENA - ako ikad zatreba PRECIZNIJA verzija: Isaac Sim moguce publisha
-TF i za door_leaf direktno (ground truth iz simulacije, ne AprilTag
-procjena) - provjeri `ros2 topic echo /tf --once` postoji li takav frame.
-To bi bilo bolje za precizne stvari, ali za sigurnosnu zonu ovo je dovoljno.
+Dimenzije se podstavljaju da pokriju sum procjene, i to razlicito po osi:
+tanko u dubini, gdje ruka mora precizno prici kvaki, a velikodusno u sirini i
+visini, gdje margina ne smeta a najvise koristi.
 
-Preduvjet: move_group.launch.py mora raditi, apriltag_detection.launch.py
-mora vidjeti door_tag_center (robot mora gledati prema vratima).
+Preduvjet: move_group radi, apriltag vidi door_tag_center.
 
 Pokretanje:
     ros2 run kmr_iiwa_task add_door_collision
@@ -59,46 +48,16 @@ JOINT_NAMES = [
 # Stvarna geometrija panela (provjereno u sliding_door.urdf).
 DOOR_PANEL_SIZE = [0.04, 0.85, 2.0]  # X, Y, Z u LOKALNOM frameu vrata
 
-# Lokalni offset od door_tag_center do centra panela (izveden usporedbom
-# dvije poznate lokalne pozicije, vidi docstring).
+# Offset od door_tag_center do centra panela - vidi docstring.
 TAG_TO_PANEL_CENTER_OFFSET = [-0.021, 0.0, 0.0]
 
-# Koliko dodati na svaku dimenziju kutije - konzervativna sigurnosna margina
-# koja pokriva orijentacijski sum AprilTag procjene (izmjereno ~20 stupnjeva
-# odstupanja, vidi razgovor) I pozicijski sum. Namjerno velikodusno - svrha
-# ovog objekta je sprijeciti divlje putanje blizu vrata, ne precizno opisati
-# geometriju (za to bi trebao live vizualni feedback koji trenutno nemamo
-# pouzdano na ovoj udaljenosti).
-# Padding je RAZLICIT po osi - jedinstven padding je uzrokovao da sam
-# GRASP CILJ upadne unutar vlastite sigurnosne zone (grasp trazi ~1.5cm od
-# kvake, a jedinstveni padding od 0.15m protezao je kutiju ~7.5cm izvan
-# povrsine vrata u SVIM smjerovima, ukljucujuci dubinu gdje moramo precizno
-# prici). Sad: tanak padding u dubini (X - okomito na vrata, gdje treba
-# preciznost za sam hvat), velikodusan u sirini/visini (Y,Z - gdje ne
-# smeta, i tamo najvise pomaze protiv divljih rotacija sto zadire u strane).
+# Sigurnosna margina, razlicita po osi. Tanka u dubini jer grasp cilj lezi
+# svega par centimetara od povrsine vrata i inace bi upao u vlastitu
+# sigurnosnu zonu; velikodusna u sirini i visini gdje ne smeta.
 COLLISION_PADDING_DEPTH_M = 0.02
 COLLISION_PADDING_WIDTH_HEIGHT_M = 0.15
 
 COLLISION_OBJECT_ID = "door_panel"
-
-
-def quat_to_rpy_deg(q):
-    """Kvaternion (x,y,z,w) -> (roll, pitch, yaw) u stupnjevima, standardna
-    ZYX Euler konvencija. Samo za citljiv ispis/debug, ne za racunanje."""
-    x, y, z, w = q
-    sinr_cosp = 2.0 * (w * x + y * z)
-    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2.0 * (w * y - z * x)
-    sinp = max(-1.0, min(1.0, sinp))
-    pitch = math.asin(sinp)
-
-    siny_cosp = 2.0 * (w * z + x * y)
-    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(siny_cosp, cosy_cosp)
-
-    return [math.degrees(roll), math.degrees(pitch), math.degrees(yaw)]
 
 
 def quat_rotate_vector(q, v):
@@ -147,15 +106,12 @@ def rotmat_to_quat(r):
 
 
 def build_vertical_panel_orientation(tag_quat):
-    """Izgradi orijentaciju za kutiju panela vrata koja garantirano stoji
-    USPRAVNO (Z uvijek gore, base_link/world konvencija - vrata se fizicki
-    ne naginju), koristeci SAMO tag Z-os (van iz povrsine) za vodoravni dio.
-    NE koristi punu tag orijentaciju (roll/pitch bi mogli uzrokovati da
-    kutija legne na bok, kao sto smo upravo vidjeli)."""
+    """Orijentacija kutije panela koja uvijek stoji uspravno. Iz tag
+    orijentacije se uzima samo Z-os (van iz povrsine) za vodoravni dio; puna
+    tag orijentacija bi zbog roll/pitch suma polozila kutiju na bok."""
     z_world_up = np.array([0.0, 0.0, 1.0])
 
-    # Tag Z-os (van iz povrsine vrata) - projeciraj na vodoravnu ravninu i
-    # normaliziraj (ako je tag blago nakrivljen, ovo cisti tu gresku).
+    # Tag Z-os projicirana na vodoravnu ravninu - cisti nagib taga.
     tag_z = np.array(quat_rotate_vector(tag_quat, [0.0, 0.0, 1.0]))
     tag_z_horizontal = tag_z - np.dot(tag_z, z_world_up) * z_world_up
     norm = np.linalg.norm(tag_z_horizontal)
@@ -211,16 +167,9 @@ def main():
     node.get_logger().info(
         f"door_tag_center pozicija=({t.x:.3f}, {t.y:.3f}, {t.z:.3f})"
     )
-    node.get_logger().info(f"door_tag_center SIROVI kvaternion (x,y,z,w)={tag_quat}")
-    node.get_logger().info(
-        f"door_tag_center RPY (stupnjevi)={quat_to_rpy_deg(tag_quat)}"
-    )
 
-    # Izgradi USPRAVNU orijentaciju (Z uvijek gore) umjesto da koristimo
-    # sirovu tag orijentaciju direktno - vidi build_vertical_panel_orientation
-    # docstring. Offset primijeni duz NJENE X-osi (dubina panela), ne duz
-    # sirove tag orijentacije, jer su sad usklade (obje predstavljaju "van
-    # iz povrsine, vodoravno").
+    # Offset se primjenjuje duz X-osi izgradjene orijentacije (dubina panela),
+    # ne duz sirove tag orijentacije.
     panel_quat = build_vertical_panel_orientation(tag_quat)
     depth_axis = quat_rotate_vector(panel_quat, [1.0, 0.0, 0.0])
     panel_center = [
@@ -234,9 +183,7 @@ def main():
     ]
 
     node.get_logger().info(
-        f"Panel centar={panel_center}, orijentacija={panel_quat}, "
-        f"RPY (stupnjevi)={quat_to_rpy_deg(panel_quat)}, "
-        f"dimenzije (s paddingom)={padded_dims}"
+        f"Panel centar={panel_center}, dimenzije (s paddingom)={padded_dims}"
     )
 
     moveit2.add_collision_primitive(

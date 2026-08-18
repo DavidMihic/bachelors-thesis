@@ -8,23 +8,22 @@ base_link okviru. Sustav je preodredjen (7 jednadzbi, 6 nepoznanica) pa se
 rjesava metodom najmanjih kvadrata; norma reziduala se objavljuje kao
 dijagnostika (koliko momenta se NE moze objasniti silom na TCP-u).
 
-Jacobian se racuna direktno iz TF-a - sve osi zglobova su (0,0,1) u
-lokalnom okviru pripadnog linka (provjereno u iiwa7.xacro), pa je os u
-base_link okviru trostupac rotacije base_link->iiwa_link_N:
+Jacobian se racuna iz TF-a. Sve osi zglobova su (0,0,1) u lokalnom okviru
+pripadnog linka, pa je os u base_link okviru treci stupac rotacije
+base_link->iiwa_link_N:
     z_i = R(base<-iiwa_link_i) * [0,0,1]
     J_v_i = z_i x (p_tcp - p_i)
     J_w_i = z_i
 
-GRAVITACIJA NIJE MODELIRANA. Sirovi tau je dominantno gravitacijski (u
-mirovanju smo mjerili -36, -79, -17, -48 Nm) pa je apsolutna vrijednost
-besmislena. Zato node podrzava "tare": posalji praznu poruku na
-/estimation/tare i trenutna procjena se pamti kao nula. Sve nakon toga je
-RAZLIKA u odnosu na taj trenutak, sto je ono sto nam treba za detekciju
-kontakta i procjenu krutosti.
+Gravitacija nije modelirana, a sirovi tau je dominantno gravitacijski, pa je
+apsolutna vrijednost neupotrebljiva. Zato node podrzava tare: prazna poruka
+na /estimation/tare pamti trenutnu procjenu kao nulu, a sve nakon toga je
+razlika u odnosu na taj trenutak - upravo ono sto treba za detekciju kontakta
+i procjenu krutosti.
 
-VAZNO: tare vrijedi samo u blizini poze u kojoj je uzet - gravitacijski
-moment se mijenja s konfiguracijom ruke. Za probing od nekoliko milimetara
-oko iste poze to je zanemarivo; za velike pokrete treba ponoviti tare.
+Tare vrijedi samo u blizini poze u kojoj je uzet, jer se gravitacijski moment
+mijenja s konfiguracijom ruke. Za pomake od nekoliko milimetara oko iste poze
+zanemarivo je; za vece pokrete treba ga ponoviti.
 
 Preduvjet: /isaac_joint_states (arm-control graf u USD-u) i TF za
 iiwa_link_1..7 + gripper_tcp.
@@ -59,11 +58,13 @@ def quat_to_rotmat(x, y, z, w):
     xx, xy, xz = x * X, x * Y, x * Z
     yy, yz, zz = y * Y, y * Z, z * Z
     wx, wy, wz = w * X, w * Y, w * Z
-    return np.array([
-        [1.0 - (yy + zz), xy - wz, xz + wy],
-        [xy + wz, 1.0 - (xx + zz), yz - wx],
-        [xz - wy, yz + wx, 1.0 - (xx + yy)],
-    ])
+    return np.array(
+        [
+            [1.0 - (yy + zz), xy - wz, xz + wy],
+            [xy + wz, 1.0 - (xx + zz), yz - wx],
+            [xz - wy, yz + wx, 1.0 - (xx + yy)],
+        ]
+    )
 
 
 class TcpWrenchEstimator(Node):
@@ -84,8 +85,12 @@ class TcpWrenchEstimator(Node):
         self.create_subscription(Empty, "/estimation/tare", self._on_tare, 10)
 
         self._pub = self.create_publisher(WrenchStamped, "/estimation/tcp_wrench", 10)
-        self._pub_raw = self.create_publisher(WrenchStamped, "/estimation/tcp_wrench_raw", 10)
-        self._pub_res = self.create_publisher(Float32, "/estimation/wrench_residual", 10)
+        self._pub_raw = self.create_publisher(
+            WrenchStamped, "/estimation/tcp_wrench_raw", 10
+        )
+        self._pub_res = self.create_publisher(
+            Float32, "/estimation/wrench_residual", 10
+        )
 
         rate = self.get_parameter("publish_rate_hz").value
         self.create_timer(1.0 / rate, self._tick)
@@ -114,19 +119,23 @@ class TcpWrenchEstimator(Node):
         t0 = rclpy.time.Time()
         try:
             tf_tcp = self.tf_buffer.lookup_transform(BASE_FRAME, TCP_FRAME, t0)
-            p_tcp = np.array([
-                tf_tcp.transform.translation.x,
-                tf_tcp.transform.translation.y,
-                tf_tcp.transform.translation.z,
-            ])
+            p_tcp = np.array(
+                [
+                    tf_tcp.transform.translation.x,
+                    tf_tcp.transform.translation.y,
+                    tf_tcp.transform.translation.z,
+                ]
+            )
             J = np.zeros((6, 7))
             for i, link in enumerate(ARM_LINKS):
                 tf_i = self.tf_buffer.lookup_transform(BASE_FRAME, link, t0)
-                p_i = np.array([
-                    tf_i.transform.translation.x,
-                    tf_i.transform.translation.y,
-                    tf_i.transform.translation.z,
-                ])
+                p_i = np.array(
+                    [
+                        tf_i.transform.translation.x,
+                        tf_i.transform.translation.y,
+                        tf_i.transform.translation.z,
+                    ]
+                )
                 q = tf_i.transform.rotation
                 R = quat_to_rotmat(q.x, q.y, q.z, q.w)
                 z_i = R[:, 2]  # sve osi su (0,0,1) lokalno
@@ -134,7 +143,9 @@ class TcpWrenchEstimator(Node):
                 J[3:6, i] = z_i
             return J
         except (LookupException, ConnectivityException, ExtrapolationException) as exc:
-            self.get_logger().warn(f"TF nedostupan ({exc}) - preskacem.", throttle_duration_sec=5.0)
+            self.get_logger().warn(
+                f"TF nedostupan ({exc}) - preskacem.", throttle_duration_sec=5.0
+            )
             return None
 
     def _tick(self):
@@ -162,8 +173,12 @@ class TcpWrenchEstimator(Node):
             msg = WrenchStamped()
             msg.header.stamp = stamp
             msg.header.frame_id = BASE_FRAME
-            msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z = map(float, vec[0:3])
-            msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z = map(float, vec[3:6])
+            msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z = map(
+                float, vec[0:3]
+            )
+            msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z = map(
+                float, vec[3:6]
+            )
             pub.publish(msg)
 
 

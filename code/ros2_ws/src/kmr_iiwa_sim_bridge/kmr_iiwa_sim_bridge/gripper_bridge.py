@@ -1,49 +1,32 @@
 """
-gripper_bridge.py - standalone gripper driver, NE pokrece vlastiti Isaac Sim.
-Umjesto toga koristi VEC POSTOJECI /isaac_joint_commands i /isaac_joint_states
-par (isti kojeg koristi ros2_control preko topic_based_ros2_control, vidi
-add_arm_ros_control_graph.py) - radi unutar DIJELJENE simulacije koju vec
-hostira sto god trenutno pokrece world.step() (npr. cmd_vel_bridge.py),
-umjesto da otvara svoj vlastiti, odvojeni Isaac Sim prozor.
+gripper_bridge.py - upravljanje gripperom preko vec pokrenute Isaac Sim
+simulacije, bez otvaranja vlastite.
 
-Zamjenjuje stari gripper_driver.py za slucajeve kad vec postoji zajednicka
-simulacija - stari file ostaje za samostalno pokretanje/testiranje ako
-zatreba, arhitektura i sucelje su namjerno identicni.
+Koristi postojeci par /isaac_joint_commands i /isaac_joint_states, isti koji
+ros2_control koristi preko topic_based_ros2_control, pa radi unutar
+simulacije koju hostira proces sto vrti world.step() (cmd_vel_bridge.py).
 
-Ista stall-detekcijska logika kao stari gripper_driver.py (isti brojevi/
-pragovi - referentni izvor). Jedina stvarna razlika: stari throttling
-"svaki N fizickih koraka" (jer je taj node sam kontrolirao world.step()
-petlju) postaje ovdje "svaki N milisekundi" wall-clock timer, jer ovaj node
-vise ne kontrolira fizicku petlju direktno, samo se pretplacuje na tudja
-stanja preko topica.
-
-Sucelje (identicno starom gripper_driver.py):
+Sucelje:
   SUB  /gripper_cmd      (std_msgs/Float32)  0.0=otvori, 1.0=zatvori
-  PUB  /gripper_state    (std_msgs/Float32)  0.0..1.0, stvarna trenutna pozicija
-  PUB  /gripper_stalled  (std_msgs/Bool)     True = gura prema targetu ali se
-                                              vise ne mice i nije stigao ->
-                                              vjerojatno je nesto uhvatio
-  PUB  /joint_states     (sensor_msgs/JointState) - trenutne pozicije 4 prsta,
-                                              DODATNO uz gornje - inace MoveIt-ov
-                                              planning_scene_monitor nikad ne
-                                              vidi gripper zglobove (samo
-                                              joint_state_broadcaster/ruku
-                                              publisha na taj topic). Vise
-                                              publishera na isti topic je OK -
-                                              current_state_monitor akumulira.
+  PUB  /gripper_state    (std_msgs/Float32)  0.0..1.0, trenutna pozicija
+  PUB  /gripper_stalled  (std_msgs/Bool)     gura prema cilju ali se vise ne
+                                             mice i nije stigao, dakle
+                                             vjerojatno je nesto uhvatio
+  PUB  /joint_states     (sensor_msgs/JointState) pozicije 4 prsta
 
-Interno (nova stvar naspram starog gripper_driver.py):
-  PUB  /isaac_joint_commands (sensor_msgs/JointState) - pozicijski cilj za
-       4 prsta, ide u DIJELJENU simulaciju preko postojeceg arm-control grafa
-  SUB  /isaac_joint_states (sensor_msgs/JointState) - trenutno stanje CIJELE
-       artikulacije (isti graf publisha za sve, ukljucujuci ruku) - filtriramo
-       samo 4 prsta po imenu
+Prsti se objavljuju i na /joint_states jer ih inace MoveIt-ov
+planning_scene_monitor nikad ne vidi - joint_state_broadcaster publisha samo
+zglobove ruke. Vise publishera na isti topic je u redu, current_state_monitor
+akumulira stanje.
 
-Pokretanje (Isaac Sim + arm-control graf VEC MORAJU raditi - npr. preko
-cmd_vel_bridge.py na USD-u koji ima add_arm_ros_control_graph.py bakiran):
+Interno:
+  PUB  /isaac_joint_commands  pozicijski cilj za 4 prsta
+  SUB  /isaac_joint_states    stanje cijele artikulacije, filtrira se po imenu
+
+Pokretanje (Isaac Sim i arm-control graf moraju vec raditi):
     ros2 run kmr_iiwa_sim_bridge gripper_bridge
 
-Rucni test u drugom terminalu (identicno starom gripper_driver.py):
+Rucna provjera:
     ros2 topic pub /gripper_cmd std_msgs/msg/Float32 "{data: 1.0}" -1
     ros2 topic echo /gripper_state
     ros2 topic echo /gripper_stalled
@@ -122,8 +105,7 @@ class GripperBridgeNode(Node):
             self._closing_fraction = float(np.clip(msg.data, 0.0, 1.0))
 
     def _on_isaac_state(self, msg: JointState):
-        # Izvuci samo 4 prsta iz stanja CIJELE artikulacije (poruka sadrzi i
-        # ruku - vidi napomenu u add_arm_ros_control_graph.py).
+        # Poruka sadrzi cijelu artikulaciju, uzimamo samo 4 prsta.
         positions = {}
         for name, pos in zip(msg.name, msg.position):
             if name in FINGER_JOINTS:
@@ -139,9 +121,8 @@ class GripperBridgeNode(Node):
 
         target_pos = closing_fraction * STROKE
 
-        # Salji komandu u dijeljenu simulaciju svaki tick - jednostavno i
-        # dovoljno (ArticulationController drzi zadnju primljenu vrijednost
-        # izmedju poruka, isti princip kao cmd_vel_bridge.py).
+        # ArticulationController drzi zadnju primljenu vrijednost izmedju
+        # poruka, pa je dovoljno slati komandu svaki tick.
         cmd_msg = JointState()
         cmd_msg.name = FINGER_JOINTS
         cmd_msg.position = [target_pos] * len(FINGER_JOINTS)

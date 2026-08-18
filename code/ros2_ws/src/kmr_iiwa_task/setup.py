@@ -24,7 +24,10 @@ setup(
     entry_points={
         "console_scripts": [
             "door_task_node = kmr_iiwa_task.door_task_node:main",
-            "handle_approach_test = kmr_iiwa_task.handle_approach_test:main",
+            "handle_approach = kmr_iiwa_task.handle_approach:main",
+            "door_probe = kmr_iiwa_task.door_probe:main",
+            "door_open = kmr_iiwa_task.door_open:main",
+            "door_pull_base = kmr_iiwa_task.door_pull_base:main",
         ],
     },
 )

@@ -1,46 +1,40 @@
 """
-handle_approach_test.py - puni test prilaska i hvata kvake preko
-/perception/handle_pose: ready poza -> citanje/usrednjavanje percepcije ->
-pre-grasp -> grasp-dive -> zatvaranje grippera. Attach (fiksni joint) jos
-NIJE implementiran - to je sljedeci korak nakon ovoga.
+handle_approach.py - prilaz i hvat kvake preko /perception/handle_pose.
+Redoslijed: citanje i usrednjavanje percepcije -> primicanje baze uz
+rekonstrukciju poze kvake -> kolizijski objekt vrata -> ready poza ->
+pre-grasp -> uron -> bocna korekcija -> hvat.
 
-Konvencija iz handle_pose_fusion.py (provjereno u izvoru):
+Kvaka se ne fiksira na gripper. Fiksni joint bi onemogucio mjerenje sile i
+momenta, sto je dio zadatka.
+
+Primicanje baze: standoff u door_task_node je velik (~1.35 m) da mali tagovi
+na kvaki ostanu u vidnom polju, jer se inace orijentacija hvata raspadne. Na
+toj udaljenosti kvaka je izvan dosega ruke, pa se baza nakon ocitanja
+primakne. Ocitanje prezivi pomak jer se poza kvake rekonstruira iz njezinog
+invarijantnog odnosa prema velikom tagu na vratima: oboje je kruto na istim
+vratima, a veliki tag ostaje pouzdan i izbliza. Percepcija time zamjenjuje
+odometriju, koju baza nema.
+
+Konvencija iz handle_pose_fusion.py:
   - pozicija = poloviste dva taga (otprilike centar drske)
   - Y-os poruke = duz drske (baseline izmedju tagova)
-  - Z-os poruke = "gleda prema" - od povrsine vrata PREMA kameri/robotu
+  - Z-os poruke = od povrsine vrata prema kameri
 
-Konvencija iz gripper.xacro (provjereno u izvoru):
-  - gripper_base/gripper_tcp lokalni +Z = smjer prstiju (alat gleda "naprijed")
-  - hvat se zatvara duz lokalnog X, sipka/kvaka lezi duz lokalnog Y
-  - gripper_tcp referentna tocka = os sipke KAD JE ZAHVACENA (q=0.026) - znaci
-    grasp cilj = TOCNO handle_pose pozicija
+Konvencija iz gripper.xacro:
+  - gripper_tcp lokalni +Z = smjer prstiju, +X = smjer zatvaranja,
+    +Y = duz sipke
+  - gripper_tcp je os sipke kad je zahvacena, pa je grasp cilj tocno
+    handle_pose pozicija
 
-Da gripper ispravno prilazi (prstima PREMA drsci, ne od nje) i da sipka
-zavrsi duz gripperovog Y (kako dizajn ocekuje), ciljna orijentacija =
-orijentacija iz handle_pose ROTIRANA 180 stupnjeva oko VLASTITE Y-osi
-(flips predznak X i Z, Y ostaje) - izvedeno usporedbom dvije konvencije
-gore (R_gripper = R_handle @ diag(-1,1,-1)), ne pretpostavka.
+Ciljna orijentacija je orijentacija iz handle_pose rotirana 180 stupnjeva oko
+vlastite Y-osi, sto slijedi iz usporedbe te dvije konvencije
+(R_gripper = R_handle @ diag(-1,1,-1)). Time gripper prilazi prstima prema
+drsci, a sipka zavrsi duz gripperovog Y.
 
-READY_POSE: poslana NAKON citanja/usrednjavanja percepcije (ne prije - ready
-poza proteze ruku naprijed i MOZE zakloniti tagove kameri, pa citanje mora
-biti prvo, dok je ruka jos u pocetnoj/cistoj konfiguraciji), a PRIJE
-pokreta prema pre-grasp cilju, da RRT planer krece iz
-razumne (ne rubne/nulte) konfiguracije - smanjuje sansu za neprirodno
-"skvrcena" rjesenja. Trenutna vrijednost potvrdjena vizualno kao
-"u redu, radi", ALI je pruzena previse naprijed po korisnikovoj ocjeni -
-TODO: pomaknuti end effector u ready pozi ~15-30cm prema -X kad se nadje
-vrijeme, nije prioritet sad.
-
-Keep-out zona za zaklon kamere je isprobana i namjerno UKLONJENA (vidi
-prijasnju verziju/razgovor) - blokirala je prevelik dio prostora. Trenutna
-arhitektura (jedno usrednjeno ocitanje PRIJE pokreta, svi pokreti nakon
-toga "slijepi") to ionako ne treba za sad.
-
-Isaac Sim, ros2_control_test.launch.py, move_group.launch.py moraju raditi,
-kao i gripper_driver.py (za /gripper_cmd, /gripper_stalled).
+Preduvjet: Isaac Sim, ros2_control, move_group i gripper_bridge rade.
 
 Pokretanje:
-    ros2 run kmr_iiwa_task handle_approach_test
+    ros2 run kmr_iiwa_task handle_approach
 """
 
 import math
@@ -49,7 +43,7 @@ import time
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 from pymoveit2 import MoveIt2
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
@@ -63,6 +57,7 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 from kmr_iiwa_task.add_door_collision import (
     build_vertical_panel_orientation,
     quat_rotate_vector,
+    rotmat_to_quat,
     DOOR_PANEL_SIZE,
     TAG_TO_PANEL_CENTER_OFFSET,
     COLLISION_PADDING_DEPTH_M,
@@ -80,80 +75,103 @@ JOINT_NAMES = [
     "iiwa_joint_7",
 ]
 
-# Poslano prije citanja percepcije - vidi napomenu u docstringu.
-READY_POSE = [0.0, 0.6, 0.0, -1.2, 0.0, 1.0, 0.0]
+# Ruka skupljena uz sebe (lakat jako savijen), zapesce zakrenuto tako da
+# gripper gleda PREMA NAPRIJED, prema vratima. Pretpostavka je opravdana jer
+# door_task_node bazu dovodi manje-vise okomito na vrata. Time je prijelaz u
+# pre-grasp cisto priblizavanje bez preorijentacije - a preorijentacija je
+# bila uzrok divljih putanja izmedju ready i pre-grasp poze. Skupljena ruka
+# ujedno manje zaklanja kameru i tagove na kvaki.
+#
+# Zadnji zglob je +pi/2 jer je zadana meta KLIZNA vrata, gdje je sipka
+# OKOMITA - gripper mora biti zarotiran 90 stupnjeva oko vlastite osi alata
+# u odnosu na zakretna vrata, gdje je poluga vodoravna. Zglob 7 rotira bas
+# oko te osi, pa se tip vrata mijenja samo tom vrijednoscu.
+READY_POSE = [0.0, 0.45, 0.0, -1.9, 0.0, -0.8, 1.5708]
 
-# Koliko unatrag (duz Z-osi handle_pose) za pre-grasp tocku. Bio 0.15 dok
-# je padding u dubini bio debeo (0.15) - sad kad je COLLISION_PADDING_DEPTH_M
-# tanak (0.02), ne treba tako velik standoff da izbjegnemo vlastitu
-# sigurnosnu zonu. Smanjen na 0.06 - kraci grasp-dive povecava sansu da
-# cartesian=True uspije (kraca pravocrtna dionica = manja sansa da
-# computeCartesianPath naidje na singularnost/granicu usput i odustane).
+# Odmak pre-grasp tocke unatrag duz Z-osi handle_pose. Kratak, jer kraca
+# pravocrtna dionica ima manju sansu da computeCartesianPath naidje na
+# singularnost usput i odustane.
 STANDOFF_M = 0.06
 
-# Koliko dugo prikupljati uzorke za usrednjavanje (i za prvo i za drugo,
-# svjeze ocitanje na pre-grasp tocki).
+# Primicanje baze nakon ocitanja - vidi docstring.
+REAPPROACH_DELTA_M = 0.18
+REAPPROACH_TOLERANCE_M = 0.01
+REAPPROACH_KP = 0.6
+REAPPROACH_MIN_SPEED = 0.12  # prag statickog trenja baze
+REAPPROACH_MAX_SPEED = 0.25
+REAPPROACH_TIMEOUT_SEC = 20.0
+
+# Trajanje prikupljanja uzoraka za usrednjavanje percepcije.
 SAMPLE_WINDOW_SEC = 2.5
 
-# Grasp cilj = TOCNO os sipke (gripper_tcp je po dizajnu definiran kao os
-# sipke kad je zahvacena, vidi gripper.xacro).
+# Grasp cilj je os sipke, a gripper_tcp je po dizajnu bas ta tocka.
 GRASP_STANDOFF_M = 0
 
-# Ciljana frakcija zatvorenosti za DOBAR hvat (vidi Korak 4) -
-# gripper.xacro dizajnerski komentar: "q=0.025 = POTPUNO ZATVOREN (namjerni
-# preklop ~1.5mm sa sipkom Ø28 u centru)" - nasa sipka je bas Ø28 (radius
-# 0.014, iz sliding_door.urdf "handle" linka), pa je 1.0 (potpuno zatvoren,
-# uz otpor) DIZAJNIRANI ocekivani ishod za ispravno uhvacenu sipku, ne
-# nesto na pola hoda. Malo popustanja (0.90, ne bas 1.0) za simulacijsku
-# netocnost.
+# Ciljana frakcija zatvorenosti za dobar hvat. Gripper je dimenzioniran tako
+# da se oko sipke Ø28 zatvori gotovo do kraja, uz mali preklop, pa je hvat na
+# pola hoda znak da sipka nije sjela u utor.
 GOOD_GRASP_MIN_FRACTION = 0.90
 
-# Ako PRVI pokusaj stane ispod ovoga, prsti su se zaustavili gotovo odmah -
-# ranije (prije kolizijskog objekta vrata) ovo je bio signal za trenutni
-# odustanak, jer je hill-climbing pretraga mogla gurati vrata pri
-# pokusajima korekcije. Sad kad door_panel kolizijski objekt stiti od toga,
-# taj rizik je puno manji - postavljeno na -1.0 (efektivno iskljuceno) da
-# hill-climbing pretraga stvarno dobije priliku raditi ono za sto je
-# napravljena, umjesto da se uvijek presijece prije prvog koraka.
+# Ako prvi pokusaj stane ispod ovoga, prsti su se zaustavili gotovo odmah i
+# pretraga se prekida. Iskljuceno (-1.0) jer door_panel kolizijski objekt vec
+# stiti od guranja vrata pri korekcijama.
 EARLY_ABORT_FRACTION = -1.0
 
-# Koliko puta pokusati "otvori, pomakni dublje, zatvori ponovno" prije
-# odustajanja (timeout mehanizam koji sprjecava beskonacno pokusavanje).
+# Koliko puta pokusati "otvori, pomakni, zatvori ponovno" prije odustajanja.
 MAX_GRASP_ATTEMPTS = 6
 
-# Koliko dublje (duz -Z_axis, prema sipci) pomaknuti po pokusaju - mnozi se
-# s brojem pokusaja (attempt+1), pa svaki sljedeci pokusaj ide malo dalje
-# od proslog. PLACEHOLDER, podesi empirijski.
+# Pomak po pokusaju pretrage, duz osi prilaza.
 RETRY_ADVANCE_M = 0.002
 
-# 180 stupnjeva oko Y, u (x,y,z,w) redoslijedu - vidi obrazlozenje u docstringu.
+# 180 stupnjeva oko Y, u (x,y,z,w) redoslijedu - vidi docstring.
 Y_180 = (0.0, 1.0, 0.0, 0.0)
 
 GRIPPER_STALL_TIMEOUT_SEC = 10.0
 
-# Koliko uzastopnih True /gripper_stalled ocitanja (svaki ~0.1s) treba
-# prije nego prihvatimo stall kao stvaran, ne prolazan sumni trzaj.
+# Uzastopnih True ocitanja /gripper_stalled prije nego se stall prihvati kao
+# stvaran, a ne prolazan sumni trzaj.
 STALL_DEBOUNCE_COUNT = 3
 
-# Ako je gripper_tcp dalje od izracunatog grasp cilja od ovoga (npr. zbog
-# STATUS_ABORTED izvrsavanja trajektorije), NE zatvaraj gripper - vidi
-# provjeru prije Koraka 4.
+# Ako je gripper_tcp dalje od grasp cilja od ovoga, gripper se ne zatvara.
+# wait_until_executed() ne baca gresku kad izvrsavanje trajektorije ne uspije,
+# pa je ova provjera jedini nacin da se to uhvati.
 MAX_GRASP_POSITION_ERROR_M = 0.03
 
-# Koliko puta ponoviti cartesian=True grasp-dive pokusaj prije odustajanja
-# (bez RRT fallbacka - vidi Korak 3).
+# Koliko puta ponoviti pravocrtni uron prije odustajanja.
 MAX_CARTESIAN_RETRIES = 4
+
+# Ruka zna stici na tocnu poziciju ali nagnuta, a nagnut gripper ne moze
+# zatvoriti utor oko sipke. Zato uz pozicijsku ide i provjera orijentacije.
+MAX_ORIENTATION_ERROR_RAD = math.radians(5.0)
+
+# Pretraga smije i unatrag, ograniceno - optimum je ponekad plici od
+# procijenjene mete.
+MIN_DEPTH_OFFSET_M = -0.004
+
+# Kod kliznih vrata sipka je okomita, sto je poznato iz modela, dok je
+# procjena nagiba iz malih tagova nepouzdana. Zato se iz percepcije uzima
+# samo smjer prema vratima, a nagib se prisiljava na vodoravan. Za zakretna
+# vrata, gdje je poluga vodoravna, ovo treba iskljuciti.
+FORCE_HORIZONTAL_APPROACH = True
 
 # Prsti 1,2 su na +X strani baze (ox=+0.035), prsti 3,4 na -X (ox=-0.035).
 # Razlika njihovih zaustavnih pozicija daje pomak kvake duz osi zatvaranja.
 FINGER_SIDE_A = ["gripper_finger_1_joint", "gripper_finger_2_joint"]  # +X
 FINGER_SIDE_B = ["gripper_finger_3_joint", "gripper_finger_4_joint"]  # -X
-MAX_LATERAL_CORRECTIONS = 3
+MAX_LATERAL_CORRECTIONS = 6
 LATERAL_TOLERANCE_M = 0.0015
 
 
 def math_dist(a, b):
     return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
+
+
+def quat_angle_between(q1, q2):
+    """Kut najkrace rotacije izmedju dvije orijentacije, u radijanima.
+    Apsolutna vrijednost skalarnog produkta jer q i -q predstavljaju istu
+    rotaciju (dvostruko pokrivanje)."""
+    d = abs(sum(a * b for a, b in zip(q1, q2)))
+    return 2.0 * math.acos(min(1.0, d))
 
 
 def quat_multiply(q1, q2):
@@ -182,6 +200,52 @@ def quat_z_axis(q):
             1.0 - 2.0 * (x * x + y * y),
         ]
     )
+
+
+def quat_conj(q):
+    x, y, z, w = q
+    return (-x, -y, -z, w)
+
+
+def tf_compose(pa, qa, pb, qb):
+    """Slozi transformacije: A->B pa B->C daje A->C."""
+    p = np.array(pa) + np.array(quat_rotate_vector(qa, list(pb)))
+    return p, quat_multiply(qa, qb)
+
+
+def tf_inverse(p, q):
+    qi = quat_conj(q)
+    return -np.array(quat_rotate_vector(qi, list(p))), qi
+
+
+def orient_from_handle(q_handle, logger=None):
+    """Iz orijentacije kvake izvedi (z_axis, q_gripper) za prilaz.
+
+    Uz FORCE_HORIZONTAL_APPROACH os prilaza se projicira na vodoravnu ravninu
+    i orijentacija se ponovno gradi oko poznate okomite sipke, pa se iz
+    percepcije zadrzava samo smjer prema vratima. Bez toga gripper kopira
+    nagib kvake i ulazi ukoso.
+    """
+    z_axis = quat_z_axis(q_handle)
+    if not FORCE_HORIZONTAL_APPROACH:
+        return z_axis, quat_multiply(q_handle, Y_180)
+
+    z_flat = np.array([z_axis[0], z_axis[1], 0.0])
+    n = np.linalg.norm(z_flat)
+    if n < 1e-6:
+        if logger is not None:
+            logger.warn(
+                "Os prilaza je gotovo vertikalna - ne mogu je projicirati, "
+                "koristim sirovu orijentaciju iz percepcije."
+            )
+        return z_axis, quat_multiply(q_handle, Y_180)
+
+    z_axis = z_flat / n
+    y_axis = np.array([0.0, 0.0, 1.0])  # sipka je okomita
+    x_axis = np.cross(y_axis, z_axis)
+    x_axis /= np.linalg.norm(x_axis)
+    q_flat = rotmat_to_quat([x_axis, y_axis, z_axis])
+    return z_axis, quat_multiply(q_flat, Y_180)
 
 
 def compute_target(hp_x, hp_y, hp_z, z_axis, q_gripper, standoff):
@@ -237,11 +301,18 @@ def collect_average_pose(samples, window_sec, wait_timeout_sec=None):
     return hp_x, hp_y, hp_z, tuple(avg_quat)
 
 
-def main():
-    rclpy.init()
-    node = Node("handle_approach_test")
-    callback_group = ReentrantCallbackGroup()
+def run_grasp_sequence(node, tf_buffer, callback_group):
+    """Odradi cijeli hvat kvake na VEC POKRENUTOM i VEC SPINANOM nodu.
 
+    Pozivatelj je duzan prije poziva:
+      - pokrenuti rclpy i stvoriti node,
+      - dodati node u izvrsavac i vrtjeti ga u zasebnoj niti,
+      - stvoriti tf_buffer s TransformListenerom na tom nodu.
+    Ovako je ista logika upotrebljiva i samostalno i iz door_task_node, bez
+    dupliciranja koda.
+
+    Vraca True ako je hvat postignut, inace False.
+    """
     moveit2 = MoveIt2(
         node=node,
         joint_names=JOINT_NAMES,
@@ -251,19 +322,11 @@ def main():
         callback_group=callback_group,
     )
 
-    executor = MultiThreadedExecutor(4)
-    executor.add_node(node)
-
-    # Sve pretplate/publisheri koje ce nam trebati - NAMJERNO stvoreni ovdje,
-    # prije nego executor nit krene (vidi _spin_forever ispod). Otkriveno
-    # Gripper monitoring na POTPUNO ODVOJENOM nodu + izvrsavacu - dokazano
-    # (izoliranim testom) da MoveIt2-ova vlastita pozadinska aktivnost
-    # (action feedback/status na istom nodu/executoru kao nase pretplate)
-    # gladuje nase jednostavne pretplate na istom dijeljenom setupu.
-    # Zaseban Node s SingleThreadedExecutor-om, isti obrazac kao izolirani
-    # test koji je radio besprijekorno.
+    # Gripper na zasebnom nodu i izvrsavacu - MoveIt2-ova pozadinska aktivnost
+    # inace gladuje obicne pretplate na istom nodu.
     gripper_node = Node("handle_approach_gripper_monitor")
     gripper_pub = gripper_node.create_publisher(Float32, "/gripper_cmd", 10)
+    cmd_vel_pub = gripper_node.create_publisher(Twist, "/cmd_vel", 10)
     stalled = {"value": False, "consecutive_true": 0}
     state = {"value": None}
     finger_pos = {"A": None, "B": None}
@@ -281,16 +344,9 @@ def main():
     )
 
     def _on_stalled(msg):
-        # DEBOUNCE, ne obican latch - otkriveno da jednostavan latch (prvi
-        # True odmah prihvacen) hvata i RANE, SUMNE trzajeve blizu pocetka
-        # zatvaranja (frakcija ~0.002), uzrokujuci da nasa while petlja
-        # prestane pratiti prerano i ispise laznu, gotovo-nula frakciju -
-        # dok gripper u stvarnosti nastavlja zatvarati dalje i stvarno
-        # stane puno kasnije (npr. 0.556 potvrdjeno direktnim echo-om).
-        # Sad trazimo STALL_DEBOUNCE_COUNT UZASTOPNIH True ocitanja (svaki
-        # ~0.1s, iz gripper_bridge check_period_sec) prije nego prihvatimo
-        # stall kao stvaran - jedan prolazni trzaj se filtrira, stvaran
-        # mehanicki zastoj (koji ostaje stabilno True) prolazi.
+        # Debounce, ne obican latch: prvi True zna biti prolazan trzaj blizu
+        # pocetka zatvaranja, pa bi petlja prestala pratiti prerano i
+        # zabiljezila gotovo nultu frakciju iako se gripper jos zatvara.
         if msg.data:
             stalled["consecutive_true"] += 1
             if stalled["consecutive_true"] >= STALL_DEBOUNCE_COUNT:
@@ -309,28 +365,104 @@ def main():
     gripper_thread = threading.Thread(target=gripper_executor.spin, daemon=True)
     gripper_thread.start()
 
-    def _spin_forever():
-        # NE koristi executor.spin direktno - jedna neuhvacena iznimka
-        # (vidjeli smo "Failed to get number of ready entities for action
-        # client" od pymoveit2/rclpy internog action clienta) tiho ubije
-        # ovu nit. Ova petlja hvata iznimke po iteraciji i nastavlja.
-        while rclpy.ok():
-            try:
-                executor.spin_once(timeout_sec=0.1)
-            except Exception as exc:
-                node.get_logger().error(f"Executor spin iznimka (nastavljam): {exc}")
+    # --- Korak 0: citaj i usrednji /perception/handle_pose PRIJE bilo kakvog
+    # pokreta ruke - ready poza (korak 1) proteze ruku naprijed i MOZE
+    # zakloniti tagove kameri, pa citanje mora biti prvo, ne nakon toga. ---
+    samples = []
+    node.create_subscription(
+        PoseStamped,
+        "/perception/handle_pose",
+        samples.append,
+        10,
+        callback_group=callback_group,
+    )
 
-    executor_thread = threading.Thread(target=_spin_forever, daemon=True)
-    executor_thread.start()
+    node.get_logger().info("Cekam /perception/handle_pose...")
+    hp_x, hp_y, hp_z, q_handle = collect_average_pose(samples, SAMPLE_WINDOW_SEC)
+    node.get_logger().info(
+        f"Uprosjecena pozicija=({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f}), "
+        f"orijentacija={q_handle}"
+    )
 
-    tf_buffer = Buffer()
-    TransformListener(tf_buffer, node)
+    z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
 
-    # --- Korak -1: dodaj vrata kao kolizijski objekt u planning scenu,
-    # SVJEZE u OVOJ sesiji (ne oslanjaj se na odvojeno, ranije pokrenutu
-    # add_door_collision - to je bio zaseban rucni korak koji je mogao
-    # ostati zastario ako se scena resetirala izmedju pokretanja, uzrokujuci
-    # kolizijski objekt koji stoji na krivom mjestu naspram stvarne scene).
+    # --- Korak 0.5: primakni bazu, uz rekonstrukciju poze kvake ---
+    # Standoff je namjerno velik da mali tagovi na kvaki ostanu vidljivi, ali
+    # je kvaka na toj udaljenosti izvan dosega ruke. Primicemo se regulirajuci
+    # po VELIKOM tagu (pouzdan i izbliza), a pozu kvake rekonstruiramo iz
+    # njezinog invarijantnog odnosa prema tom tagu - oboje je kruto na istim
+    # vratima. Bez toga bi pomak baze obesmislio ocitanje, jer je handle_pose
+    # izrazen u base_link, a baza nema odometriju.
+    def read_door_tag():
+        try:
+            t = tf_buffer.lookup_transform(
+                "base_link", "door_tag_center", rclpy.time.Time()
+            )
+            tr, r = t.transform.translation, t.transform.rotation
+            return np.array([tr.x, tr.y, tr.z]), (r.x, r.y, r.z, r.w)
+        except (LookupException, ConnectivityException, ExtrapolationException):
+            return None, None
+
+    node.get_logger().info("Cekam door_tag_center za rekonstrukciju...")
+    p_tag, q_tag = None, None
+    while p_tag is None and rclpy.ok():
+        p_tag, q_tag = read_door_tag()
+        time.sleep(0.1)
+
+    p_tag_inv, q_tag_inv = tf_inverse(p_tag, q_tag)
+    p_rel, q_rel = tf_compose(
+        p_tag_inv, q_tag_inv, np.array([hp_x, hp_y, hp_z]), q_handle
+    )
+    node.get_logger().info(f"Kvaka u okviru velikog taga: {np.round(p_rel, 4)}")
+
+    d_start = float(np.linalg.norm(p_tag[:2]))
+    d_target = d_start - REAPPROACH_DELTA_M
+    node.get_logger().info(
+        f"Primicem bazu: {d_start:.3f} m -> {d_target:.3f} m do velikog taga"
+    )
+
+    t_begin = time.monotonic()
+    while rclpy.ok():
+        p_tag_now, _ = read_door_tag()
+        if p_tag_now is None:
+            time.sleep(0.05)
+            continue
+        err = float(np.linalg.norm(p_tag_now[:2])) - d_target
+        if abs(err) < REAPPROACH_TOLERANCE_M:
+            break
+        if time.monotonic() - t_begin > REAPPROACH_TIMEOUT_SEC:
+            node.get_logger().warn(
+                "Timeout pri primicanju baze - nastavljam s postignutim."
+            )
+            break
+        v = REAPPROACH_KP * err
+        v = math.copysign(
+            min(max(abs(v), REAPPROACH_MIN_SPEED), REAPPROACH_MAX_SPEED), v
+        )
+        tw = Twist()
+        tw.linear.x = v
+        cmd_vel_pub.publish(tw)
+        time.sleep(0.05)
+
+    cmd_vel_pub.publish(Twist())
+    time.sleep(1.5)  # neka se baza smiri prije novog ocitanja
+
+    p_tag2, q_tag2 = None, None
+    while p_tag2 is None and rclpy.ok():
+        p_tag2, q_tag2 = read_door_tag()
+        time.sleep(0.1)
+
+    p_handle_new, q_handle_new = tf_compose(p_tag2, q_tag2, p_rel, q_rel)
+    hp_x, hp_y, hp_z = p_handle_new
+    q_handle = q_handle_new
+    z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
+    node.get_logger().info(
+        f"Kvaka rekonstruirana nakon pomaka: ({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f})"
+    )
+
+    # --- Korak 0.6: vrata kao kolizijski objekt, tek sad nakon primicanja
+    # baze. Racuna se iz door_tag_center izrazenog u base_link, pa bi ga pomak
+    # baze ucinio zastarjelim da je dodan ranije. ---
     node.get_logger().info(
         "Cekam TF base_link -> door_tag_center (za kolizijski objekt vrata)..."
     )
@@ -371,43 +503,13 @@ def main():
         f"Kolizijski objekt vrata dodan (svjeze, ova sesija): centar={door_panel_center}"
     )
 
-    # --- Korak 0: citaj i usrednji /perception/handle_pose PRIJE bilo kakvog
-    # pokreta ruke - ready poza (korak 1) proteze ruku naprijed i MOZE
-    # zakloniti tagove kameri, pa citanje mora biti prvo, ne nakon toga. ---
-    samples = []
-    node.create_subscription(
-        PoseStamped,
-        "/perception/handle_pose",
-        samples.append,
-        10,
-        callback_group=callback_group,
-    )
-
-    node.get_logger().info("Cekam /perception/handle_pose...")
-    hp_x, hp_y, hp_z, q_handle = collect_average_pose(samples, SAMPLE_WINDOW_SEC)
-    node.get_logger().info(
-        f"Uprosjecena pozicija=({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f}), "
-        f"orijentacija={q_handle}"
-    )
-
-    z_axis = quat_z_axis(q_handle)
-    q_gripper = quat_multiply(q_handle, Y_180)
-
-    # --- Korak 1: ready poza - SAD kad vec imamo izracunat cilj iz cistog
-    # ocitanja, sigurno je pomaknuti ruku (RRT planer krece iz razumne
-    # konfiguracije umjesto iz nulte/rubne). ---
+    # --- Korak 1: ready poza. Tek sad, kad je cilj vec izracunat iz cistog
+    # ocitanja, jer pruzena ruka moze zakloniti tagove kameri. ---
     node.get_logger().info(f"Saljem ready pozu: {READY_POSE}")
     moveit2.move_to_configuration(READY_POSE)
     moveit2.wait_until_executed()
 
-    # Sigurnosno usporavanje - PRIJE pre-grasp poteza sad, ne tek nakon
-    # njega. Otkad je STANDOFF_M smanjen na 0.03, i pre-grasp cilj je blizu
-    # vrata (bio je siguran na 12cm, sad je na 3cm) - ranije je usporavanje
-    # dolazilo tek nakon pre-grasp poteza, kad je to imalo smisla na 12cm.
-    # NAPOMENA - isti oprez kao i za set_path_orientation_constraint: nisam
-    # mogao provjeriti tocan naziv svojstva izravno iz izvora, samo iz
-    # referentnog vodica. Ako baci AttributeError, provjeri:
-    #   python3 -c "from pymoveit2 import MoveIt2; print([a for a in dir(MoveIt2) if 'veloc' in a.lower() or 'accel' in a.lower()])"
+    # Sigurnosno usporavanje za sve pokrete blizu vrata.
     moveit2.max_velocity = 0.05
     moveit2.max_acceleration = 0.05
 
@@ -420,61 +522,60 @@ def main():
     )
 
     def read_pre_grasp_error():
+        """Vrati (pozicijska_greska_m, kutna_greska_rad, ok)."""
         try:
             actual = tf_buffer.lookup_transform(
                 "base_link", "gripper_tcp", rclpy.time.Time()
             )
             at = actual.transform.translation
-            return math_dist((at.x, at.y, at.z), pre_grasp_position), True
+            ar = actual.transform.rotation
+            return (
+                math_dist((at.x, at.y, at.z), pre_grasp_position),
+                quat_angle_between((ar.x, ar.y, ar.z, ar.w), pre_grasp_quat),
+                True,
+            )
         except (LookupException, ConnectivityException, ExtrapolationException) as exc:
             node.get_logger().warn(f"Ne mogu procitati TF gripper_tcp ({exc}).")
-            return 0.0, False
+            return 0.0, 0.0, False
 
-    # NAPOMENA - ova provjera je nedostajala do sad (grasp-dive je vec imao
-    # slicnu, pre-grasp ne). wait_until_executed() ne baca gresku ni kad
-    # planiranje/izvrsavanje ne uspije (isti STATUS_ABORTED/INVALID_MOTION_PLAN
-    # obrazac kao vise puta ranije) - bez ove provjere, skripta bi ispisala
-    # "Pre-grasp dosegnut" i nastavila dalje CAK I DA SE RUKA UOPCE NIJE
-    # POMAKNULA (npr. ostala u ready pozi). Otkriveno na revolute vratima -
-    # razlog jos nije poznat (geometrija vrata za koliziju je provjereno
-    # identicna sliding/revolute, nije to), ali provjera barem sprjecava
-    # tihi nastavak na krivoj bazi bez obzira na uzrok.
+    # wait_until_executed() ne baca gresku kad planiranje ili izvrsavanje ne
+    # uspije, pa bi bez ove provjere skripta nastavila dalje i kad se ruka
+    # uopce nije pomaknula.
     for pre_grasp_attempt in range(3):
         moveit2.move_to_pose(
             position=pre_grasp_position, quat_xyzw=pre_grasp_quat, cartesian=False
         )
         moveit2.wait_until_executed()
-        pg_error, pg_tf_ok = read_pre_grasp_error()
+        pg_error, pg_angle, pg_tf_ok = read_pre_grasp_error()
         node.get_logger().info(
-            f"Nakon pre-grasp pokusaja {pre_grasp_attempt}, odstupanje od cilja={pg_error:.3f}m"
+            f"Nakon pre-grasp pokusaja {pre_grasp_attempt}, "
+            f"odstupanje={pg_error:.3f}m, nagib={math.degrees(pg_angle):.1f}deg"
         )
-        if pg_error <= MAX_GRASP_POSITION_ERROR_M:
+        if (
+            pg_error <= MAX_GRASP_POSITION_ERROR_M
+            and pg_angle <= MAX_ORIENTATION_ERROR_RAD
+        ):
             break
     else:
         node.get_logger().error(
-            f"Pre-grasp NIJE dosegnut nakon 3 pokusaja (zadnje odstupanje={pg_error:.3f}m) - "
-            "odustajem, ne nastavljam na grasp-dive iz krive bazne poze."
+            f"Pre-grasp NIJE dosegnut nakon 3 pokusaja (odstupanje={pg_error:.3f}m, "
+            f"nagib={math.degrees(pg_angle):.1f}deg) - odustajem, ne nastavljam "
+            "na grasp-dive iz krive bazne poze."
         )
         gripper_executor.shutdown()
         gripper_node.destroy_node()
-        rclpy.shutdown()
-        executor_thread.join(timeout=2.0)
         gripper_thread.join(timeout=2.0)
-        return
+        return False
 
     node.get_logger().info("Pre-grasp dosegnut.")
 
-    # --- Korak 2.5: pokusaj SVJEZE ocitanje ovdje, izbliza (~STANDOFF_M od
-    # kvake) - AprilTag procjena je precznija na manjoj udaljenosti (veci
-    # prividni tag u slici = manji relativni utjecaj piksel-suma na kut).
-    # Fallback na staro ocitanje ako tagovi odavde nisu vidljivi (zaklon) -
-    # ne cekaj beskonacno. ---
+    # --- Korak 2.5: svjeze ocitanje izbliza, gdje je AprilTag procjena
+    # preciznija. Ako tagovi odavde nisu vidljivi, koristi se staro. ---
     node.get_logger().info("Pokusavam svjeze ocitanje na pre-grasp tocki...")
     fresh = collect_average_pose(samples, SAMPLE_WINDOW_SEC, wait_timeout_sec=1.5)
     if fresh is not None:
         hp_x, hp_y, hp_z, q_handle = fresh
-        z_axis = quat_z_axis(q_handle)
-        q_gripper = quat_multiply(q_handle, Y_180)
+        z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
         node.get_logger().info(
             f"Svjeza pozicija=({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f}), "
             f"orijentacija={q_handle} - koristim ovo za grasp cilj."
@@ -485,26 +586,9 @@ def main():
             "koristim staro (izdaleka) ocitanje za grasp cilj."
         )
 
-    # --- Korak 3: grasp-dive (kraci uron, koristi svjeze ocitanje iz koraka
-    # 2.5 ako je bilo dostupno, inace staro).
-    #
-    # Isprobali smo vise kombinacija za ovaj kratki, ali prostorno stisnuti
-    # pokret (blizu vrata/kvake):
-    #   - cartesian=False (RRT): pouzdano STIGNE, ali slobodno rotira usput
-    #     ("dodje sa strane umjesto okomito", zapinje o gripper).
-    #   - cartesian=False + path orientation constraint: constraint sprijeci
-    #     rotaciju, ALI RRT u ovom stisnutom prostoru ne moze naci NIJEDAN
-    #     put koji panduje kolizije I ostane unutar tolerancije - probano na
-    #     0.3 i 0.5 rad, oboje INVALID_MOTION_PLAN.
-    #   - cartesian=True (pravocrtna interpolacija): NE MOZE rotirati usput
-    #     po definiciji (linearno interpolira i poziciju i orijentaciju), ali
-    #     ranije je znao ili "sletjeti" na krivu lokaciju ili STATUS_ABORTED
-    #     kad pravocrtni put nije kolizijski slobodan.
-    #
-    # Sad kad imamo TF sigurnosnu provjeru (ispod) koja hvata OBA loša
-    # ishoda bez obzira na metodu, probamo cartesian=True PRVI (nema
-    # rotacije po prirodi stvari), s cartesian=False (bez constrainta) kao
-    # fallback ako cartesian=True ne uspije stici. ---
+    # --- Korak 3: uron do kvake, pravocrtno. Pravocrtna interpolacija po
+    # definiciji ne moze rotirati usput, dok RRT u ovom stisnutom prostoru
+    # bira putanje koje dovedu gripper ukoso. ---
     grasp_position, grasp_quat = compute_target(
         hp_x, hp_y, hp_z, z_axis, q_gripper, GRASP_STANDOFF_M
     )
@@ -513,34 +597,39 @@ def main():
     )
 
     def read_gripper_tcp_error():
-        """Vrati (error_m, ok) - udaljenost gripper_tcp od grasp_position, ili
-        (0.0, False) ako TF trenutno nije citljiv (ne blokiraj u tom slucaju)."""
+        """Vrati (pozicijska_greska_m, kutna_greska_rad, ok) u odnosu na grasp
+        cilj, ili (0.0, 0.0, False) ako TF trenutno nije citljiv."""
         try:
             actual = tf_buffer.lookup_transform(
                 "base_link", "gripper_tcp", rclpy.time.Time()
             )
             at = actual.transform.translation
-            return math_dist((at.x, at.y, at.z), grasp_position), True
+            ar = actual.transform.rotation
+            return (
+                math_dist((at.x, at.y, at.z), grasp_position),
+                quat_angle_between((ar.x, ar.y, ar.z, ar.w), grasp_quat),
+                True,
+            )
         except (LookupException, ConnectivityException, ExtrapolationException) as exc:
             node.get_logger().warn(f"Ne mogu procitati TF gripper_tcp ({exc}).")
-            return 0.0, False
+            return 0.0, 0.0, False
 
-    # NAMJERNO nema RRT (cartesian=False) fallbacka ovdje - probano, ali
-    # RRT zna birati divlju/rotirajucu putanju kroz ovaj prostor koja
-    # POVREMENO fizicki udari u vrata/kvaku. Umjesto toga, PONOVI istu
-    # sigurnu metodu (cartesian=True) nekoliko puta - planiranje nije
-    # savrseno deterministicko, ponovljeni pokusaj ima realnu sansu uspjeti
-    # cak i kad je prvi pao, bez rizika koji RRT fallback nosi.
+    # Bez RRT fallbacka: RRT ovdje zna birati putanju koja udari u vrata.
+    # Umjesto toga se ista pravocrtna metoda ponavlja - planiranje nije
+    # deterministicko, pa ponovljeni pokusaj cesto uspije.
     for grasp_dive_attempt in range(MAX_CARTESIAN_RETRIES):
         moveit2.move_to_pose(
             position=grasp_position, quat_xyzw=grasp_quat, cartesian=True
         )
         moveit2.wait_until_executed()
-        error, tf_ok = read_gripper_tcp_error()
+        error, angle, tf_ok = read_gripper_tcp_error()
         node.get_logger().info(
-            f"Nakon cartesian=True pokusaja {grasp_dive_attempt}, odstupanje od cilja={error:.3f}m"
+            f"Nakon cartesian=True pokusaja {grasp_dive_attempt}, "
+            f"odstupanje={error:.3f}m, nagib={math.degrees(angle):.1f}deg"
         )
-        if not tf_ok or error <= MAX_GRASP_POSITION_ERROR_M:
+        if not tf_ok or (
+            error <= MAX_GRASP_POSITION_ERROR_M and angle <= MAX_ORIENTATION_ERROR_RAD
+        ):
             break
 
     node.get_logger().info("Grasp poza dosegnuta.")
@@ -550,18 +639,18 @@ def main():
     # ne uspije (npr. STATUS_ABORTED) - bez ove provjere, skripta bi slijepo
     # nastavila i zatvorila gripper gdje god je ruka zavrsila, ne nuzno na
     # cilju. Isti TF obrazac koji koristimo cijeli razgovor. ---
-    if error > MAX_GRASP_POSITION_ERROR_M:
+    if error > MAX_GRASP_POSITION_ERROR_M or angle > MAX_ORIENTATION_ERROR_RAD:
         node.get_logger().error(
-            f"Gripper_tcp je {error:.3f}m od cilja (> {MAX_GRASP_POSITION_ERROR_M}m) - "
-            "vjerojatno izvrsavanje trajektorije nije uspjelo (STATUS_ABORTED ili slicno). "
-            "NE zatvaram gripper na krivoj poziciji."
+            f"Grasp poza nije dosegnuta (odstupanje={error:.3f}m, "
+            f"nagib={math.degrees(angle):.1f}deg; dopusteno "
+            f"{MAX_GRASP_POSITION_ERROR_M}m i "
+            f"{math.degrees(MAX_ORIENTATION_ERROR_RAD):.0f}deg). "
+            "NE zatvaram gripper na krivoj pozi."
         )
         gripper_executor.shutdown()
         gripper_node.destroy_node()
-        rclpy.shutdown()
-        executor_thread.join(timeout=2.0)
         gripper_thread.join(timeout=2.0)
-        return
+        return False
 
     # --- Korak 4: pomakni malo naprijed, stisni, otpusti, ponovi - pozicija
     # se AKUMULIRA (ne resetira na originalnu grasp_position izmedju
@@ -577,11 +666,9 @@ def main():
     # pokusajem, okreni smjer ako se pogorsalo). ---
     node.get_logger().info("Zatvaram gripper...")
 
-    # --- Bocna korekcija duz osi zatvaranja prstiju ---
-    # Nije ista os kao GRASP_STANDOFF_M (to je dubina, normala vrata).
-    # Ova os je lokalni X gripera. Smjer i iznos citamo iz razlike
-    # zaustavnih pozicija dviju strana - strana koja stane RANIJE je strana
-    # prema kojoj je kvaka pomaknuta.
+    # --- Bocna korekcija duz osi zatvaranja prstiju (lokalni X gripera).
+    # Smjer i iznos slijede iz razlike zaustavnih pozicija dviju strana:
+    # strana koja stane ranije je ona prema kojoj je kvaka pomaknuta. ---
     gripper_x = np.array(quat_rotate_vector(grasp_quat, [1.0, 0.0, 0.0]))
 
     for lat in range(MAX_LATERAL_CORRECTIONS):
@@ -619,14 +706,9 @@ def main():
         )
         moveit2.wait_until_executed()
 
-    # depth_offset prati koliko smo se pomaknuli OD ORIGINALNE grasp_position
-    # duz -Z_axis (pozitivno = dublje prema kvaki). CLAMPANO na >=0 - ne
-    # dopusti pretrazi da ide DALJE UNATRAG od originalne, percepcijom
-    # izracunate mete. Otkriveno empirijski: povlacenje unatrag zna
-    # LAZNO pokazati visu frakciju (prsti se zatvore skoro do kraja jer
-    # NEMA NICEGA da ih zaustavi - promasaj, ne dobar hvat), pa bi
-    # hill-climbing bez ovog ogranicenja bjezao sve dalje u prazninu
-    # slijedeci tu laznu "poboljsanu" frakciju.
+    # depth_offset je pomak od originalne grasp_position duz osi prilaza,
+    # pozitivno prema kvaki. Ogranicen je s MIN_DEPTH_OFFSET_M jer povlacenje
+    # unatrag zna lazno pokazati visu frakciju - prsti se zatvore u prazno.
     depth_offset = 0.0
     current_position = list(grasp_position)
     direction = 1.0  # +1 = dublje (prema -Z_axis), -1 = natrag (prema +Z_axis)
@@ -705,11 +787,11 @@ def main():
         prev_fraction = fraction
 
         depth_offset += direction * RETRY_ADVANCE_M
-        if depth_offset < 0.0:
-            depth_offset = 0.0
+        if depth_offset < MIN_DEPTH_OFFSET_M:
+            depth_offset = MIN_DEPTH_OFFSET_M
             node.get_logger().info(
-                "Pretraga bi otisla dalje unatrag od originalne mete - "
-                "ogranicavam na originalnu poziciju (ne bjezi u prazninu)."
+                "Pretraga je dosegla najplicu dopustenu tocku - dalje unatrag "
+                "ne idem."
             )
 
         node.get_logger().info(
@@ -737,15 +819,39 @@ def main():
             f"na poziciji {best_position}."
         )
 
-    node.get_logger().info(
-        "Gotovo (hvat zavrsen, attach - fiksni joint - jos NIJE implementiran)."
-    )
-
     gripper_executor.shutdown()
     gripper_node.destroy_node()
-    rclpy.shutdown()
-    executor_thread.join(timeout=2.0)
     gripper_thread.join(timeout=2.0)
+    return good_grasp
+
+
+def spin_node_forever(node, executor):
+    """Vrti izvrsavac otporno na iznimke. NE koristi executor.spin izravno -
+    jedna neuhvacena iznimka iz pymoveit2/rclpy internog action clienta tiho
+    ubije nit, nakon cega se nijedan callback vise ne poziva."""
+    while rclpy.ok():
+        try:
+            executor.spin_once(timeout_sec=0.1)
+        except Exception as exc:
+            node.get_logger().error(f"Executor spin iznimka (nastavljam): {exc}")
+
+
+def main():
+    rclpy.init()
+    node = Node("handle_approach")
+    callback_group = ReentrantCallbackGroup()
+
+    executor = MultiThreadedExecutor(4)
+    executor.add_node(node)
+    threading.Thread(
+        target=spin_node_forever, args=(node, executor), daemon=True
+    ).start()
+
+    tf_buffer = Buffer()
+    TransformListener(tf_buffer, node)
+
+    run_grasp_sequence(node, tf_buffer, callback_group)
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

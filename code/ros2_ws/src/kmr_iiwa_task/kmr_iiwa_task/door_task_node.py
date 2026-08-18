@@ -1,35 +1,34 @@
 """
-door_task_node.py - state-machine node za zadatak otvaranja vrata. Ova verzija
-implementira samo fazu prilaska: baza se dovede na fiksnu stajnu udaljenost i
-kut ispred vrata, koristeci door_tag_center kao vizualnu referencu, pa se
-zakljuca kad regulacija konvergira. Naredne faze (prilazak kvaci, hvat,
-provjera brave, procjena ogranicenja gibanja, impedancijsko otvaranje) nisu
-jos implementirane.
+door_task_node.py - state-machine node za zadatak otvaranja vrata.
 
-Nasumican spawn baze rjesava se odvojeno, u build_integration_scene.py
-(--randomize-spawn), prije nego se scena uopce ucita - ne ovdje.
+Faza prilaska: baza se dovede na fiksnu stajnu udaljenost i kut ispred vrata,
+koristeci door_tag_center kao vizualnu referencu, pa se zakljuca kad
+regulacija konvergira.
 
-Napomena o pristupu - bearing umjesto poravnanja orijentacije:
-Regulator ne pokusava poravnati orijentaciju baze s orijentacijom
-door_tag_center transforma, jer bi to zahtijevalo pretpostavku o konvenciji
-osi koju apriltag_ros koristi za tag frame koja nije potvrdjena. Umjesto toga
-koristi cisto pozicijski "bearing": atan2(ty, tx) u base_link frameu, kut
-izmedju robotove naprijed-osi i smjera prema tagu. Ovo je dovoljno da baza
-zavrsi priblizno kvadratno ispred vrata, sto je dovoljno za domet ruke u
-sljedecoj fazi.
+Faza hvata: cim je baza zakljucana, pokrece se run_grasp_sequence iz
+handle_approach - ocitanje percepcije, primicanje baze uz rekonstrukciju poze
+kvake preko velikog taga, ready poza, pre-grasp, uron, bocna korekcija i
+hvat. Ista funkcija koristi se i pri samostalnom pokretanju tog modula, pa
+logika hvata postoji samo na jednom mjestu.
 
-TF lanac: ne treba dodatni glue kod - add_camera_ros_graph.py vec publisha
-kompletno kinematicko stablo (base_link -> ... -> camera_color_optical_frame)
-preko ROS2PublishTransformTree, a apriltag_ros dodaje door_tag_center na isti
-tf2 tree (isti princip kao u handle_pose_fusion.py). Ovaj node samo radi
-lookup_transform(base_frame, door_tag_frame, Time()) - najnoviji dostupan.
+Nasumican spawn baze rjesava se u build_integration_scene.py
+(--randomize-spawn), prije ucitavanja scene.
+
+Regulator koristi bearing umjesto poravnanja orijentacije: atan2(ty, tx) u
+base_link frameu, dakle kut izmedju naprijed-osi robota i smjera prema tagu.
+Poravnanje po orijentaciji tag framea trazilo bi pretpostavku o konvenciji
+osi koju apriltag_ros koristi, a bearing je dovoljan da baza zavrsi
+priblizno kvadratno ispred vrata.
+
+TF lanac ne treba dodatni kod: add_camera_ros_graph.py publisha kinematicko
+stablo (base_link -> ... -> camera_color_optical_frame), a apriltag_ros
+dodaje door_tag_center na isti tf2 tree.
 
 Sigurnosna napomena: cmd_vel_bridge.py primjenjuje zadnju primljenu Twist
-poruku svaki fizicki korak - nema failsafe timeouta. Zato ovaj node mora
-eksplicitno publishati nulti Twist cim TF postane nedostupan ili zastario
-(ne smije se osloniti na "prestani publishati pa ce robot stati"), i mora
-prestati publishati bilo sto, ukljucujuci nule, nakon zakljucavanja baze -
-vidi _tick_base_locked().
+poruku svaki fizicki korak i nema failsafe timeout. Zato ovaj node
+eksplicitno publisha nulti Twist cim TF postane nedostupan ili zastario, a
+nakon zakljucavanja baze prestaje publishati bilo sto - vidi
+_tick_base_locked().
 
 Sucelje:
   PUB  /cmd_vel (geometry_msgs/Twist), u base_link frameu (isto kao
@@ -44,7 +43,7 @@ finalnim greskama.
 Pokretanje:
     ros2 run kmr_iiwa_task door_task_node
     ros2 run kmr_iiwa_task door_task_node --ros-args \
-        -p standoff_distance_m:=1.2 -p door_tag_frame:=door_tag_center
+        -p standoff_distance_m:=1.35 -p door_tag_frame:=door_tag_center
 """
 
 import json
@@ -52,38 +51,36 @@ import math
 import time
 from enum import Enum, auto
 
+import threading
+
 import rclpy
 from geometry_msgs.msg import Twist
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+
+from kmr_iiwa_task.handle_approach import run_grasp_sequence, spin_node_forever
 
 
 class Phase(Enum):
     WAITING_FOR_TAG = auto()
     APPROACHING = auto()
     BASE_LOCKED = auto()
-    # Naredne faze (nisu jos implementirane):
-    #   APPROACHING_HANDLE    - IK prema /perception/handle_pose
-    #   GRASPING              - zatvaranje grippera na kvaci
-    #   ATTACHED              - fiksni joint nakon potvrdjenog kontakta
-    #   PROBING               - provjera postoji li brava
-    #   UNLOCKING             - otkljucavanje ako brava postoji
-    #   ESTIMATING_CONSTRAINT - rekurzivni fit kruznice/pravca za gibanje vrata
-    #   OPENING               - impedancijsko povlacenje/klizanje
-    #   DONE
+    GRASPING = auto()
+    GRASPED = auto()
+    FAILED = auto()
 
 
 def apply_speed_floor(
     value: float, limit: float, floor: float, error_abs: float, tolerance: float
 ) -> float:
-    """Ogranici komandu na [-limit, limit]. Dok je pripadna greska (error_abs)
-    izvan tolerance, garantiraj minimalnu magnitudu (floor) kad je komanda
-    nenulta - sprjecava da regulator asimptotski padne ispod praga koji
-    svladava staticko trenje baze i nikad stvarno ne stigne do cilja. Kad je
-    greska vec unutar tolerance, vraca nulu - dalje guranje bi samo izbacilo
-    bazu natrag van tolerancije."""
+    """Ogranici komandu na [-limit, limit], uz minimalnu magnitudu (floor) dok
+    je greska izvan tolerance. Bez poda regulator asimptotski padne ispod
+    praga statickog trenja baze i nikad ne stigne do cilja. Unutar tolerance
+    vraca nulu, jer bi dalje guranje samo izbacilo bazu natrag van nje."""
     if error_abs <= tolerance or value == 0.0:
         return 0.0
     magnitude = max(min(abs(value), limit), floor)
@@ -103,14 +100,14 @@ class DoorTaskNode(Node):
         self.declare_parameter("control_rate_hz", 20.0)
 
         # --- Cilj prilaska ---
-        self.declare_parameter("standoff_distance_m", 1.2)
+        self.declare_parameter("standoff_distance_m", 1.35)
 
         # --- P regulator ---
         self.declare_parameter("kp_x", 0.6)
         self.declare_parameter("kp_y", 0.6)
         self.declare_parameter("kp_yaw", 1.2)
 
-        # --- Settle kriterij (debounce protiv suma pri konvergenciji) ---
+        # --- Settle kriterij (debounce protiv suma) ---
         self.declare_parameter("pos_tolerance_m", 0.05)
         self.declare_parameter("yaw_tolerance_rad", 0.08)
         self.declare_parameter("settle_ticks", 10)
@@ -149,7 +146,7 @@ class DoorTaskNode(Node):
         self.phase = Phase.WAITING_FOR_TAG
         self.settle_counter = 0
         self.approach_start_time = None
-        self._locked_stub_logged = False
+        self._base_locked_logged = False
         self._last_tag_stamp_ns = None
 
         rate = self.get_parameter("control_rate_hz").value
@@ -200,16 +197,10 @@ class DoorTaskNode(Node):
         self._drive_toward_tag(transform)
 
     def _tick_base_locked(self):
-        # Baza se vise ne mice do kraja zadatka - namjerno ne publishamo bas
-        # nista ovdje (cak ni nule), da se ne otvori slucajni prozor gdje
-        # neka buduca izmjena doda logiku prije ovog returna i preskoci ga.
-        if not self._locked_stub_logged:
-            self.get_logger().info(
-                "Baza zakljucana na stajnoj tocki. Naredne faze (attach, "
-                "probing, otkljucavanje, procjena ogranicenja, impedancija) "
-                "nisu jos implementirane u ovom nodu."
-            )
-            self._locked_stub_logged = True
+        # Baza se vise ne mice - namjerno se ne publisha nista, ni nule.
+        if not self._base_locked_logged:
+            self.get_logger().info("Baza zakljucana na stajnoj tocki.")
+            self._base_locked_logged = True
 
     # ------------------------------------------------------------------ #
     # Pomocne metode
@@ -321,8 +312,35 @@ class DoorTaskNode(Node):
 def main():
     rclpy.init()
     node = DoorTaskNode()
+    callback_group = ReentrantCallbackGroup()
+
+    # Node se vrti u zasebnoj niti, a glavna nit vodi zadatak sekvencijalno.
+    # Faza hvata je blokirajuca (ceka izvrsavanje trajektorija), pa ne moze
+    # zivjeti u timer callbacku - odatle ova podjela.
+    executor = MultiThreadedExecutor(4)
+    executor.add_node(node)
+    threading.Thread(
+        target=spin_node_forever, args=(node, executor), daemon=True
+    ).start()
+
     try:
-        rclpy.spin(node)
+        while rclpy.ok() and node.phase != Phase.BASE_LOCKED:
+            time.sleep(0.1)
+
+        # Regulator baze se gasi prije hvata: run_grasp_sequence sam primice
+        # bazu preko /cmd_vel, pa bi dva izvora naredbi na istom topicu
+        # radila jedan protiv drugoga.
+        node.timer.cancel()
+        node.phase = Phase.GRASPING
+        node.get_logger().info("Pocinjem hvat kvake.")
+
+        ok = run_grasp_sequence(node, node.tf_buffer, callback_group)
+        node.phase = Phase.GRASPED if ok else Phase.FAILED
+        node.get_logger().info("Kvaka uhvacena." if ok else "Hvat kvake nije uspio.")
+        node._append_log({"event": "grasp_complete", "success": bool(ok)})
+
+        while rclpy.ok():
+            time.sleep(0.2)
     except KeyboardInterrupt:
         pass
     finally:
