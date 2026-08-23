@@ -75,15 +75,10 @@
     </inertial>
   </link>
 
-  <!-- Latch: axis = door normal (X). Turn the handle here to unlock.
-       Give it a spring-return via the PhysX drive after import. -->
-  <joint name="latch_joint" type="revolute">
+  <joint name="latch_joint" type="fixed">
     <parent link="door_leaf"/>
     <child link="handle_base"/>
     <origin xyz="0.02 0.72 1.0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>
-    <limit lower="0.0" upper="0.7" effort="20" velocity="3.0"/>
-    <dynamics damping="0.2" friction="0.05"/>
   </joint>
 
   <!-- ===================== HANDLE: lever to grasp ===================== -->

@@ -101,6 +101,15 @@ parser.add_argument(
     help="Regex koji pogađa imena gripper prismatic zglobova u URDF-u.",
 )
 parser.add_argument(
+    "--door-joint-pattern",
+    type=str,
+    default=r"^door_dof_joint$",
+    help="Regex za DOF vrata. Gains su namjerno 0 - otpor vrata NE zivi u assetu, "
+    "nego se postavlja u ArticulationCfg-u i randomizira po env-u.",
+)
+parser.add_argument("--door-stiffness", type=float, default=0.0)
+parser.add_argument("--door-damping", type=float, default=0.0)
+parser.add_argument(
     "--joint-target-type",
     type=str,
     default="position",
@@ -113,11 +122,40 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-import os  # noqa: E402
+import os, re  # noqa: E402
+import xml.etree.ElementTree as ET
 
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg  # noqa: E402
 from isaaclab.utils.assets import check_file_path  # noqa: E402
 from isaaclab.utils.dict import print_dict  # noqa: E402
+
+
+def urdf_joint_names(path: str) -> set[str]:
+    """Imena zglobova iz URDF-a. Sluzi samo za filtriranje gain patterna i
+    upozorenje o merge-u, pa neuspjelo parsiranje ne smije srusiti
+    konverziju - Isaacov parser je tolerantniji od ElementTree-a (npr. na
+    '--' unutar XML komentara, sto je formalno nedopusteno)."""
+    try:
+        return {j.get("name") for j in ET.parse(path).getroot().iter("joint")}
+    except ET.ParseError as exc:
+        print(f"!! Ne mogu parsirati {path} radi provjere zglobova: {exc}")
+        return set()
+
+
+def matching_patterns(urdf_path: str, gains: dict[str, float]) -> dict[str, float]:
+    """Zadrzi samo patterne koji pogadjaju barem jedan zglob u URDF-u.
+
+    IsaacLab-ov _set_joint_drive_gains baca ValueError na pattern bez
+    pogotka. Jedan konverter opsluzuje i robota i vrata, koji nemaju
+    zajednickih zglobova, pa se nepogodjeni patterni tiho izbacuju umjesto
+    da se odrzavaju dvije skoro identicne skripte.
+    """
+    names = urdf_joint_names(urdf_path)
+    return {
+        pattern: value
+        for pattern, value in gains.items()
+        if any(re.match(pattern, name) for name in names)
+    }
 
 
 def main():
@@ -126,9 +164,10 @@ def main():
         raise ValueError(f"Invalid file path: {urdf_path}")
     dest_path = os.path.abspath(args_cli.output)
 
-    if args_cli.merge_joints:
+    if args_cli.merge_joints and "gripper_wrist_joint" in urdf_joint_names(urdf_path):
         print(
-            "!! UPOZORENJE: --merge-joints je uključen — gripper_wrist_joint (F/T) ce biti spojen i nestat ce."
+            "!! UPOZORENJE: --merge-joints je uključen na URDF-u koji ima "
+            "gripper_wrist_joint (F/T) — bit ce spojen i nestat ce."
         )
 
     cfg = UrdfConverterCfg(
@@ -143,14 +182,22 @@ def main():
         make_instanceable=args_cli.make_instanceable,
         joint_drive=UrdfConverterCfg.JointDriveCfg(
             gains=UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
-                stiffness={
-                    args_cli.arm_joint_pattern: args_cli.arm_stiffness,
-                    args_cli.gripper_joint_pattern: args_cli.gripper_stiffness,
-                },
-                damping={
-                    args_cli.arm_joint_pattern: args_cli.arm_damping,
-                    args_cli.gripper_joint_pattern: args_cli.gripper_damping,
-                },
+                stiffness=matching_patterns(
+                    urdf_path,
+                    {
+                        args_cli.arm_joint_pattern: args_cli.arm_stiffness,
+                        args_cli.gripper_joint_pattern: args_cli.gripper_stiffness,
+                        args_cli.door_joint_pattern: args_cli.door_stiffness,
+                    },
+                ),
+                damping=matching_patterns(
+                    urdf_path,
+                    {
+                        args_cli.arm_joint_pattern: args_cli.arm_damping,
+                        args_cli.gripper_joint_pattern: args_cli.gripper_damping,
+                        args_cli.door_joint_pattern: args_cli.door_damping,
+                    },
+                ),
             ),
             target_type=args_cli.joint_target_type,
         ),

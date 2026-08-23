@@ -1,0 +1,130 @@
+<?xml version="1.0"?>
+<!-- Revolute (hinged) door, RL training variant.
+
+     Differences from revolute_door.urdf (the perception/classical asset):
+       - No latch. Turning the handle is out of scope for both approaches;
+         it was the dominant failure mode of the model-based controller.
+         The spindle stub and the lever are therefore merged into a single
+         rigid handle_grasp link, welded to the leaf. Mass and inertia below
+         are the parallel-axis sum of the two original primitives about the
+         combined centre of mass, not a placeholder.
+       - AprilTag anchor links removed (state-based observation, no camera
+         in the loop; the near-massless tag links only degrade solver
+         conditioning during contact).
+       - Canonical names shared with sliding_door_rl.urdf:
+             door_frame      static base link
+             door_leaf       moving link
+             door_dof_joint  the single DOF that "opens"
+             handle_grasp    the link the gripper takes
+
+     Consequence of welding the handle: the entire hinge torque now passes
+     through finger friction on a 28mm rod. Grip slip replaces lever
+     rotation as the failure mode, so the gripper friction coefficient
+     (apply_gripper_friction.py) belongs in the domain randomisation.
+
+     Convert with merge-joints and make-instanceable.
+     Result: 2 rigid bodies, 1 DOF.
+
+     The <dynamics> values below are DEFAULTS ONLY - resistance is set in
+     the ArticulationCfg and randomised per-env at runtime. In particular,
+     do NOT rely on the converter's default drive: it produced a 100 Nm/rad
+     closer spring on the hinge (218 N at the handle to reach 90 deg), which
+     is what the earlier revolute-door experiments were fighting.
+
+     Convention: door face normal = +X, width along +Y (hinge at Y=0),
+     height along +Z. -->
+<robot name="revolute_door_rl">
+
+  <!-- ===================== FRAME (static hinge post) ===================== -->
+  <link name="door_frame">
+    <visual>
+      <origin xyz="0 -0.03 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 0.06 2.0"/></geometry>
+      <material name="frame_grey"><color rgba="0.5 0.5 0.5 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.03 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 0.06 2.0"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 -0.03 1.0"/>
+      <mass value="50"/>
+      <inertia ixx="16.7" iyy="16.7" izz="0.03" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- ===================== DOOR LEAF ===================== -->
+  <link name="door_leaf">
+    <visual>
+      <origin xyz="0.0 0.425 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.04 0.85 2.0"/></geometry>
+      <material name="door_wood"><color rgba="0.72 0.52 0.30 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0.0 0.425 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.04 0.85 2.0"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.0 0.425 1.0"/>
+      <mass value="15"/>
+      <inertia ixx="5.90" iyy="5.00" izz="0.91" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <!-- The DOF that opens. Revolute here, prismatic in the other asset -
+       same name, so the env code never branches on door type. -->
+  <joint name="door_dof_joint" type="revolute">
+    <parent link="door_frame"/>
+    <child link="door_leaf"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="1.57" effort="200" velocity="2.0"/>
+    <dynamics damping="2.0" friction="1.0"/>
+  </joint>
+
+  <!-- ===================== HANDLE (spindle + lever, welded) ===================== -->
+  <!-- Link frame sits where latch_joint used to be. Geometry is unchanged
+       from revolute_door.urdf, so the grasp pose carries over:
+         - spindle stub, axis +X, centred at (0.02, 0, 0)
+         - lever, axis +Y, spanning y in [-0.16, 0] at x = 0.04,
+           pointing back toward the hinge side like a real lever handle
+       Inertia: combined centre of mass at (0.034286, -0.057143, 0),
+       total mass 0.35 kg, tensor about that point from the parallel-axis
+       theorem over both cylinders (note the non-zero ixy - the two pieces
+       are offset in both x and y, so the tensor is not diagonal). -->
+  <link name="handle_grasp">
+    <visual>
+      <origin xyz="0.02 0 0" rpy="0 1.5708 0"/>
+      <geometry><cylinder radius="0.012" length="0.04"/></geometry>
+      <material name="handle_metal"><color rgba="0.2 0.2 0.22 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0.02 0 0" rpy="0 1.5708 0"/>
+      <geometry><cylinder radius="0.012" length="0.04"/></geometry>
+    </collision>
+
+    <visual>
+      <origin xyz="0.04 -0.08 0" rpy="1.5708 0 0"/>
+      <geometry><cylinder radius="0.014" length="0.16"/></geometry>
+      <material name="handle_metal"><color rgba="0.2 0.2 0.22 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.08 0" rpy="1.5708 0 0"/>
+      <geometry><cylinder radius="0.014" length="0.16"/></geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0.034286 -0.057143 0"/>
+      <mass value="0.35"/>
+      <inertia ixx="1.00993e-3" iyy="7.00048e-5" izz="1.04823e-3"
+               ixy="1.14286e-4" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="handle_fixed" type="fixed">
+    <parent link="door_leaf"/>
+    <child link="handle_grasp"/>
+    <origin xyz="0.02 0.72 1.0" rpy="0 0 0"/>
+  </joint>
+
+</robot>

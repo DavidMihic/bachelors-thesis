@@ -53,9 +53,9 @@ parser.add_argument(
     "--door-offset",
     type=float,
     nargs=3,
-    default=[2.5, 0.0, DOOR_GROUND_CLEARANCE_M],
+    default=[2.5, 0.0, 0],
     metavar=("X", "Y", "Z"),
-    help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X) i 1 mm iznad poda (trenje).",
+    help="Pozicija vrata relativno na robotov spawn (m). Default 2.5m ispred (+X), na Z se uvijek dodaje f{DOOR_GROUND_CLEARANCE_M} m od poda (clearance)",
 )
 parser.add_argument(
     "--door-yaw",
@@ -218,6 +218,15 @@ def main():
         )
     else:
         door_offset, door_yaw = args_cli.door_offset, args_cli.door_yaw
+
+    # Clearence primijeni UVIJEK, ne samo kroz default vrijednost argumenta -
+    # inace ga eksplicitan "--door-offset 2.5 0 0"
+    # tiho ponisti i door_leaf kolider opet lezi na GroundPlaneu.
+    door_offset = [
+        door_offset[0],
+        door_offset[1],
+        door_offset[2] + DOOR_GROUND_CLEARANCE_M,
+    ]
 
     # --- Vrata: referenca na (eventualno randomiziranom) offsetu/rotaciji ---
     door_path = "/World/Door"
