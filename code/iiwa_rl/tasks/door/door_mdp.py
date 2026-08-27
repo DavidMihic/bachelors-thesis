@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import torch
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import quat_apply
+from isaaclab.utils.math import quat_apply, quat_mul
 
 from .door_cfg import DOOR_DOF_JOINT, DOOR_LEAF_BODY
 from .robot_cfg import GRIPPER_CLOSED
@@ -41,6 +41,11 @@ NOMINAL_TCP_B = (1.158, -0.287, 1.005)  # TCP pri hvatu, u base_link (iz TF-a)
 DOOR_BASE_YAW = 3.14159265  # vrata gledaju natrag prema robotu
 
 Z_AXIS = torch.tensor([0.0, 0.0, 1.0])
+
+
+# --------------------------------------------------------------------------
+# Pomocne
+# --------------------------------------------------------------------------
 
 # Indeksi zglobova i tijela ne mijenjaju se kroz trening, a find_joints/
 # find_bodies rade regex pretragu po imenima pri svakom pozivu - uz sest
@@ -62,11 +67,13 @@ def _joints(asset, key: str, pattern: str) -> list[int]:
     return _INDEX_CACHE[cache_key]
 
 
-def _door_dof(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Pomak/kut DOF-a vrata, (num_envs,). PRIVILEGIRANO."""
-    door: Articulation = env.scene[asset_cfg.name]
-    joint_ids = _joints(door, "dof", DOOR_DOF_JOINT)
-    return door.data.joint_pos[:, joint_ids[0]]
+def quat_inv(q: torch.Tensor) -> torch.Tensor:
+    """Konjugat jedinicnog kvaterniona (w, x, y, z).
+
+    Rucno umjesto quat_conjugate/quat_apply_inverse jer se ta imena mijenjaju
+    medu verzijama Isaac Laba, a ovo je cetiri znaka koda.
+    """
+    return q * torch.tensor([1.0, -1.0, -1.0, -1.0], device=q.device)
 
 
 def _yaw_quat(angle: torch.Tensor) -> torch.Tensor:
@@ -74,6 +81,25 @@ def _yaw_quat(angle: torch.Tensor) -> torch.Tensor:
     half = 0.5 * angle
     zero = torch.zeros_like(half)
     return torch.stack([torch.cos(half), zero, zero, torch.sin(half)], dim=-1)
+
+
+def _past_grace(env: "ManagerBasedRLEnv", grace_steps: int) -> torch.Tensor:
+    """Prvih nekoliko koraka epizode terminacije ne vrijede.
+
+    Dva razloga, oba lazni pozitivi u koraku 0:
+    - prsti se pri resetu zatvaraju KROZ polugu, PhysX prodor razrijesi
+      impulsom daleko iznad praga sile
+    - body_pos_w nije osvjezen odmah nakon write_joint_state_to_sim, pa se
+      zastarjeli TCP usporeduje s novom pozom vrata
+    """
+    return env.episode_length_buf > grace_steps
+
+
+def _door_dof(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Pomak/kut DOF-a vrata, (num_envs,). PRIVILEGIRANO."""
+    door: Articulation = env.scene[asset_cfg.name]
+    joint_ids = _joints(door, "dof", DOOR_DOF_JOINT)
+    return door.data.joint_pos[:, joint_ids[0]]
 
 
 def _horizontal_force_w(
@@ -89,8 +115,7 @@ def _horizontal_force_w(
     bez dobitka ovdje.)
     """
     robot: Articulation = env.scene[robot_cfg.name]
-    body_ids = _bodies(robot, "ft", FT_SENSOR_BODY)
-    idx = body_ids[0]
+    idx = _bodies(robot, "ft", FT_SENSOR_BODY)[0]
 
     force_local = tcp_wrench(env, robot_cfg)[:, :3]
     force_w = quat_apply(robot.data.body_quat_w[:, idx], force_local).clone()
@@ -112,20 +137,18 @@ def door_motion_direction_w(
     obzira na to koliko je njena vlastita procjena smjera dobra.
     """
     door: Articulation = env.scene[asset_cfg.name]
-    root_quat = door.data.root_quat_w
-    root_pos = door.data.root_pos_w
 
     if door_type == "sliding":
         # Klizanje je duz lokalne +Y osi okvira vrata (konvencija iz URDF-a).
         local = torch.zeros_like(tcp_pos_w)
         local[:, 1] = 1.0
-        return quat_apply(root_quat, local)
+        return quat_apply(door.data.root_quat_w, local)
 
     # Zakretna: tangenta luka je z x (p - c), gdje je c os sarke. Sarka je u
     # ishodistu okvira vrata (door_dof_joint origin = 0 0 0 u URDF-u), pa je
     # radijus-vektor p_tcp - p_root, projiciran u vodoravnu ravninu.
     z = Z_AXIS.to(tcp_pos_w.device).expand_as(tcp_pos_w)
-    radius = (tcp_pos_w - root_pos).clone()
+    radius = (tcp_pos_w - door.data.root_pos_w).clone()
     radius[:, 2] = 0.0
     tangent = torch.cross(z, radius, dim=-1)
     return tangent / (tangent.norm(dim=-1, keepdim=True) + 1e-8)
@@ -144,8 +167,7 @@ def handle_pos_w(
     skliznuo, pa bi grasp_lost okidao cim vrata krenu.
     """
     door: Articulation = env.scene[door_cfg.name]
-    body_ids = _bodies(door, "leaf", DOOR_LEAF_BODY)
-    idx = body_ids[0]
+    idx = _bodies(door, "leaf", DOOR_LEAF_BODY)[0]
     local = torch.tensor(handle_local, device=env.device).expand(env.num_envs, 3)
     return door.data.body_pos_w[:, idx] + quat_apply(
         door.data.body_quat_w[:, idx], local
@@ -165,33 +187,36 @@ def tcp_wrench(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Ten
     velicinu koja ulazi i u opazanje i u nagradu.
     """
     robot: Articulation = env.scene[asset_cfg.name]
-    body_ids = _bodies(robot, "ft", FT_SENSOR_BODY)
-    forces = robot.root_physx_view.get_link_incoming_joint_force()
-    return forces[:, body_ids[0], :]
+    idx = _bodies(robot, "ft", FT_SENSOR_BODY)[0]
+    return robot.root_physx_view.get_link_incoming_joint_force()[:, idx, :]
 
 
 def tcp_pose_b(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Poza vrha alata u frameu baze, (num_envs, 7): pozicija + kvaternion."""
+    """Poza vrha alata u frameu baze, (num_envs, 7): pozicija + kvaternion.
+
+    Rotira se u okvir baze, ne samo translatira: baza se moze zakretati, a
+    bez rotacije bi politika vidjela pozu koja se mijenja kad se baza okrene
+    iako se ruka naspram baze nije pomaknula.
+    """
     robot: Articulation = env.scene[asset_cfg.name]
-    body_ids = _bodies(robot, "obs", asset_cfg.body_names[0])
-    idx = body_ids[0]
-    pos = robot.data.body_pos_w[:, idx] - robot.data.root_pos_w
-    return torch.cat([pos, robot.data.body_quat_w[:, idx]], dim=-1)
+    idx = _bodies(robot, "obs", asset_cfg.body_names[0])[0]
+    q_inv = quat_inv(robot.data.root_quat_w)
+    pos = quat_apply(q_inv, robot.data.body_pos_w[:, idx] - robot.data.root_pos_w)
+    quat = quat_mul(q_inv, robot.data.body_quat_w[:, idx])
+    return torch.cat([pos, quat], dim=-1)
 
 
 def tcp_velocity_b(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Linearna i kutna brzina vrha alata, (num_envs, 6).
-
-    NAPOMENA O OKVIRU: baza je fiksirana s identitetom kao orijentacijom, pa
-    je okvir baze jednak svjetskom do na translaciju - a translacija ne utjece
-    na brzinu. Ako robot ikad dobije rotiran spawn, i ovaj i tcp_pose_b treba
-    ispraviti.
-    """
+    """Linearna i kutna brzina vrha alata u frameu baze, (num_envs, 6)."""
     robot: Articulation = env.scene[asset_cfg.name]
-    body_ids = _bodies(robot, "obs", asset_cfg.body_names[0])
-    idx = body_ids[0]
+    idx = _bodies(robot, "obs", asset_cfg.body_names[0])[0]
+    q_inv = quat_inv(robot.data.root_quat_w)
     return torch.cat(
-        [robot.data.body_lin_vel_w[:, idx], robot.data.body_ang_vel_w[:, idx]], dim=-1
+        [
+            quat_apply(q_inv, robot.data.body_lin_vel_w[:, idx]),
+            quat_apply(q_inv, robot.data.body_ang_vel_w[:, idx]),
+        ],
+        dim=-1,
     )
 
 
@@ -211,7 +236,12 @@ def dof_progress(
     full_travel: float,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("door"),
 ) -> torch.Tensor:
-    """Normirani napredak DOF-a vrata. Glavni clan nagrade."""
+    """Normirani napredak DOF-a vrata. Glavni clan nagrade.
+
+    full_travel je PRAG USPJEHA, ne puni hod vrata. Uz normiranje na puni hod
+    centimetar pomaka vrijedi premalo da nadjaca kazne, pa je politika ucila
+    drzati kvaku i ne dirati vrata.
+    """
     return _door_dof(env, asset_cfg) / full_travel
 
 
@@ -272,11 +302,12 @@ def force_exceeded(
     env: "ManagerBasedRLEnv",
     limit: float,
     robot_cfg: SceneEntityCfg,
+    grace_steps: int = 5,
 ) -> torch.Tensor:
     """Sigurnosni prekid epizode. Ista vodoravna sila kao u kazni - inace bi
     prag okidao na tezini gripera umjesto na interakciji."""
     force_w, _ = _horizontal_force_w(env, robot_cfg)
-    return force_w.norm(dim=-1) > limit
+    return (force_w.norm(dim=-1) > limit) & _past_grace(env, grace_steps)
 
 
 def grasp_lost(
@@ -285,6 +316,7 @@ def grasp_lost(
     handle_local: tuple[float, float, float],
     robot_cfg: SceneEntityCfg,
     door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+    grace_steps: int = 5,
 ) -> torch.Tensor:
     """Hvat izgubljen: TCP se udaljio od sipke kvake.
 
@@ -292,10 +324,9 @@ def grasp_lost(
     vrata gura udarcem umjesto vucenjem.
     """
     robot: Articulation = env.scene[robot_cfg.name]
-    tcp_ids = _bodies(robot, "tcp", TCP_BODY)
-    tcp = robot.data.body_pos_w[:, tcp_ids[0]]
+    tcp = robot.data.body_pos_w[:, _bodies(robot, "tcp", TCP_BODY)[0]]
     handle = handle_pos_w(env, handle_local, door_cfg)
-    return (tcp - handle).norm(dim=-1) > max_distance
+    return ((tcp - handle).norm(dim=-1) > max_distance) & _past_grace(env, grace_steps)
 
 
 # --------------------------------------------------------------------------
@@ -324,7 +355,7 @@ def reset_grasp_and_door(
     To nije kozmetika nego uvjet prijenosa. Pri deploymentu klasicni
     handle_approach parkira bazu gdje stigne, IK da neki joint_1, a politika
     kao opazanje dobiva pozu TCP-a u okviru baze - trenirana na jednoj
-    vrijednosti, vidjela bi neviđenu raspodjelu.
+    vrijednosti, vidjela bi nevidenu raspodjelu.
 
     delta_range treba drzati joint_1 daleko od limita (-2.967 rad): pri
     vucenju se potrosi oko 0.3 rad, a izvorno izmjerena konfiguracija
@@ -346,9 +377,20 @@ def reset_grasp_and_door(
 
     delta = torch.empty((n,), device=device).uniform_(*delta_range)
 
+    # --- baza natrag u ishodiste env-a s identitetom ---
+    # Poza vrata dolje racuna se u okviru base_link pod tom pretpostavkom, a
+    # baza je kroz epizodu odlutala. Ide PRIJE zglobova jer ostatak funkcije
+    # ovisi o tome gdje baza stoji.
+    root_state = robot.data.default_root_state[env_ids].clone()
+    root_state[:, :3] = env.scene.env_origins[env_ids]
+    robot.write_root_pose_to_sim(root_state[:, :7], env_ids=env_ids)
+    robot.write_root_velocity_to_sim(
+        torch.zeros_like(root_state[:, 7:]), env_ids=env_ids
+    )
+
     # --- ruka ---
-    arm_ids, _ = robot.find_joints("iiwa_joint_[1-7]")
-    finger_ids, _ = robot.find_joints("gripper_finger_[1-4]_joint")
+    arm_ids = _joints(robot, "arm", "iiwa_joint_[1-7]")
+    finger_ids = _joints(robot, "fingers", "gripper_finger_[1-4]_joint")
 
     nominal = torch.tensor(nominal_joint_pos, device=device)
     noise = torch.rand((n, len(arm_ids)), device=device) - 0.5
@@ -370,8 +412,7 @@ def reset_grasp_and_door(
 
     door_quat = _yaw_quat(DOOR_BASE_YAW + delta)
     local = torch.tensor(handle_local, device=device).expand(n, 3)
-    door_pos = handle_b - quat_apply(door_quat, local)
-    door_pos = door_pos + env.scene.env_origins[env_ids]
+    door_pos = handle_b - quat_apply(door_quat, local) + env.scene.env_origins[env_ids]
 
     door.write_root_pose_to_sim(
         torch.cat([door_pos, door_quat], dim=-1), env_ids=env_ids

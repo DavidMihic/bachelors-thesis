@@ -50,11 +50,6 @@ DOOR_LEAF_BODY = "door_leaf"
 HANDLE_LOCAL_SLIDING = (0.09, 0.65, 1.0)
 HANDLE_LOCAL_REVOLUTE = (0.06, 0.64, 1.0)
 
-# Hod do kraja, iz URDF limita. Prag uspjeha NIJE ovo - ogranicen je dosegom
-# ruke pri fiksnoj bazi, vidi door_env_cfg.py.
-SLIDING_FULL_TRAVEL_M = 0.8
-REVOLUTE_FULL_TRAVEL_RAD = 1.57
-
 
 @dataclass
 class DoorResistanceRanges:
@@ -140,7 +135,7 @@ def door_articulation_cfg(
             ),
         ),
         init_state=DoorArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.0),  # env postavlja stvarnu pozu vrata
+            pos=(0.0, 0.0, 0.0),  # reset postavlja stvarnu pozu vrata
             joint_pos={DOOR_DOF_JOINT: 0.0},
             joint_vel={DOOR_DOF_JOINT: 0.0},
         ),

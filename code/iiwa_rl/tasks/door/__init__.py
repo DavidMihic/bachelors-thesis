@@ -8,7 +8,7 @@ politika na kliznima nauci nesto smisleno.
 import gymnasium as gym
 
 from . import agents
-from .door_env_cfg import DoorEnvCfg, DoorRevoluteEnvCfg
+from .door_env_cfg import DoorEnvCfg, DoorRevoluteEnvCfg, DoorRevoluteFixedEnvCfg
 
 gym.register(
     id="Isaac-Door-Sliding-KMR-iiwa-v0",
@@ -26,6 +26,16 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": DoorRevoluteEnvCfg,
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DoorPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Isaac-Door-Revolute-Fixed-KMR-iiwa-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": DoorRevoluteFixedEnvCfg,
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DoorPPORunnerCfg",
     },
 )

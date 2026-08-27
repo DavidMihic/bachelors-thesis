@@ -34,75 +34,68 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import os, sys  # noqa: E402
-import gymnasium as gym
-import torch
+import os  # noqa: E402
+import sys  # noqa: E402
 
-import isaaclab_tasks  # noqa: F401
-from isaaclab_tasks.utils import parse_env_cfg
+import gymnasium as gym  # noqa: E402
+import torch  # noqa: E402
+
+import isaaclab_tasks  # noqa: F401, E402
+from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from isaaclab.managers import SceneEntityCfg
-import iiwa_rl.tasks.door  # noqa: E402, F401
-from iiwa_rl.tasks.door import door_mdp as mdp
+import iiwa_rl.tasks.door  # noqa: E402, F401  - registrira Isaac-Door-* zadatke
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 
 def main():
-    """Zero actions agent with Isaac Lab environment."""
-    # parse configuration
+    """Zero actions agent with Isaac Lab environment.
+
+    Nulta akcija uz pose_rel znaci "ne pomicaj referencu", pa ruka mirno
+    stoji i drzi kvaku. Sluzi za provjeru scene i reseta bez politike u igri:
+    ako se ovdje nesto mice ili raspada, uzrok nije u treningu.
+    """
     env_cfg = parse_env_cfg(
         args_cli.task,
         device=args_cli.device,
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
-    # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    count = 0
-
-    # print info (this is vectorized environment)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
-    # reset environment
     env.reset()
-    # simulate environment
+
+    count = 0
     while simulation_app.is_running():
-        # run everything in inference mode
         with torch.inference_mode():
-            # compute zero actions
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
-            # actions[:, 1] = -1.0  # puni pomak reference duz osi klizanja
-            # actions[:, 6:] = 1.0  # maksimalna krutost
-            # apply actions
             env.step(actions)
 
             if count % 60 == 0:
                 robot = env.unwrapped.scene["robot"]
-                arm_ids, arm_names = robot.find_joints("iiwa_joint_[1-7]")
+                arm_ids, _ = robot.find_joints("iiwa_joint_[1-7]")
                 q = robot.data.joint_pos[0, arm_ids]
                 lower = robot.data.soft_joint_pos_limits[0, arm_ids, 0]
                 upper = robot.data.soft_joint_pos_limits[0, arm_ids, 1]
-                # 0 = na donjem limitu, 1 = na gornjem, ~0.5 = sredina raspona
+                # 0 = na donjem limitu, 1 = na gornjem, ~0.5 = sredina raspona.
+                # Zglob na 0 ili 1 znaci da je ruka kinematicki potrosena i da
+                # vrata staju zbog toga, a ne zbog upravljanja.
                 print("zglobovi (udio raspona):", ((q - lower) / (upper - lower)))
                 tcp_ids, _ = robot.find_bodies("gripper_tcp")
-                base = robot.data.root_pos_w[0]
-                print(
-                    "|TCP - baza|:",
-                    (robot.data.body_pos_w[0, tcp_ids[0]] - base).norm(),
-                )
+                reach = (
+                    robot.data.body_pos_w[0, tcp_ids[0]] - robot.data.root_pos_w[0]
+                ).norm()
+                print("|TCP - baza|:", reach.item())
 
             count += 1
 
-    # close the simulator
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
     main()
-    # close sim app
     simulation_app.close()

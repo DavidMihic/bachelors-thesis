@@ -2,7 +2,7 @@
 
 Parno uz door_cfg.py: USD nosi topologiju, gains zive ovdje.
 
-DVIJE VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
+TRI VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
 
 1. Ruka ide s pogonom na NULI. OSC racuna momente i pise ih kao effort
    target; da implicitni aktuator zadrzi krutost 100000 iz konverzije, PD
@@ -15,17 +15,22 @@ DVIJE VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
    7.5x previse autoriteta; politika bi ga naucila koristiti i pri
    deploymentu ne bi radila.
 
-Baza je fiksirana ovdje (fix_root_link), ne u assetu - asset ostaje
-upotrebljiv i za scenarij s pokretnom bazom ako se opseg kasnije prosiri.
+3. Korijen artikulacije je FIKSAN i to mora ostati. OSC racuna jakobijan i
+   inercijsku matricu uz pretpostavku fiksnog korijena; s plutajucim
+   korijenom kompenzacija gravitacije ispadne kriva i ruka jednostavno
+   propada - provjereno empirijski. Pomicanje baze zato ne ide kroz
+   plutajuci korijen nego kroz fiktivne zglobove (world -> base_x -> base_y
+   -> base_theta -> base_link), gdje korijen ostaje fiksan a baza se giba
+   kao dio artikulacije.
 """
 
 from __future__ import annotations
 
+import os
+
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
-
-import os
 
 ASSETS_DIR = os.path.normpath(
     os.path.join(
@@ -33,6 +38,8 @@ ASSETS_DIR = os.path.normpath(
     )
 )
 
+# URDF: "+q = zatvaranje prema centru za sva 4 prsta". Nula je OTVORENO.
+# 0.025 a ne 0.026 jer je gripper_tcp definiran bas pri q=0.025.
 GRIPPER_OPEN = 0.0
 GRIPPER_CLOSED = 0.025
 
@@ -47,8 +54,9 @@ IIWA7_EFFORT_LIMITS = {
     "iiwa_joint_7": 40.0,
 }
 
-# Konfiguracija ruke pri spawnu. Stvarnu pozu hvata postavlja reset_to_grasp;
-# ovo je samo da robot ne krene iz potpuno ispruzenog, singularnog stanja.
+# Konfiguracija ruke pri spawnu. Stvarnu pozu hvata postavlja
+# reset_grasp_and_door; ovo je samo da robot ne krene iz potpuno
+# ispruzenog, singularnog stanja.
 DEFAULT_ARM_JOINT_POS = {
     "iiwa_joint_1": 0.0,
     "iiwa_joint_2": 0.4,
@@ -71,8 +79,7 @@ KMR_IIWA_CFG = ArticulationCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=16,
             solver_velocity_iteration_count=1,
-            # Baza je fiksna (vidi docstring env cfg-a). Mijenja se ovdje ako
-            # se scenarij prosiri na pokretnu bazu.
+            # NE mijenjaj u False - vidi tocku 3 u docstringu.
             fix_root_link=True,
         ),
     ),

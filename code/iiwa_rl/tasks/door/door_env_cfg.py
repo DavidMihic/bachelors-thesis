@@ -3,12 +3,15 @@
 OPSEG (§0): epizoda pocinje od stanja "gripper drzi kvaku". Prilaz i hvat
 ostaju klasicni i nisu dio ovog env-a.
 
-BAZA JE FIKSNA. Izmjereno je da se pri fiksnoj bazi i grubom vucenju vrata
-otvore oko 0.065 m prije nego ruka dodje do granice radnog prostora, pa je
-prag uspjeha 0.05 m - "vrata otvorena", ne "vrata otvorena do kraja". To je
-kinematicko ogranicenje, ne spustena ljestvica, i u radu ide kao eksplicitno
-ogranicenje opsega uz izmjerenu brojku. Ako se baza kasnije doda u prostor
-akcije, mijenjaju se SUCCESS_* konstante i ActionsCfg, ostalo ostaje.
+BAZA SE VODI ADMITANCIJSKIM ZAKONOM (base_admittance.py), ne politikom - RL
+i dalje uci samo interakciju. Koordinacija ruke i baze time NIJE naucena i
+to treba tako i napisati u radu.
+
+PRAGOVI SU IZMJERENI, NE POGODENI. Pri fiksnoj bazi je naucena politika
+dosezala 0.27 m hoda kliznih vrata prije nego bi ruka potrosila zglobni
+limit, pa je prag 0.15 m. Za zakretna je 0.5 rad postavljen tako da zatvarac
+stvarno opterecuje sustav - pri manjem kutu je moment zatvaraca premalen da
+bi razlika izmedju fiksne i varijabilne impedancije bila mjerljiva.
 
 NEMA TERMINACIJE NA USPJEHU. Prekid epizode cim vrata prijedju prag davao je
 politici degeneriranu strategiju: jedan trzaj preko praga, epizoda gotova,
@@ -36,6 +39,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.noise import GaussianNoiseCfg
 
 from . import door_mdp as mdp
+from .base_admittance import BaseAdmittanceActionCfg
 from .door_cfg import (
     HANDLE_LOCAL_REVOLUTE,
     HANDLE_LOCAL_SLIDING,
@@ -43,24 +47,24 @@ from .door_cfg import (
     REVOLUTE_CLOSER_RESISTANCE,
     REVOLUTE_DOOR_CFG,
     REVOLUTE_FREE_RESISTANCE,
-    REVOLUTE_FULL_TRAVEL_RAD,
     SLIDING_DOOR_CFG,
-    SLIDING_FULL_TRAVEL_M,
     SLIDING_RESISTANCE,
 )
 from .door_events import randomize_door_resistance
 from .robot_cfg import KMR_IIWA_CFG
 
-# --- Pragovi uspjeha, ograniceni dosegom ruke pri fiksnoj bazi ---
+# --- Pragovi uspjeha (vidi docstring) ---
 SUCCESS_SLIDING_M = 0.15
-SUCCESS_REVOLUTE_RAD = 0.12  # ~7 stupnjeva, isti red velicine pomaka kvake
+SUCCESS_REVOLUTE_RAD = 0.5
 
 # ~280 N je izmjereno klasicnim pristupom kao tranzijent, ne kao otpor vrata.
 # Ovdje sluzi kao referenca iznad koje kaznjavamo, i kao sigurnosni prekid.
 FORCE_REFERENCE_N = 280.0
 FORCE_ABORT_N = 400.0
 
-# Udaljenost TCP-a od sipke iznad koje se hvat smatra izgubljenim.
+# Udaljenost TCP-a od sipke iznad koje se hvat smatra izgubljenim. 0.09 a ne
+# 0.05: sipka kliznih vrata je visoka 0.25 m, pa je klizanje po njoj
+# legitimno i ne smije se brojati kao ispustanje.
 GRASP_LOST_DISTANCE_M = 0.09
 
 TCP_BODY = "gripper_tcp"
@@ -91,13 +95,14 @@ NOMINAL_GRASP_JOINT_POS_REVOLUTE = (
     1.1665,
 )
 
-# Poza vrata izvedena IZ te konfiguracije, ne obrnuto: TCP je pri hvatu bio na
-# (1.158, -0.287, 1.005) u base_link, pa su vrata postavljena tako da tocka
-# hvata padne tocno tamo. Uz yaw 180 lokalne osi X i Y gledaju u -X i -Y
-# svijeta, pa se lokalni offset kvake (HANDLE_LOCAL_*) oduzima.
-SLIDING_DOOR_SPAWN = (0.174, 0.839, 0.005)
-REVOLUTE_DOOR_SPAWN = (0.172, 0.808, 0.005)
-DOOR_SPAWN_ROT = (-0.5646, 0.0, 0.0, 0.8253)  # yaw 180 + 68.8 stupnjeva
+# Poza vrata pri SPAWNU. reset_grasp_and_door je svejedno pregazi u prvom
+# resetu, pa su ove vrijednosti bitne samo za prvi frame - ali neka budu
+# tocne, jer se inace vizualna provjera kroz zero_agent cita krivo.
+# Izvedene su iz NOMINAL_TCP_B uz delta = 0: vrata se postave tako da tocka
+# hvata padne na TCP, a yaw 180 okrece vrata natrag prema robotu.
+SLIDING_DOOR_SPAWN = (1.248, 0.363, 0.005)
+REVOLUTE_DOOR_SPAWN = (1.218, 0.353, 0.005)
+DOOR_SPAWN_ROT = (0.0, 0.0, 0.0, 1.0)  # yaw 180, (w, x, y, z)
 
 
 @configclass
@@ -153,7 +158,7 @@ class ActionsCfg:
             motion_stiffness_task=300.0,
             motion_damping_ratio_task=1.0,
             # Gornja granica x position_scale odredjuje maksimalnu silu:
-            # 5000 x 0.05 = 250 N, tik ispod referentne granice iz klasicnog.
+            # 15000 x 0.015 = 225 N, tik ispod referentne granice iz klasicnog.
             motion_stiffness_limits_task=(200.0, 15000.0),
             # 7-DOF ruka je redundantna: bez ovoga lakat pluta i pri kontaktu
             # moze odlutati u singularitet ili zglobni limit dok TCP mirno
@@ -162,10 +167,10 @@ class ActionsCfg:
             nullspace_stiffness=10.0,
             nullspace_damping_ratio=1.0,
         ),
-        # 0.015 m po koraku. Politika uzorkuje iz Gaussa sa std 1.0, dakle
-        # akcija ide do ±3, pa je stvarni maksimalni skok reference ~4.5 cm na
-        # 30 Hz. Pri 0.05 je bio 15 cm po koraku i eksploracija je trgala hvat
-        # sa sipke prije nego je politika stigla nesto nauciti - jedina
+        # 0.015 m po koraku. Politika uzorkuje iz Gaussa sa std 0.5, dakle
+        # akcija ide do ~±1.5, pa je stvarni maksimalni skok reference ~2.2 cm
+        # na 30 Hz. Pri 0.05 je bio 15 cm po koraku i eksploracija je trgala
+        # hvat sa sipke prije nego je politika stigla nesto nauciti - jedina
         # strategija koja prezivi takvu eksploraciju je nulta akcija.
         position_scale=0.015,
         orientation_scale=0.1,
@@ -173,7 +178,8 @@ class ActionsCfg:
         damping_ratio_scale=1.0,
         nullspace_joint_pos_target="default",
     )
-    # Prsti nisu u prostoru akcije - hvat je zatvoren cijelu epizodu (§0).
+
+    base = BaseAdmittanceActionCfg(debug=False)
 
 
 @configclass
@@ -210,11 +216,11 @@ class ObservationsCfg:
 
 @configclass
 class RewardsCfg:
-    # Normirano na PRAG, ne na puni hod: dosezanje praga vrijedi 1.0 po
-    # koraku umjesto 0.19, pa centimetar pomaka nosi 2 umjesto 0.125.
-    # Uz normiranje na puni hod je vucenje bilo skuplje od mirovanja na
-    # svakom koraku prije praga, a bonus na 0.15 m prerijedak da povuce
-    # eksploraciju - politika je naucila drzati kvaku i ne dirati vrata.
+    # Normirano na PRAG, ne na puni hod. Uz normiranje na puni hod (0.8 m)
+    # centimetar pomaka nosi 0.125 po koraku, sto je premalo da nadjaca
+    # kazne - politika je ucila drzati kvaku i ne dirati vrata, a bonus na
+    # pragu bio je prerijedak da povuce eksploraciju. Ova jedna promjena
+    # digla je progress s 0.006 na 24.
     progress = RewTerm(
         func=mdp.dof_progress,
         weight=10.0,
@@ -283,14 +289,18 @@ class EventCfg:
             # Faza prilaza centrira robota pred vratima, pa vrata NIKAD nisu
             # bocno. Ostaje samo rezidualna greska kuta prilaska; isti raspon
             # kao spawn-yaw-jitter u build_integration_scene.py (±20°).
+            #
+            # MORA biti uze od heading_tolerance u BaseAdmittanceActionCfg,
+            # inace admitancijski zakon odmah ponisti nasumicni kut prilaza
+            # i randomizacija nema ucinka.
             "delta_range": (-0.35, 0.35),
             "position_noise": 0.005,
             "handle_local": HANDLE_LOCAL_SLIDING,
             "robot_cfg": SceneEntityCfg("robot"),
         },
     )
-    # TODO (§4): trenje prstiju i poza vrata. Trenje prstiju vise nije
-    # sporedno otkad je kvaka zavarena - sav moment sarke ide kroz njega.
+    # TODO (§4): trenje prstiju. Vise nije sporedno otkad je kvaka zavarena -
+    # sav moment sarke ide kroz trenje prstiju na poluzi.
 
 
 @configclass
@@ -312,7 +322,8 @@ class DoorEnvCfg(ManagerBasedRLEnvCfg):
 @configclass
 class DoorRevoluteEnvCfg(DoorEnvCfg):
     """Zakretna vrata. Zbog kanonskih imena u assetima razlika je samo u
-    USD-u, pozi, rasponima otpora i pragu - nijedna funkcija se ne mijenja."""
+    USD-u, pozi, konfiguraciji hvata, rasponima otpora i pragu - nijedna
+    funkcija se ne mijenja."""
 
     def __post_init__(self):
         super().__post_init__()
@@ -333,3 +344,34 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         self.rewards.perpendicular_force.params["door_type"] = "revolute"
         self.rewards.success.params["threshold"] = SUCCESS_REVOLUTE_RAD
         self.terminations.grasp_lost.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
+        self.actions.base.heading_joint_nominal = NOMINAL_GRASP_JOINT_POS_REVOLUTE[0]
+
+
+# --- Ablacija: fiksna impedancija ---------------------------------------
+# Uz pose_rel je maksimalna sila ~ K * position_scale, pa jedna fiksna
+# vrijednost NIJE postena usporedba: preniska ne moze razviti silu za
+# zatvarac (25 Nm / 0.72 m = 35 N), previsoka se bori s ogranicenjem. Zato se
+# pusta vise vrijednosti i izvjestava se NAJBOLJA - inace je usporedba
+# namjestena u korist varijabilne impedancije.
+#
+# Uz position_scale = 0.015:
+#    2000  ->  30 N max, na granici izvedivog
+#    6000  ->  90 N max, srednje
+#   15000  -> 225 N max, isti strop kao varijabilna (kruto upravljanje)
+#
+# MIJENJA SE RUCNO izmedju runova sweepa; posljednja vrijednost ostaje
+# zapisana ovdje pa provjeri je prije nego pokrenes usporedbu.
+FIXED_STIFFNESS_ABLATION = 15000.0
+
+
+@configclass
+class DoorRevoluteFixedEnvCfg(DoorRevoluteEnvCfg):
+    """Kontrolna skupina: politika uci SAMO kamo pomicati referencu, ne i
+    koliko biti kruta. Akcija pada s 12 na 6 brojeva; sve ostalo - nagrada,
+    opazanje, randomizacija, broj iteracija - ostaje identicno, sto je i
+    smisao ablacije."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.arm.controller_cfg.impedance_mode = "fixed"
+        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
