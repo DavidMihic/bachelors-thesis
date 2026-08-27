@@ -56,6 +56,12 @@ parser.add_argument(
     default=False,
     help="Run in real-time, if possible.",
 )
+parser.add_argument(
+    "--debug-grasp",
+    action="store_true",
+    default=False,
+    help="Ispisi dijagnostiku hvata (TCP, racunata poza kvake, poza vrata).",
+)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -97,6 +103,7 @@ from isaaclab.envs import (
     ManagerBasedRLEnvCfg,
     multi_agent_to_single_agent,
 )
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 
@@ -122,8 +129,49 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import iiwa_rl.tasks.door  # noqa: E402, F401  - registrira Isaac-Door-* zadatke
+from iiwa_rl.tasks.door import door_mdp as mdp  # noqa: E402
+from iiwa_rl.tasks.door.door_cfg import (  # noqa: E402
+    HANDLE_LOCAL_REVOLUTE,
+    HANDLE_LOCAL_SLIDING,
+)
 
 # PLACEHOLDER: Extension template (do not remove this comment)
+
+
+def print_diagnostics(env, handle_local, label=""):
+    """Gdje je TCP, gdje MISLIMO da je kvaka, i gdje su vrata.
+
+    Kljucna usporedba je |TCP - kvaka|: ako je velika a hvat vizualno drzi,
+    onda grasp_lost okida na pogresno izracunatoj pozi kvake, a ne na
+    stvarnom klizanju. Poza korijena vrata otkriva je li reset uopce uspio
+    pomaknuti vrata - kod fix_root_link=True PhysX drzi korijen na pozi iz
+    spawna i write_root_pose_to_sim moze ostati bez ucinka.
+    """
+    unwrapped = env.unwrapped
+    robot = unwrapped.scene["robot"]
+    door = unwrapped.scene["door"]
+
+    tcp_ids, _ = robot.find_bodies("gripper_tcp")
+    tcp = robot.data.body_pos_w[0, tcp_ids[0]]
+    handle = mdp.handle_pos_w(unwrapped, handle_local, SceneEntityCfg("door"))[0]
+    leaf_ids, _ = door.find_bodies("door_leaf")
+
+    print(f"--- {label}")
+    print(f"  TCP            : {tcp.tolist()}")
+    print(f"  kvaka(racunata): {handle.tolist()}")
+    print(f"  |TCP - kvaka|  : {(tcp - handle).norm().item():.4f}")
+    print(f"  door root      : {door.data.root_pos_w[0].tolist()}")
+    print(f"  door leaf      : {door.data.body_pos_w[0, leaf_ids[0]].tolist()}")
+    print(f"  env origin     : {unwrapped.scene.env_origins[0].tolist()}")
+    print(f"  door dof       : {door.data.joint_pos[0].tolist()}")
+
+    arm_ids, _ = robot.find_joints("iiwa_joint_[1-7]")
+    q = robot.data.joint_pos[0, arm_ids]
+    lower = robot.data.soft_joint_pos_limits[0, arm_ids, 0]
+    upper = robot.data.soft_joint_pos_limits[0, arm_ids, 1]
+    print(f"  zglobovi (udio): {((q - lower) / (upper - lower)).tolist()}")
+    reach = (tcp - robot.data.root_pos_w[0]).norm()
+    print(f"  |TCP - baza|   : {reach.item():.4f}")
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
@@ -135,6 +183,11 @@ def main(
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
+
+    # lokalni offset kvake ovisi o tipu vrata
+    handle_local = (
+        HANDLE_LOCAL_REVOLUTE if "Revolute" in task_name else HANDLE_LOCAL_SLIDING
+    )
 
     # override configurations with non-hydra CLI arguments
     agent_cfg: RslRlBaseRunnerCfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
@@ -259,7 +312,13 @@ def main(
     # reset environment
     obs = env.get_observations()
     timestep = 0
+
+    # Epizode se trenutno prekidaju u prvom koraku, pa je stanje ODMAH
+    # nakon reseta jedino koje se stigne vidjeti - zato prije prvog stepa.
+    print_diagnostics(env, handle_local, "prije prvog koraka")
+
     # simulate environment
+    count = 0
     while simulation_app.is_running():
         start_time = time.time()
         # run everything in inference mode
@@ -273,6 +332,13 @@ def main(
                 policy.reset(dones)
             else:
                 policy_nn.reset(dones)
+
+        # Prvih nekoliko koraka svaki, dalje rjedje: ako epizoda traje
+        # jedan korak, ispis na svakih 60 koraka nikad ne uhvati trenutak.
+        if count < 5 or count % 60 == 0:
+            print_diagnostics(env, handle_local, f"korak {count}")
+            print("  krutost:", actions[0, 6:].tolist())
+
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
@@ -284,7 +350,7 @@ def main(
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
 
-        print("krutost:", actions[0, 6:])
+        count += 1
 
     # close the simulator
     env.close()

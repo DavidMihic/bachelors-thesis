@@ -82,19 +82,17 @@ def main():
 
             if count % 60 == 0:
                 robot = env.unwrapped.scene["robot"]
-                door = env.unwrapped.scene["door"]
-                forces = robot.root_physx_view.get_link_incoming_joint_force()
-                idx, _ = robot.find_bodies("gripper_base")
-                print("body_names:", robot.data.body_names)
-                print("shape:", forces.shape)
-                print("gripper_base idx:", idx, "wrench:", forces[0, idx[0], :])
-                print("|F| po linkovima:", forces[0, :, :3].norm(dim=-1))
-                print("door dof:", door.data.joint_pos[0])
+                arm_ids, arm_names = robot.find_joints("iiwa_joint_[1-7]")
+                q = robot.data.joint_pos[0, arm_ids]
+                lower = robot.data.soft_joint_pos_limits[0, arm_ids, 0]
+                upper = robot.data.soft_joint_pos_limits[0, arm_ids, 1]
+                # 0 = na donjem limitu, 1 = na gornjem, ~0.5 = sredina raspona
+                print("zglobovi (udio raspona):", ((q - lower) / (upper - lower)))
+                tcp_ids, _ = robot.find_bodies("gripper_tcp")
+                base = robot.data.root_pos_w[0]
                 print(
-                    "perp:",
-                    mdp.perpendicular_force_penalty(
-                        env.unwrapped, "sliding", SceneEntityCfg("robot")
-                    ),
+                    "|TCP - baza|:",
+                    (robot.data.body_pos_w[0, tcp_ids[0]] - base).norm(),
                 )
 
             count += 1

@@ -12,15 +12,20 @@ assetu bila spojena u jedan pogon:
           + damping * q_dot          viskozno
           + stiffness * q            zatvarac, ogranicen effort_limitom
 
-Rasponi dolje su kalibrirani prema stvarnim vratima, NE prema ~280 N
-izmjerenih klasicnim pristupom - ta je brojka tranzijent akceleracije baze
-kroz krutu vezu ruka<->vrata, ne otpor vrata (klizna vrata u staroj sceni
-imala su ~19 N otpora pri 0.17 m). 280 N ostaje samo gornja referentna
-granica za kaznu na silu u nagradi.
+Jedinice su APSOLUTNE (N odnosno Nm), ne bezdimenzijski koeficijenti -
+provjereno mjerenjem (measure_door_friction.py): breakaway se poklapa sa
+zadanim trenjem uz omjer 1.00-1.03 kroz raspon 10-60.
+
+Rasponi su kalibrirani prema stvarnim vratima, NE prema ~280 N izmjerenih
+klasicnim pristupom - ta je brojka tranzijent akceleracije baze kroz krutu
+vezu ruka<->vrata, ne otpor vrata (klizna vrata u staroj sceni imala su ~19 N
+otpora pri 0.17 m). 280 N ostaje samo gornja referentna granica za kaznu na
+silu u nagradi.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import isaaclab.sim as sim_utils
@@ -28,8 +33,7 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.utils import configclass
 
-import os
-
+# Skripte se pokrecu iz ~/IsaacLab, pa relativne putanje pokazuju u prazno.
 ASSETS_DIR = os.path.normpath(
     os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "assets"
@@ -40,8 +44,14 @@ ASSETS_DIR = os.path.normpath(
 DOOR_DOF_JOINT = "door_dof_joint"
 DOOR_LEAF_BODY = "door_leaf"
 
-# Hod do kraja, iz URDF limita. Prag uspjeha je zasebna stvar i NIJE ovo -
-# doseg ruke pri fiksnoj bazi je oko 0.17 m, pa se prag postavlja u env cfg-u.
+# Tocka hvata u lokalnom okviru vrata (prije rotacije), iz URDF-a:
+#   klizna:   handle_fixed na (0.02, 0.65, 1.0), sipka na lokalnom x=0.07
+#   zakretna: handle_fixed na (0.02, 0.72, 1.0), poluga na lokalnom (0.04, -0.08)
+HANDLE_LOCAL_SLIDING = (0.09, 0.65, 1.0)
+HANDLE_LOCAL_REVOLUTE = (0.06, 0.64, 1.0)
+
+# Hod do kraja, iz URDF limita. Prag uspjeha NIJE ovo - ogranicen je dosegom
+# ruke pri fiksnoj bazi, vidi door_env_cfg.py.
 SLIDING_FULL_TRAVEL_M = 0.8
 REVOLUTE_FULL_TRAVEL_RAD = 1.57
 
@@ -61,7 +71,7 @@ class DoorResistanceRanges:
 
 
 # Klizna vrata nemaju povratnu oprugu - stiffness je fiksno 0. Otpor je
-# kotrljanje kolica: lagana unutarnja vrata ~10 N, teska ~60-80 N.
+# kotrljanje kolica: lagana unutarnja vrata ~10 N, teska ~60 N.
 SLIDING_RESISTANCE = DoorResistanceRanges(
     stiffness=(0.0, 0.0),
     damping=(5.0, 50.0),
@@ -105,7 +115,7 @@ class DoorArticulationCfg(ArticulationCfg):
 
 
 def door_articulation_cfg(
-    usd_path: str,
+    usd_name: str,
     prim_path: str = "{ENV_REGEX_NS}/Door",
     solver_position_iterations: int = 16,
     solver_velocity_iterations: int = 1,
@@ -115,13 +125,12 @@ def door_articulation_cfg(
     solver_position_iterations: konverzija je stavila 32, sto je
     predimenzionirano za artikulaciju s jednim DOF-om i skalira linearno s
     num_envs. 16 je polazna vrijednost - izmjeri FPS na 8 / 16 / 32 s
-    zatvorenim hvatom PRIJE nego skaliras broj env-ova, jer je kontakt
-    prsti<->drska jedino mjesto gdje bi vise iteracija moglo trebati.
+    zatvorenim hvatom PRIJE nego skaliras broj env-ova.
     """
     return DoorArticulationCfg(
         prim_path=prim_path,
         spawn=sim_utils.UsdFileCfg(
-            usd_path=usd_path,
+            usd_path=os.path.join(ASSETS_DIR, usd_name),
             activate_contact_sensors=False,
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 enabled_self_collisions=False,
@@ -149,9 +158,5 @@ def door_articulation_cfg(
     )
 
 
-SLIDING_DOOR_CFG = door_articulation_cfg(
-    os.path.join(ASSETS_DIR, "sliding_door_rl.usd")
-)
-REVOLUTE_DOOR_CFG = door_articulation_cfg(
-    os.path.join(ASSETS_DIR, "revolute_door_rl.usd")
-)
+SLIDING_DOOR_CFG = door_articulation_cfg("sliding_door_rl.usd")
+REVOLUTE_DOOR_CFG = door_articulation_cfg("revolute_door_rl.usd")
