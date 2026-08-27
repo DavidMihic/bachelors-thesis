@@ -76,6 +76,21 @@ TCP_BODY = "gripper_tcp"
 # trenirana. To je konkretna stavka za fazu integracije.
 NOMINAL_GRASP_JOINT_POS = (-0.4071, 0.9457, 0.3483, -1.4265, -0.3294, -0.7337, 1.5311)
 
+# Zakretna vrata: ISTA tocka hvata, ali poluga lezi vodoravno umjesto
+# vertikalno kao sipka kliznih, pa je gripper zakrenut za +90 stupnjeva oko
+# svoje osi prilaza. Lokalna Y os gripera (ona koja lezi duz drske) time
+# gleda vodoravno. Poza TCP-a je identicna do 0.1 mm; razlikuje se samo
+# orijentacija. Svi zglobovi izmedju 49% i 84% raspona.
+NOMINAL_GRASP_JOINT_POS_REVOLUTE = (
+    0.4756,
+    1.3382,
+    1.9412,
+    1.4265,
+    -0.0489,
+    0.9288,
+    1.1665,
+)
+
 # Poza vrata izvedena IZ te konfiguracije, ne obrnuto: TCP je pri hvatu bio na
 # (1.158, -0.287, 1.005) u base_link, pa su vrata postavljena tako da tocka
 # hvata padne tocno tamo. Uz yaw 180 lokalne osi X i Y gledaju u -X i -Y
@@ -308,6 +323,7 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
             ),
         )
         self.events.grasp.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
+        self.events.grasp.params["nominal_joint_pos"] = NOMINAL_GRASP_JOINT_POS_REVOLUTE
         self.events.door_resistance.params = {
             "ranges": REVOLUTE_FREE_RESISTANCE,
             "alt_ranges": REVOLUTE_CLOSER_RESISTANCE,
