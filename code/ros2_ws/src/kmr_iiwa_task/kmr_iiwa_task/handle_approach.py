@@ -82,11 +82,11 @@ JOINT_NAMES = [
 # bila uzrok divljih putanja izmedju ready i pre-grasp poze. Skupljena ruka
 # ujedno manje zaklanja kameru i tagove na kvaki.
 #
-# Zadnji zglob je +pi/2 jer je zadana meta KLIZNA vrata, gdje je sipka
-# OKOMITA - gripper mora biti zarotiran 90 stupnjeva oko vlastite osi alata
-# u odnosu na zakretna vrata, gdje je poluga vodoravna. Zglob 7 rotira bas
-# oko te osi, pa se tip vrata mijenja samo tom vrijednoscu.
-READY_POSE = [0.0, 0.45, 0.0, -1.9, 0.0, -0.8, 1.5708]
+# Klizna vrata imaju okomitu sipku, zakretna vodoravnu polugu. Griper zato
+# mora biti zarotiran 90 stupnjeva oko osi alata, a prisiljavanje vodoravne
+# osi prilaza vrijedi samo za okomitu sipku.
+READY_POSE_VERTICAL_BAR = [0.0, 0.45, 0.0, -1.9, 0.0, -0.8, 1.5708]
+READY_POSE_HORIZONTAL_BAR = [0.0, 0.45, 0.0, -1.9, 0.0, -0.8, 0.0]
 
 # Odmak pre-grasp tocke unatrag duz Z-osi handle_pose. Kratak, jer kraca
 # pravocrtna dionica ima manju sansu da computeCartesianPath naidje na
@@ -148,11 +148,6 @@ MAX_ORIENTATION_ERROR_RAD = math.radians(5.0)
 # procijenjene mete.
 MIN_DEPTH_OFFSET_M = -0.004
 
-# Kod kliznih vrata sipka je okomita, sto je poznato iz modela, dok je
-# procjena nagiba iz malih tagova nepouzdana. Zato se iz percepcije uzima
-# samo smjer prema vratima, a nagib se prisiljava na vodoravan. Za zakretna
-# vrata, gdje je poluga vodoravna, ovo treba iskljuciti.
-FORCE_HORIZONTAL_APPROACH = True
 
 # Prsti 1,2 su na +X strani baze (ox=+0.035), prsti 3,4 na -X (ox=-0.035).
 # Razlika njihovih zaustavnih pozicija daje pomak kvake duz osi zatvaranja.
@@ -218,16 +213,17 @@ def tf_inverse(p, q):
     return -np.array(quat_rotate_vector(qi, list(p))), qi
 
 
-def orient_from_handle(q_handle, logger=None):
+def orient_from_handle(q_handle, force_horizontal=True, logger=None):
     """Iz orijentacije kvake izvedi (z_axis, q_gripper) za prilaz.
 
-    Uz FORCE_HORIZONTAL_APPROACH os prilaza se projicira na vodoravnu ravninu
-    i orijentacija se ponovno gradi oko poznate okomite sipke, pa se iz
+    Uz force_horizontal os prilaza se projicira na vodoravnu ravninu i
+    orijentacija se ponovno gradi oko poznate okomite sipke, pa se iz
     percepcije zadrzava samo smjer prema vratima. Bez toga gripper kopira
-    nagib kvake i ulazi ukoso.
+    nagib kvake i ulazi ukoso. Vrijedi samo za okomitu sipku, dakle za klizna
+    vrata; kod zakretnih je poluga vodoravna pa se prosljedjuje False.
     """
     z_axis = quat_z_axis(q_handle)
-    if not FORCE_HORIZONTAL_APPROACH:
+    if not force_horizontal:
         return z_axis, quat_multiply(q_handle, Y_180)
 
     z_flat = np.array([z_axis[0], z_axis[1], 0.0])
@@ -301,7 +297,7 @@ def collect_average_pose(samples, window_sec, wait_timeout_sec=None):
     return hp_x, hp_y, hp_z, tuple(avg_quat)
 
 
-def run_grasp_sequence(node, tf_buffer, callback_group):
+def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
     """Odradi cijeli hvat kvake na VEC POKRENUTOM i VEC SPINANOM nodu.
 
     Pozivatelj je duzan prije poziva:
@@ -313,6 +309,10 @@ def run_grasp_sequence(node, tf_buffer, callback_group):
 
     Vraca True ako je hvat postignut, inace False.
     """
+
+    ready_pose = READY_POSE_VERTICAL_BAR if vertical_bar else READY_POSE_HORIZONTAL_BAR
+    force_horizontal = vertical_bar
+
     moveit2 = MoveIt2(
         node=node,
         joint_names=JOINT_NAMES,
@@ -384,7 +384,9 @@ def run_grasp_sequence(node, tf_buffer, callback_group):
         f"orijentacija={q_handle}"
     )
 
-    z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
+    z_axis, q_gripper = orient_from_handle(
+        q_handle, force_horizontal, node.get_logger()
+    )
 
     # --- Korak 0.5: primakni bazu, uz rekonstrukciju poze kvake ---
     # Standoff je namjerno velik da mali tagovi na kvaki ostanu vidljivi, ali
@@ -455,7 +457,9 @@ def run_grasp_sequence(node, tf_buffer, callback_group):
     p_handle_new, q_handle_new = tf_compose(p_tag2, q_tag2, p_rel, q_rel)
     hp_x, hp_y, hp_z = p_handle_new
     q_handle = q_handle_new
-    z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
+    z_axis, q_gripper = orient_from_handle(
+        q_handle, force_horizontal, node.get_logger()
+    )
     node.get_logger().info(
         f"Kvaka rekonstruirana nakon pomaka: ({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f})"
     )
@@ -505,8 +509,8 @@ def run_grasp_sequence(node, tf_buffer, callback_group):
 
     # --- Korak 1: ready poza. Tek sad, kad je cilj vec izracunat iz cistog
     # ocitanja, jer pruzena ruka moze zakloniti tagove kameri. ---
-    node.get_logger().info(f"Saljem ready pozu: {READY_POSE}")
-    moveit2.move_to_configuration(READY_POSE)
+    node.get_logger().info(f"Saljem ready pozu: {ready_pose}")
+    moveit2.move_to_configuration(ready_pose)
     moveit2.wait_until_executed()
 
     # Sigurnosno usporavanje za sve pokrete blizu vrata.
@@ -575,7 +579,9 @@ def run_grasp_sequence(node, tf_buffer, callback_group):
     fresh = collect_average_pose(samples, SAMPLE_WINDOW_SEC, wait_timeout_sec=1.5)
     if fresh is not None:
         hp_x, hp_y, hp_z, q_handle = fresh
-        z_axis, q_gripper = orient_from_handle(q_handle, node.get_logger())
+        z_axis, q_gripper = orient_from_handle(
+            q_handle, force_horizontal, node.get_logger()
+        )
         node.get_logger().info(
             f"Svjeza pozicija=({hp_x:.3f}, {hp_y:.3f}, {hp_z:.3f}), "
             f"orijentacija={q_handle} - koristim ovo za grasp cilj."

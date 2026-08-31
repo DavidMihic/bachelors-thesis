@@ -5,6 +5,9 @@ Faza prilaska: baza se dovede na fiksnu stajnu udaljenost i kut ispred vrata,
 koristeci door_tag_center kao vizualnu referencu, pa se zakljuca kad
 regulacija konvergira.
 
+Parametar vertical_bar bira tip kvake: True za okomitu sipku kliznih vrata,
+False za vodoravnu polugu zakretnih.
+
 Faza hvata: cim je baza zakljucana, pokrece se run_grasp_sequence iz
 handle_approach - ocitanje percepcije, primicanje baze uz rekonstrukciju poze
 kvake preko velikog taga, ready poza, pre-grasp, uron, bocna korekcija i
@@ -101,6 +104,11 @@ class DoorTaskNode(Node):
 
         # --- Cilj prilaska ---
         self.declare_parameter("standoff_distance_m", 1.35)
+
+        # Klizna vrata imaju okomitu sipku, zakretna vodoravnu polugu. O tome
+        # ovisi zakret gripera oko osi alata i smije li se os prilaza
+        # prisiliti na vodoravnu.
+        self.declare_parameter("vertical_bar", True)
 
         # --- P regulator ---
         self.declare_parameter("kp_x", 0.6)
@@ -334,7 +342,12 @@ def main():
         node.phase = Phase.GRASPING
         node.get_logger().info("Pocinjem hvat kvake.")
 
-        ok = run_grasp_sequence(node, node.tf_buffer, callback_group)
+        ok = run_grasp_sequence(
+            node,
+            node.tf_buffer,
+            callback_group,
+            vertical_bar=node.get_parameter("vertical_bar").value,
+        )
         node.phase = Phase.GRASPED if ok else Phase.FAILED
         node.get_logger().info("Kvaka uhvacena." if ok else "Hvat kvake nije uspio.")
         node._append_log({"event": "grasp_complete", "success": bool(ok)})
