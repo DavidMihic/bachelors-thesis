@@ -2,7 +2,7 @@
 
 Parno uz door_cfg.py: USD nosi topologiju, gains zive ovdje.
 
-TRI VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
+CETIRI VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
 
 1. Ruka ide s pogonom na NULI. OSC racuna momente i pise ih kao effort
    target; da implicitni aktuator zadrzi krutost 100000 iz konverzije, PD
@@ -17,11 +17,18 @@ TRI VAZNE RAZLIKE OD ONOGA STO JE U USD-U:
 
 3. Korijen artikulacije je FIKSAN i to mora ostati. OSC racuna jakobijan i
    inercijsku matricu uz pretpostavku fiksnog korijena; s plutajucim
-   korijenom kompenzacija gravitacije ispadne kriva i ruka jednostavno
-   propada - provjereno empirijski. Pomicanje baze zato ne ide kroz
-   plutajuci korijen nego kroz fiktivne zglobove (world -> base_x -> base_y
-   -> base_theta -> base_link), gdje korijen ostaje fiksan a baza se giba
-   kao dio artikulacije.
+   korijenom kompenzacija gravitacije ispadne kriva i ruka propada -
+   provjereno empirijski.
+
+4. Baza se ipak giba, kroz tri fiktivna zgloba iz add_base_joints.py
+   (world -> base_x -> base_y -> base_theta -> base_link). Korijen je sad
+   link 'world' i fiksan je u ishodistu env-a; base_link je obicno TIJELO.
+   Sve sto racuna u okviru baze mora zato citati pozu tijela base_link, a NE
+   root_pos_w/root_quat_w - to je najlaksa greska u ovom setupu.
+
+Baza je pozicijski upravljana: admitancijski zakon integrira svoju brzinu u
+ciljnu poziciju zglobova. Velocity-only pogon bi pod reakcijom ruke puzao,
+jer sila trenja vrata na bazu nema protutezu osim prigusenja.
 """
 
 from __future__ import annotations
@@ -37,6 +44,13 @@ ASSETS_DIR = os.path.normpath(
         os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "assets"
     )
 )
+
+# Link koji predstavlja platformu. NIJE korijen artikulacije - korijen je
+# 'world'. Svako racunanje u okviru baze ide preko ovog tijela.
+BASE_BODY = "base_link"
+
+# Fiktivni zglobovi iz add_base_joints.py.
+BASE_JOINTS = ("base_x_joint", "base_y_joint", "base_theta_joint")
 
 # URDF: "+q = zatvaranje prema centru za sva 4 prsta". Nula je OTVORENO.
 # 0.025 a ne 0.026 jer je gripper_tcp definiran bas pri q=0.025.
@@ -69,7 +83,7 @@ DEFAULT_ARM_JOINT_POS = {
 
 KMR_IIWA_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=os.path.join(ASSETS_DIR, "kmr_iiwa_full.usd"),
+        usd_path=os.path.join(ASSETS_DIR, "kmr_iiwa_full_rl.usd"),
         activate_contact_sensors=False,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -79,7 +93,8 @@ KMR_IIWA_CFG = ArticulationCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=16,
             solver_velocity_iteration_count=1,
-            # NE mijenjaj u False - vidi tocku 3 u docstringu.
+            # NE mijenjaj u False - vidi tocku 3 u docstringu. Baza se giba
+            # kroz fiktivne zglobove, ne kroz plutajuci korijen.
             fix_root_link=True,
         ),
     ),
@@ -88,6 +103,7 @@ KMR_IIWA_CFG = ArticulationCfg(
         joint_pos={
             **DEFAULT_ARM_JOINT_POS,
             "gripper_finger_[1-4]_joint": GRIPPER_OPEN,
+            "base_.*_joint": 0.0,
         },
         joint_vel={".*": 0.0},
     ),
@@ -102,6 +118,24 @@ KMR_IIWA_CFG = ArticulationCfg(
             # nista. Ako se pojavi jitter pri zatvorenom hvatu, ovo je prva
             # brojka koju treba dignuti, prije solver iteracija.
             armature=0.01,
+        ),
+        "base": ImplicitActuatorCfg(
+            joint_names_expr=["base_.*_joint"],
+            # Kruto pozicijsko drzanje: platforma od ~390 kg mora stajati na
+            # mjestu dok ruka vuce vrata. Prenisko i baza puze pod reakcijom,
+            # cime bi se izgubila referenca u odnosu na koju je poza vrata
+            # izracunata pri resetu.
+            stiffness={
+                "base_x_joint": 1.0e5,  # N/m
+                "base_y_joint": 1.0e5,  # N/m
+                "base_theta_joint": 1.0e5,  # Nm/rad
+            },
+            damping={
+                "base_x_joint": 1.0e4,
+                "base_y_joint": 1.0e4,
+                "base_theta_joint": 1.0e4,
+            },
+            effort_limit_sim=5000.0,
         ),
         "gripper": ImplicitActuatorCfg(
             joint_names_expr=["gripper_finger_[1-4]_joint"],

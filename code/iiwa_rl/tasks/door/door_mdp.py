@@ -9,10 +9,17 @@ koriste se ISKLJUCIVO u nagradi i terminaciji, nikad u opazanju politike.
 Isto pravilo kao u klasicnom pristupu. Nagrada smije znati istinu jer se
 racuna offline; politika ne smije jer ju u stvarnosti nema.
 
-OKVIRI: get_link_incoming_joint_force vraca silu u LOKALNOM okviru linka.
-Svaka usporedba sa smjerom gibanja vrata mora ju prvo rotirati u svijet -
-propust u tome daje kaznu reda 1e-6 koja izgleda kao "nema sile", a zapravo
-znaci da politika trenira bez ikakve informacije o kontaktu.
+OKVIRI, dvije zamke:
+
+1. get_link_incoming_joint_force vraca silu u LOKALNOM okviru linka. Svaka
+   usporedba sa smjerom gibanja vrata mora ju prvo rotirati u svijet -
+   propust u tome daje kaznu reda 1e-6 koja izgleda kao "nema sile", a
+   zapravo znaci da politika trenira bez ikakve informacije o kontaktu.
+
+2. Okvir baze je TIJELO base_link, a NE korijen artikulacije. Otkad robot
+   ima fiktivne zglobove za pokretnu bazu, korijen je link 'world' i fiksan
+   je u ishodistu env-a. Citanje root_pos_w/root_quat_w umjesto poze tijela
+   dalo bi opazanje koje se uopce ne mijenja kad se baza pomakne.
 """
 
 from __future__ import annotations
@@ -25,7 +32,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_mul
 
 from .door_cfg import DOOR_DOF_JOINT, DOOR_LEAF_BODY
-from .robot_cfg import GRIPPER_CLOSED
+from .robot_cfg import BASE_BODY, GRIPPER_CLOSED, BASE_JOINTS
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -93,6 +100,12 @@ def _past_grace(env: "ManagerBasedRLEnv", grace_steps: int) -> torch.Tensor:
       zastarjeli TCP usporeduje s novom pozom vrata
     """
     return env.episode_length_buf > grace_steps
+
+
+def _base_frame(robot: Articulation) -> tuple[torch.Tensor, torch.Tensor]:
+    """Poza tijela base_link u svijetu. Vidi zamku 2 u docstringu modula."""
+    idx = _bodies(robot, "base", BASE_BODY)[0]
+    return robot.data.body_pos_w[:, idx], robot.data.body_quat_w[:, idx]
 
 
 def _door_dof(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
@@ -194,14 +207,15 @@ def tcp_wrench(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Ten
 def tcp_pose_b(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
     """Poza vrha alata u frameu baze, (num_envs, 7): pozicija + kvaternion.
 
-    Rotira se u okvir baze, ne samo translatira: baza se moze zakretati, a
-    bez rotacije bi politika vidjela pozu koja se mijenja kad se baza okrene
-    iako se ruka naspram baze nije pomaknula.
+    Okvir baze je tijelo base_link (zamka 2). Rotira se, ne samo translatira:
+    baza se moze zakretati, a bez rotacije bi politika vidjela pozu koja se
+    mijenja kad se baza okrene iako se ruka naspram baze nije pomaknula.
     """
     robot: Articulation = env.scene[asset_cfg.name]
     idx = _bodies(robot, "obs", asset_cfg.body_names[0])[0]
-    q_inv = quat_inv(robot.data.root_quat_w)
-    pos = quat_apply(q_inv, robot.data.body_pos_w[:, idx] - robot.data.root_pos_w)
+    base_pos, base_quat = _base_frame(robot)
+    q_inv = quat_inv(base_quat)
+    pos = quat_apply(q_inv, robot.data.body_pos_w[:, idx] - base_pos)
     quat = quat_mul(q_inv, robot.data.body_quat_w[:, idx])
     return torch.cat([pos, quat], dim=-1)
 
@@ -210,7 +224,8 @@ def tcp_velocity_b(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch
     """Linearna i kutna brzina vrha alata u frameu baze, (num_envs, 6)."""
     robot: Articulation = env.scene[asset_cfg.name]
     idx = _bodies(robot, "obs", asset_cfg.body_names[0])[0]
-    q_inv = quat_inv(robot.data.root_quat_w)
+    _, base_quat = _base_frame(robot)
+    q_inv = quat_inv(base_quat)
     return torch.cat(
         [
             quat_apply(q_inv, robot.data.body_lin_vel_w[:, idx]),
@@ -218,6 +233,24 @@ def tcp_velocity_b(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch
         ],
         dim=-1,
     )
+
+
+def base_velocity(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Brzina baze (vx, vy, omega) iz fiktivnih zglobova, (num_envs, 3).
+
+    ZASTO JE OVO U OPAZANJU: baza se giba admitancijskim zakonom, dakle iz
+    razloga koji nije akcija politike. Bez ovoga politika vidi da joj se poza
+    TCP-a u okviru baze mijenja i tumaci to kao posljedicu vlastite akcije,
+    pa korigira - a korekcija se zbraja s gibanjem baze. To se u treningu
+    ocitovalo kao nagli skok grasp_lost s 0.1 na 0.8 tocno u trenutku kad je
+    politika prvi put povukla dovoljno daleko da baza uopce krene.
+
+    Ovo NIJE privilegirana velicina: pri deploymentu je to zadani cmd_vel,
+    koji inferencijski cvor ionako ima jer ga sam salje.
+    """
+    robot: Articulation = env.scene[asset_cfg.name]
+    joint_ids = [_joints(robot, f"base_{n}", n)[0] for n in BASE_JOINTS]
+    return robot.data.joint_vel[:, joint_ids]
 
 
 # TODO (§5): kad constraint_estimator.py bude vektoriziran, dodaj ObsTerm koji
@@ -276,6 +309,28 @@ def total_force_penalty(
     """
     force_w, _ = _horizontal_force_w(env, robot_cfg)
     return torch.clamp(force_w.norm(dim=-1) - reference_force, min=0.0)
+
+
+def joint_saturation_penalty(
+    env: "ManagerBasedRLEnv",
+    comfort_band: float,
+    robot_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Kazna za rad blizu zglobnih limita.
+
+    Bez nje politika odmah ispruzi ruku do ruba radnog prostora, jer je to
+    najbrzi nacin da vrata krenu. Ondje je jakobijan lose kondicioniran, fino
+    upravljanje silom otpada, hvat proklizi i gripper pocne gurati polugu
+    umjesto da je drzi. Cijena dolazi prekasno da bi je politika povezala s
+    ispruzenjem, pa je treba naplatiti odmah.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    ids = _joints(robot, "arm", "iiwa_joint_[1-7]")
+    q = robot.data.joint_pos[:, ids]
+    lower = robot.data.soft_joint_pos_limits[:, ids, 0]
+    upper = robot.data.soft_joint_pos_limits[:, ids, 1]
+    fraction = (q - lower) / (upper - lower + 1e-6)
+    return ((fraction - 0.5).abs() - comfort_band).clamp(min=0.0).sum(dim=-1)
 
 
 def is_open(
@@ -349,18 +404,13 @@ def reset_grasp_and_door(
     ZASTO ROTACIJA: iiwa_joint_1 rotira CIJELU ruku oko vertikale kroz bazu
     ruke, pa dodavanje Δ tom zglobu uz rotaciju vrata za isti Δ oko iste osi
     daje geometrijski IDENTICAN hvat. Iz jedne izmjerene konfiguracije time
-    se dobiva egzaktna augmentacija preko svih smjerova iz kojih baza moze
-    prici vratima.
+    se dobiva egzaktna augmentacija preko smjerova iz kojih baza moze prici
+    vratima.
 
     To nije kozmetika nego uvjet prijenosa. Pri deploymentu klasicni
     handle_approach parkira bazu gdje stigne, IK da neki joint_1, a politika
     kao opazanje dobiva pozu TCP-a u okviru baze - trenirana na jednoj
     vrijednosti, vidjela bi nevidenu raspodjelu.
-
-    delta_range treba drzati joint_1 daleko od limita (-2.967 rad): pri
-    vucenju se potrosi oko 0.3 rad, a izvorno izmjerena konfiguracija
-    (-2.6804) imala je samo 0.29 rad rezerve i politika je limit potrosila -
-    vrata su zbog toga stajala na 0.27 m.
 
     §6: hvat se NE fiksira pomocnim zglobom. Prsti se stvarno zatvore kroz
     sipku, PhysX prodor razrijesi, i hvat drzi bez koraka smirivanja -
@@ -369,6 +419,11 @@ def reset_grasp_and_door(
     position_noise je namjerno malen: iiwa_joint_1 ima krak do TCP-a od
     ~1.19 m, pa 0.02 rad tamo znaci 24 mm bocnog pomaka, a sipka je debela
     28 mm - polovica resetova ne bi uhvatila nista.
+
+    BAZA: fiktivni zglobovi se vracaju na nulu, cime base_link sjeda u
+    ishodiste env-a s identitetom - poza vrata dolje racuna se u tom okviru.
+    To ide kroz default_joint_pos, koji za base_.*_joint drzi nulu, pa nije
+    potreban zaseban upis.
     """
     robot: Articulation = env.scene[robot_cfg.name]
     door: Articulation = env.scene[door_cfg.name]
@@ -377,18 +432,7 @@ def reset_grasp_and_door(
 
     delta = torch.empty((n,), device=device).uniform_(*delta_range)
 
-    # --- baza natrag u ishodiste env-a s identitetom ---
-    # Poza vrata dolje racuna se u okviru base_link pod tom pretpostavkom, a
-    # baza je kroz epizodu odlutala. Ide PRIJE zglobova jer ostatak funkcije
-    # ovisi o tome gdje baza stoji.
-    root_state = robot.data.default_root_state[env_ids].clone()
-    root_state[:, :3] = env.scene.env_origins[env_ids]
-    robot.write_root_pose_to_sim(root_state[:, :7], env_ids=env_ids)
-    robot.write_root_velocity_to_sim(
-        torch.zeros_like(root_state[:, 7:]), env_ids=env_ids
-    )
-
-    # --- ruka ---
+    # --- ruka, prsti i baza ---
     arm_ids = _joints(robot, "arm", "iiwa_joint_[1-7]")
     finger_ids = _joints(robot, "fingers", "gripper_finger_[1-4]_joint")
 

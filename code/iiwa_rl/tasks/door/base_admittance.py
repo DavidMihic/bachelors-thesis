@@ -22,13 +22,16 @@ ZAKON, dvije razdvojene petlje:
                 dok hvat drzi kvaku zakret baze za Δ mijenja joint_1 tocno za
                 -Δ. To je cista petlja prvog reda bez sprege.
 
-BAZA SE VODI KINEMATICKI - svaki korak joj se upisuju poza I brzina.
-Opravdanje: baza je 390 kg naspram ruke od 24 kg, a stvarni pogon ionako
-prati cmd_vel vlastitim regulatorom umjesto da slobodno reagira na sile.
-Brzina se mora upisati zajedno s pozom: bez nje gravitacija akumulira
-brzinu izmedju upisa poze, baza stalno "pada" dok joj se pozicija ispravlja,
-i to samo po sebi proizvodi drhtanje. Iz istog razloga se Z i nagib drze
-fiksnima umjesto da se preuzimaju iz trenutnog stanja.
+KAKO SE NAREDBA PREDAJE: brzina se integrira u ciljnu poziciju trojke
+fiktivnih zglobova (base_x/base_y/base_theta iz add_base_joints.py), pa se
+posalje kao position target. Ranije se umjesto toga upisivala poza korijena
+preko write_root_pose_to_sim - to je teleportacija koja resetira unutarnje
+stanje solvera dok zglobovi zadrze kutove, pa se ruka svaki korak nalazila u
+stanju koje solver nije ocekivao i pocela bi propadati.
+
+Cisti velocity target bi bio blizi cmd_vel semantici, ali bi baza pod
+reakcijom ruke puzala: sila kojom vrata vuku bazu nema protutezu osim
+prigusenja. Integrirana pozicija drzi mjesto, sto stvarni pogon takoder radi.
 
 BRZINA JE NAMJERNO NISKA (0.3 m/s naspram 3.6 km/h iz specifikacije). Baza
 koja juri unosi tranzijente kroz krutu vezu ruka<->vrata, a upravo su takvi
@@ -46,6 +49,8 @@ from isaaclab.assets import Articulation
 from isaaclab.managers.action_manager import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 
+from .robot_cfg import BASE_BODY, BASE_JOINTS
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
@@ -57,18 +62,6 @@ def quat_apply_batch(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     qw, qv = q[:, :1], q[:, 1:]
     t = 2.0 * torch.cross(qv, v, dim=-1)
     return v + qw * t + torch.cross(qv, t, dim=-1)
-
-
-def yaw_of(q: torch.Tensor) -> torch.Tensor:
-    """Kut zakreta oko vertikale iz kvaterniona (w, x, y, z)."""
-    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
-    return torch.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-
-
-def yaw_quat(angle: torch.Tensor) -> torch.Tensor:
-    half = 0.5 * angle
-    zero = torch.zeros_like(half)
-    return torch.stack([torch.cos(half), zero, zero, torch.sin(half)], dim=-1)
 
 
 class BaseAdmittanceAction(ActionTerm):
@@ -87,14 +80,16 @@ class BaseAdmittanceAction(ActionTerm):
         self._raw = torch.zeros(self.num_envs, 0, device=self.device)
         self._arm_base_b = torch.tensor(cfg.arm_base_b, device=self.device)
 
-        tcp_ids, _ = self._asset.find_bodies(cfg.tcp_body)
-        self._tcp_idx = tcp_ids[0]
-        joint_ids, _ = self._asset.find_joints(cfg.heading_joint)
-        self._q1_idx = joint_ids[0]
+        self._tcp_idx = self._asset.find_bodies(cfg.tcp_body)[0][0]
+        self._base_idx = self._asset.find_bodies(BASE_BODY)[0][0]
+        self._q1_idx = self._asset.find_joints(cfg.heading_joint)[0][0]
+        self._arm_ids = self._asset.find_joints(cfg.arm_joint_pattern)[0]
+        self._base_joint_ids = [
+            self._asset.find_joints(name)[0][0] for name in BASE_JOINTS
+        ]
 
-        # Visina baze se drzi fiksnom umjesto da se preuzima iz stanja -
-        # inace ju gravitacija polako spusta izmedju upisa.
-        self._base_z = self._asset.data.default_root_state[:, 2].clone()
+        # Ciljna pozicija trojke [x, y, theta]. Integrira se iz brzine.
+        self._target = torch.zeros(self.num_envs, 3, device=self.device)
 
         # Histereza: jednom pokrenuto zakretanje ide dok greska ne padne na
         # polovicu tolerancije. Bez toga zakon titra oko ruba mrtve zone.
@@ -117,9 +112,13 @@ class BaseAdmittanceAction(ActionTerm):
         pass
 
     def reset(self, env_ids: torch.Tensor | None = None) -> None:
+        # reset_grasp_and_door vraca fiktivne zglobove na nulu, pa cilj mora
+        # krenuti odande - inace bi baza odmah odjurila na staru vrijednost.
         if env_ids is None:
+            self._target[:] = 0.0
             self._turning[:] = False
         else:
+            self._target[env_ids] = 0.0
             self._turning[env_ids] = False
 
     def apply_actions(self) -> None:
@@ -127,18 +126,37 @@ class BaseAdmittanceAction(ActionTerm):
         cfg = self.cfg
         dt = self._env.physics_dt
 
-        root_pos = asset.data.root_pos_w
-        root_quat = asset.data.root_quat_w
-        heading = yaw_of(root_quat)
+        # Okvir baze je TIJELO base_link, ne korijen artikulacije - korijen je
+        # link 'world' i fiksan je u ishodistu env-a.
+        base_pos = asset.data.body_pos_w[:, self._base_idx]
+        base_quat = asset.data.body_quat_w[:, self._base_idx]
 
         # --- translacija: udaljenost TCP-a od baze ruke u mrtvu zonu ---
-        arm_base = root_pos + quat_apply_batch(root_quat, self._arm_base_b)
+        arm_base = base_pos + quat_apply_batch(base_quat, self._arm_base_b)
         tcp = asset.data.body_pos_w[:, self._tcp_idx]
         delta = (tcp - arm_base)[:, :2]
         distance = delta.norm(dim=-1, keepdim=True)
         direction = delta / (distance + 1e-6)
 
-        too_far = (distance - cfg.reach_max).clamp(min=0.0)
+        # ZGLOBNA ISCRPLJENOST: udaljenost TCP-a od baze ruke ne hvata sve
+        # nacine na koje ruci ponestane prostora. U treningu su zakretna vrata
+        # stajala na 0.29 rad uz joint_3 na 96% raspona, dok je TCP bio uredno
+        # unutar mrtve zone i baza legitimno mirovala. Zato zasicenje BILO
+        # KOJEG zgloba stisne gornju granicu zone: baza se primakne, ruka se
+        # skupi i zglobovi se vrate prema sredini. Smjer je vec izracunat
+        # (prema TCP-u), pa nije potrebna zasebna petlja.
+        q = asset.data.joint_pos[:, self._arm_ids]
+        lower = asset.data.soft_joint_pos_limits[:, self._arm_ids, 0]
+        upper = asset.data.soft_joint_pos_limits[:, self._arm_ids, 1]
+        fraction = (q - lower) / (upper - lower + 1e-6)
+        saturation = ((fraction - 0.5).abs() - cfg.joint_comfort_band).clamp(min=0.0)
+        saturation = saturation.max(dim=-1, keepdim=True).values
+
+        reach_max = (cfg.reach_max - cfg.joint_reach_gain * saturation).clamp(
+            min=cfg.reach_min + 0.02
+        )
+
+        too_far = (distance - reach_max).clamp(min=0.0)
         too_close = (cfg.reach_min - distance).clamp(min=0.0)
         speed = (cfg.gain_linear * (too_far - too_close)).clamp(
             -cfg.max_linear_speed, cfg.max_linear_speed
@@ -167,30 +185,23 @@ class BaseAdmittanceAction(ActionTerm):
             torch.zeros_like(q1_error),
         )
 
-        # --- upis poze i brzine ---
-        new_pos = torch.zeros_like(root_pos)
-        new_pos[:, :2] = root_pos[:, :2] + vel_xy * dt
-        new_pos[:, 2] = self._base_z
-        new_quat = yaw_quat(heading + omega * dt)
-        # Poza se upisuje UVIJEK. Uvjetni upis znaci da baza u mirovanju
-        # postane slobodno plutajuce tijelo (fix_root_link=False) i padne
-        # pod gravitacijom, povlaceci ruku za sobom. Kad zakon ne trazi
-        # gibanje, upisuje se ista poza - Z i nagib se pritom drze fiksnima
-        # pa se gravitacija ne akumulira.
-        asset.write_root_pose_to_sim(torch.cat([new_pos, new_quat], dim=-1))
-        root_vel = torch.zeros_like(asset.data.root_vel_w)
-        root_vel[:, 0] = vel_xy[:, 0]
-        root_vel[:, 1] = vel_xy[:, 1]
-        root_vel[:, 5] = omega
-        asset.write_root_velocity_to_sim(root_vel)
+        # --- integracija u ciljnu poziciju zglobova ---
+        # vel_xy je u SVIJETU, a base_x/base_y su osi svijeta (world je
+        # korijen i ne rotira), pa transformacija nije potrebna.
+        self._target[:, 0] += vel_xy[:, 0] * dt
+        self._target[:, 1] += vel_xy[:, 1] * dt
+        self._target[:, 2] += omega * dt
+
+        asset.set_joint_position_target(self._target, joint_ids=self._base_joint_ids)
 
         if cfg.debug and self._env.common_step_counter % 120 == 0:
             print(
                 f"[baza] d={distance[0].item():.3f} v={speed[0].item():+.3f}"
                 f" q1={asset.data.joint_pos[0, self._q1_idx].item():+.3f}"
-                f" omega={omega[0].item():+.3f} turning={bool(self._turning[0])}"
+                f" omega={omega[0].item():+.3f}"
+                f" cilj=({self._target[0, 0].item():+.3f},"
+                f"{self._target[0, 1].item():+.3f},{self._target[0, 2].item():+.3f})"
             )
-            print("base_z:", self._base_z[0].item(), " root_z:", root_pos[0, 2].item())
 
 
 @configclass
@@ -204,19 +215,27 @@ class BaseAdmittanceActionCfg(ActionTermCfg):
     # Mrtva zona vodoravne udaljenosti TCP-a od baze ruke. Nominalni hvat je
     # na ~0.80 m (izmjereno), pa zona mora biti oko te vrijednosti - inace
     # baza vec pri resetu starta izvan nje i titra oko ruba.
-    reach_min: float = 0.68
-    reach_max: float = 0.82
+    reach_min: float = 0.60
+    reach_max: float = 0.78
 
     # Kurs se mjeri kutom ovog zgloba, ne smjerom prema TCP-u (vidi docstring).
     heading_joint: str = "iiwa_joint_1"
     # Nominalna vrijednost iz konfiguracije hvata. MORA odgovarati prvom
     # elementu NOMINAL_GRASP_JOINT_POS za pripadni tip vrata.
     heading_joint_nominal: float = -0.4071
-    heading_tolerance: float = 0.35  # ~20 stupnjeva
+    # MORA biti sire od delta_range u reset_grasp_and_door (±0.35), inace
+    # zakon odmah ponisti nasumicni kut prilaza koji je ondje namjerno uveden.
+    heading_tolerance: float = 0.6
 
-    gain_linear: float = 0.8
+    gain_linear: float = 0.3
     gain_angular: float = 1.0
-    max_linear_speed: float = 0.3
+    max_linear_speed: float = 0.05
     max_angular_speed: float = 0.5
 
     debug: bool = False
+
+    # Zglob se smatra udobnim unutar ±band oko sredine raspona; 0.35 znaci
+    # 15%-85%. Iznad toga se mrtva zona stisce proporcionalno prekoracenju.
+    arm_joint_pattern: str = "iiwa_joint_[1-7]"
+    joint_comfort_band: float = 0.35
+    joint_reach_gain: float = 1.5

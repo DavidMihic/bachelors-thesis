@@ -54,7 +54,7 @@ from .door_events import randomize_door_resistance
 from .robot_cfg import KMR_IIWA_CFG
 
 # --- Pragovi uspjeha (vidi docstring) ---
-SUCCESS_SLIDING_M = 0.15
+SUCCESS_SLIDING_M = 0.6
 SUCCESS_REVOLUTE_RAD = 0.5
 
 # ~280 N je izmjereno klasicnim pristupom kao tranzijent, ne kao otpor vrata.
@@ -62,10 +62,11 @@ SUCCESS_REVOLUTE_RAD = 0.5
 FORCE_REFERENCE_N = 280.0
 FORCE_ABORT_N = 400.0
 
-# Udaljenost TCP-a od sipke iznad koje se hvat smatra izgubljenim. 0.09 a ne
-# 0.05: sipka kliznih vrata je visoka 0.25 m, pa je klizanje po njoj
-# legitimno i ne smije se brojati kao ispustanje.
+# Klizna vrata: sipka je visoka 0.25 m i gripper po njoj legitimno klizi, pa
+# 0.09 prekida epizode koje nisu ispustanje. Zakretna imaju kratku polugu i
+# ondje je 0.09 ispravan prag - postavlja se zasebno u DoorRevoluteEnvCfg.
 GRASP_LOST_DISTANCE_M = 0.09
+GRASP_LOST_DISTANCE_REVOLUTE_M = 0.09
 
 TCP_BODY = "gripper_tcp"
 
@@ -197,6 +198,10 @@ class ObservationsCfg:
             func=mdp.tcp_velocity_b,
             params={"asset_cfg": SceneEntityCfg("robot", body_names=TCP_BODY)},
         )
+        base_velocity = ObsTerm(
+            func=mdp.base_velocity,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
         wrench = ObsTerm(
             func=mdp.tcp_wrench,
             params={"asset_cfg": SceneEntityCfg("robot")},
@@ -230,6 +235,11 @@ class RewardsCfg:
         func=mdp.perpendicular_force_penalty,
         weight=-0.02,
         params={"door_type": "sliding", "robot_cfg": SceneEntityCfg("robot")},
+    )
+    joint_saturation = RewTerm(
+        func=mdp.joint_saturation_penalty,
+        weight=-2.0,
+        params={"comfort_band": 0.35, "robot_cfg": SceneEntityCfg("robot")},
     )
     excess_force = RewTerm(
         func=mdp.total_force_penalty,
@@ -333,7 +343,10 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
                 pos=REVOLUTE_DOOR_SPAWN, rot=DOOR_SPAWN_ROT
             ),
         )
-        self.events.grasp.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
+        self.terminations.grasp_lost.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
+        self.terminations.grasp_lost.params["max_distance"] = (
+            GRASP_LOST_DISTANCE_REVOLUTE_M
+        )
         self.events.grasp.params["nominal_joint_pos"] = NOMINAL_GRASP_JOINT_POS_REVOLUTE
         self.events.door_resistance.params = {
             "ranges": REVOLUTE_FREE_RESISTANCE,
@@ -344,7 +357,11 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         self.rewards.perpendicular_force.params["door_type"] = "revolute"
         self.rewards.success.params["threshold"] = SUCCESS_REVOLUTE_RAD
         self.terminations.grasp_lost.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
-        self.actions.base.heading_joint_nominal = NOMINAL_GRASP_JOINT_POS_REVOLUTE[0]
+        # Zakretna vrata tjeraju TCP po luku i mijenjaju mu orijentaciju, pa se
+        # zglobovi trose brze nego kod kliznih - ondje je stroza kazna nuzna.
+        # Klizna rade unutar udobnog raspona i ondje ista kazna zaustavlja
+        # napredak na ~0.485 m.
+        self.rewards.joint_saturation.weight = -2.0
 
 
 # --- Ablacija: fiksna impedancija ---------------------------------------
@@ -370,6 +387,17 @@ class DoorRevoluteFixedEnvCfg(DoorRevoluteEnvCfg):
     koliko biti kruta. Akcija pada s 12 na 6 brojeva; sve ostalo - nagrada,
     opazanje, randomizacija, broj iteracija - ostaje identicno, sto je i
     smisao ablacije."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.arm.controller_cfg.impedance_mode = "fixed"
+        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
+
+
+@configclass
+class DoorSlidingFixedEnvCfg(DoorEnvCfg):
+    """Kontrolna skupina za klizna vrata. Ista logika kao zakretna varijanta:
+    politika uci samo kamo pomicati referencu, ne i koliko biti kruta."""
 
     def __post_init__(self):
         super().__post_init__()

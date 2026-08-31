@@ -170,8 +170,12 @@ def print_diagnostics(env, handle_local, label=""):
     lower = robot.data.soft_joint_pos_limits[0, arm_ids, 0]
     upper = robot.data.soft_joint_pos_limits[0, arm_ids, 1]
     print(f"  zglobovi (udio): {((q - lower) / (upper - lower)).tolist()}")
-    reach = (tcp - robot.data.root_pos_w[0]).norm()
-    print(f"  |TCP - baza|   : {reach.item():.4f}")
+    # base_link, NE root: korijen artikulacije je link 'world' i fiksan je u
+    # ishodistu env-a otkad robot ima fiktivne zglobove za pokretnu bazu.
+    base_idx = robot.find_bodies("base_link")[0][0]
+    base_pos = robot.data.body_pos_w[0, base_idx]
+    print(f"  baza (svijet)  : {base_pos.tolist()}")
+    print(f"  |TCP - baza|   : {(tcp - base_pos).norm().item():.4f}")
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)

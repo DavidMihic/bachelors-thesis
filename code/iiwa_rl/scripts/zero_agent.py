@@ -86,9 +86,12 @@ def main():
                 # vrata staju zbog toga, a ne zbog upravljanja.
                 print("zglobovi (udio raspona):", ((q - lower) / (upper - lower)))
                 tcp_ids, _ = robot.find_bodies("gripper_tcp")
-                reach = (
-                    robot.data.body_pos_w[0, tcp_ids[0]] - robot.data.root_pos_w[0]
-                ).norm()
+                base_idx = robot.find_bodies("base_link")[0][0]
+                base_pos = robot.data.body_pos_w[0, base_idx]
+                # reach = (
+                #     robot.data.body_pos_w[0, tcp_ids[0]] - robot.data.root_pos_w[0]
+                # ).norm()
+                reach = (robot.data.body_pos_w[0, tcp_ids[0]] - base_pos).norm()
                 print("|TCP - baza|:", reach.item())
 
             count += 1

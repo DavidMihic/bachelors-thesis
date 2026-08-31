@@ -95,7 +95,7 @@ REVOLUTE_CLOSER_RESISTANCE = DoorResistanceRanges(
 )
 
 # Vjerojatnost da zakretna vrata pri resetu dobiju zatvarac.
-REVOLUTE_CLOSER_PROBABILITY = 0.5
+REVOLUTE_CLOSER_PROBABILITY = 0.0
 
 
 @configclass
