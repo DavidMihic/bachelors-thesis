@@ -156,6 +156,12 @@ def print_diagnostics(env, handle_local, label=""):
     handle = mdp.handle_pos_w(unwrapped, handle_local, SceneEntityCfg("door"))[0]
     leaf_ids, _ = door.find_bodies("door_leaf")
 
+    print(f"  handle_local   : {handle_local}")
+    print(f"  cfg grasp      : {unwrapped.cfg.events.grasp.params['handle_local']}")
+    print(
+        f"  cfg grasp_lost : {unwrapped.cfg.terminations.grasp_lost.params['handle_local']}"
+    )
+
     print(f"--- {label}")
     print(f"  TCP            : {tcp.tolist()}")
     print(f"  kvaka(racunata): {handle.tolist()}")
@@ -176,6 +182,9 @@ def print_diagnostics(env, handle_local, label=""):
     base_pos = robot.data.body_pos_w[0, base_idx]
     print(f"  baza (svijet)  : {base_pos.tolist()}")
     print(f"  |TCP - baza|   : {(tcp - base_pos).norm().item():.4f}")
+
+    force = mdp.tcp_wrench(unwrapped, SceneEntityCfg("robot"))[0, :3]
+    print(f"  sila lokalno   : {force.tolist()}")
 
 
 @hydra_task_config(args_cli.task, args_cli.agent)
