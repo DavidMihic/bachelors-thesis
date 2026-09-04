@@ -15,14 +15,24 @@ import argparse
 
 from isaaclab.app import AppLauncher
 
-parser = argparse.ArgumentParser(description="Primijeni friction material na collision prime po imenu.")
-parser.add_argument("usd_path", type=str, help="Putanja do USD filea (mijenja se in-place).")
-parser.add_argument("--name-filter", type=str, default="gripper_finger",
-                     help="Podstring koji mora sadržavati prim path da bi dobio material (npr. 'gripper_finger' ili 'handle').")
+parser = argparse.ArgumentParser(
+    description="Primijeni friction material na collision prime po imenu."
+)
+parser.add_argument(
+    "usd_path", type=str, help="Putanja do USD filea (mijenja se in-place)."
+)
+parser.add_argument(
+    "--name-filter",
+    type=str,
+    default="gripper_finger",
+    help="Podstring koji mora sadržavati prim path da bi dobio material (npr. 'gripper_finger' ili 'handle').",
+)
 parser.add_argument("--static-friction", type=float, default=1.2)
 parser.add_argument("--dynamic-friction", type=float, default=1.0)
 parser.add_argument("--restitution", type=float, default=0.0)
-parser.add_argument("--material-path", type=str, default="/World/PhysicsMaterials/GripperFingerFriction")
+parser.add_argument(
+    "--material-path", type=str, default="/kmr_iiwa_rl/Looks/GripperFingerFriction"
+)
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -51,7 +61,9 @@ def main():
         if prim.HasAPI(UsdPhysics.CollisionAPI):
             matches.append((path_str, prim))
 
-    resolved_layers = {}  # (layer_identifier, prim_path) -> True, dedup (sva 4 prsta dijele isti backing layer)
+    resolved_layers = (
+        {}
+    )  # (layer_identifier, prim_path) -> True, dedup (sva 4 prsta dijele isti backing layer)
     unresolved = []
     for instance_path, prim in matches:
         source = prim.GetPrimInPrototype() if prim.IsInstanceProxy() else prim
@@ -68,7 +80,9 @@ def main():
         sub_stage = Usd.Stage.Open(layer_id)
         sub_prim = sub_stage.GetPrimAtPath(spec.path)
         if not (sub_prim and sub_prim.IsValid()):
-            unresolved.append(f"{instance_path}  (layer: {layer_id}  path: {spec.path})")
+            unresolved.append(
+                f"{instance_path}  (layer: {layer_id}  path: {spec.path})"
+            )
             continue
         # materijal treba postojati i unutar OVOG layera (cross-layer reference na main
         # stage material ne rezolvira se kad se ovaj layer otvori samostalno)
@@ -78,25 +92,39 @@ def main():
         sub_phys_mat.CreateDynamicFrictionAttr().Set(args_cli.dynamic_friction)
         sub_phys_mat.CreateRestitutionAttr().Set(args_cli.restitution)
         sub_material = UsdShade.Material(sub_mat_prim)
-        UsdShade.MaterialBindingAPI.Apply(sub_prim).Bind(sub_material, materialPurpose="physics")
+        UsdShade.MaterialBindingAPI.Apply(sub_prim).Bind(
+            sub_material, materialPurpose="physics"
+        )
         sub_stage.Save()
         resolved_layers[key] = True
-        print(f"   bindano u backing layeru: {layer_id}  [{spec.path}]  (pokriva: {instance_path} i sve ostale instance istog mesha)")
+        print(
+            f"   bindano u backing layeru: {layer_id}  [{spec.path}]  (pokriva: {instance_path} i sve ostale instance istog mesha)"
+        )
 
     if unresolved:
-        print(f"!! {len(unresolved)} prim(a) se nije moglo resolvati na editabilan layer:")
+        print(
+            f"!! {len(unresolved)} prim(a) se nije moglo resolvati na editabilan layer:"
+        )
         for p in unresolved:
             print("    ", p)
-        print("   Otvori USD u Isaac Sim GUI-u, desni klik na prim -> 'Select Instance' / provjeri")
+        print(
+            "   Otvori USD u Isaac Sim GUI-u, desni klik na prim -> 'Select Instance' / provjeri"
+        )
         print("   Layer stack panel da ručno nađeš u kojem je fileu stvarno definiran.")
 
     if not matches:
         print(f"!! Nijedan collision prim ne sadrži '{args_cli.name_filter}' u pathu.")
-        print("   Otvori stage u Isaac Sim GUI-u (Window > Stage) i provjeri točan naziv prima")
-        print("   koji je importer generirao za linkove grippera, pa ponovi s --name-filter.")
+        print(
+            "   Otvori stage u Isaac Sim GUI-u (Window > Stage) i provjeri točan naziv prima"
+        )
+        print(
+            "   koji je importer generirao za linkove grippera, pa ponovi s --name-filter."
+        )
     elif resolved_layers:
-        print(f"Gotovo — friction material ({args_cli.static_friction}/{args_cli.dynamic_friction}) "
-              f"primijenjen u {len(resolved_layers)} backing layer(a).")
+        print(
+            f"Gotovo — friction material ({args_cli.static_friction}/{args_cli.dynamic_friction}) "
+            f"primijenjen u {len(resolved_layers)} backing layer(a)."
+        )
 
 
 if __name__ == "__main__":
