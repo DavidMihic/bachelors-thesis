@@ -347,6 +347,7 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         self.terminations.grasp_lost.params["max_distance"] = (
             GRASP_LOST_DISTANCE_REVOLUTE_M
         )
+        self.events.grasp.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
         self.events.grasp.params["nominal_joint_pos"] = NOMINAL_GRASP_JOINT_POS_REVOLUTE
         self.events.door_resistance.params = {
             "ranges": REVOLUTE_FREE_RESISTANCE,
@@ -357,6 +358,7 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         self.rewards.perpendicular_force.params["door_type"] = "revolute"
         self.rewards.success.params["threshold"] = SUCCESS_REVOLUTE_RAD
         self.terminations.grasp_lost.params["handle_local"] = HANDLE_LOCAL_REVOLUTE
+        self.actions.base.heading_joint_nominal = NOMINAL_GRASP_JOINT_POS_REVOLUTE[0]
         # Zakretna vrata tjeraju TCP po luku i mijenjaju mu orijentaciju, pa se
         # zglobovi trose brze nego kod kliznih - ondje je stroza kazna nuzna.
         # Klizna rade unutar udobnog raspona i ondje ista kazna zaustavlja

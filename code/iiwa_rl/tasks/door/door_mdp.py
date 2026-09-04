@@ -32,7 +32,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_mul
 
 from .door_cfg import DOOR_DOF_JOINT, DOOR_LEAF_BODY
-from .robot_cfg import BASE_BODY, GRIPPER_CLOSED, BASE_JOINTS
+from .robot_cfg import BASE_BODY, GRIPPER_OPEN, GRIPPER_CLOSED, BASE_JOINTS
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -443,11 +443,20 @@ def reset_grasp_and_door(
 
     joint_pos = robot.data.default_joint_pos[env_ids].clone()
     joint_pos[:, arm_ids] = arm_pos
-    joint_pos[:, finger_ids] = GRIPPER_CLOSED
+    # Prsti se pri resetu postavljaju OTVORENI, a pogon ih zatvara kroz
+    # prvih nekoliko koraka epizode. Upis zatvorenog stanja znaci da se prsti
+    # instantno nadu unutar poluge; PhysX taj prodor razrjesava impulsom koji
+    # doseze 130 N, a hvat u vertikali drzi svega 11.6 N - hvat je narusen
+    # prije nego politika napravi ijedan potez.
+    joint_pos[:, finger_ids] = GRIPPER_OPEN
     joint_vel = torch.zeros_like(joint_pos)
 
     robot.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
-    robot.set_joint_position_target(joint_pos, env_ids=env_ids)
+
+    # Cilj pogona je zatvoreno stanje, pa se prsti sami stisnu oko poluge.
+    target = joint_pos.clone()
+    target[:, finger_ids] = GRIPPER_CLOSED
+    robot.set_joint_position_target(target, env_ids=env_ids)
 
     # --- vrata: p' = a + Rz(Δ)(p - a), yaw = yaw0 + Δ ---
     a = torch.tensor(ARM_BASE_B, device=device).expand(n, 3)
