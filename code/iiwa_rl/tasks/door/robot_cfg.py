@@ -121,15 +121,12 @@ KMR_IIWA_CFG = ArticulationCfg(
         ),
         "base": ImplicitActuatorCfg(
             joint_names_expr=["base_.*_joint"],
-            # Kruto pozicijsko drzanje: platforma od ~390 kg mora stajati na
-            # mjestu dok ruka vuce vrata. Prenisko i baza puze pod reakcijom,
-            # cime bi se izgubila referenca u odnosu na koju je poza vrata
-            # izracunata pri resetu.
-            stiffness={
-                "base_x_joint": 1.0e5,  # N/m
-                "base_y_joint": 1.0e5,  # N/m
-                "base_theta_joint": 1.0e5,  # Nm/rad
-            },
+            # Brzinski pogon: stiffness 0, sila dolazi iz prigusenja koje
+            # prati zadanu brzinu. Pod reakcijom ruke baza time lagano puze -
+            # pri 100 N i prigusenju 1e4 to je 0.01 m/s, zanemarivo naspram
+            # zadanih 0.3 m/s. Pozicijski pogon bi bio krući, ali twist je
+            # sucelje kojim se KMR stvarno vozi (/cmd_vel).
+            stiffness=0.0,
             damping={
                 "base_x_joint": 1.0e4,
                 "base_y_joint": 1.0e4,

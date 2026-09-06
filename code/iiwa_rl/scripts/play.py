@@ -186,6 +186,9 @@ def print_diagnostics(env, handle_local, label=""):
     force = mdp.tcp_wrench(unwrapped, SceneEntityCfg("robot"))[0, :3]
     print(f"  sila lokalno   : {force.tolist()}")
 
+    obs = unwrapped.observation_manager.compute_group("policy")[0]
+    print("  obs :", obs.tolist())
+
 
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(

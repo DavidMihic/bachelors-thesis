@@ -42,10 +42,12 @@ import torch  # noqa: E402
 
 import isaaclab_tasks  # noqa: F401, E402
 from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
+from isaaclab.managers import SceneEntityCfg  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import iiwa_rl.tasks.door  # noqa: E402, F401  - registrira Isaac-Door-* zadatke
+from iiwa_rl.tasks.door import door_mdp as mdp
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 
@@ -93,6 +95,10 @@ def main():
                 # ).norm()
                 reach = (robot.data.body_pos_w[0, tcp_ids[0]] - base_pos).norm()
                 print("|TCP - baza|:", reach.item())
+                proximity = mdp.base_leaf_proximity(
+                    env.unwrapped, SceneEntityCfg("robot")
+                )
+                print("baza - krilo:", proximity[0].item())
 
             count += 1
 

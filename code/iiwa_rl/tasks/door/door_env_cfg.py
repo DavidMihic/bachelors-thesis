@@ -27,7 +27,10 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.controllers import OperationalSpaceControllerCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.envs.mdp.actions import OperationalSpaceControllerActionCfg
+from isaaclab.envs.mdp.actions import (
+    OperationalSpaceControllerActionCfg,
+    JointVelocityActionCfg,
+)
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -249,6 +252,13 @@ class RewardsCfg:
             "robot_cfg": SceneEntityCfg("robot"),
         },
     )
+    # Baza je siroka 1.08 m, pa 0.5 m od osi krila drzi platformu izvan
+    # njega, a kvaka je na 0.72 m od sarke i ostaje dohvatljiva.
+    base_intrusion = RewTerm(
+        func=mdp.base_intrusion_penalty,
+        weight=-20.0,
+        params={"min_distance": 0.5, "robot_cfg": SceneEntityCfg("robot")},
+    )
     action_rate = RewTerm(func=base_mdp.action_rate_l2, weight=-0.002)
     # Bonus PO KORAKU za drzanje vrata otvorenima - zato tezina 2, ne 50.
     success = RewTerm(
@@ -270,6 +280,10 @@ class TerminationsCfg:
     overforce = DoneTerm(
         func=mdp.force_exceeded,
         params={"limit": FORCE_ABORT_N, "robot_cfg": SceneEntityCfg("robot")},
+    )
+    base_hit = DoneTerm(
+        func=mdp.base_hit_leaf,
+        params={"min_distance": 0.3, "robot_cfg": SceneEntityCfg("robot")},
     )
 
 
@@ -366,6 +380,36 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         self.rewards.joint_saturation.weight = -2.0
 
 
+@configclass
+class DoorRevoluteLearnedBaseEnvCfg(DoorRevoluteEnvCfg):
+    """Baza u prostoru akcije umjesto admitancijskog zakona.
+
+    Akcija raste s 12 na 15: tri dodatna broja su (vx, vy, omega), dakle
+    doslovno geometry_msgs/Twist. Politika time sama koordinira ruku i bazu,
+    umjesto da baza reagira tek nakon sto ruci ponestane prostora.
+
+    ZASTO USPOREDBA: s admitancijskim zakonom gibanje je sekvencijalno -
+    ruka brzo okrene vrata koliko moze, pa baza sporo krene za njom. Ovdje
+    se mjeri koliko se dobiva ako je koordinacija naucena. Sve ostalo je
+    identicno referentnom runu.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.base = JointVelocityActionCfg(
+            asset_name="robot",
+            joint_names=["base_x_joint", "base_y_joint", "base_theta_joint"],
+            # Uz izlaz politike reda ±3 to daje ~0.3 m/s i ~0.5 rad/s, isti
+            # red velicine kao gornje granice admitancijskog zakona.
+            scale={
+                "base_x_joint": 0.1,
+                "base_y_joint": 0.1,
+                "base_theta_joint": 0.17,
+            },
+            use_default_offset=False,
+        )
+
+
 # --- Ablacija: fiksna impedancija ---------------------------------------
 # Uz pose_rel je maksimalna sila ~ K * position_scale, pa jedna fiksna
 # vrijednost NIJE postena usporedba: preniska ne moze razviti silu za
@@ -397,9 +441,51 @@ class DoorRevoluteFixedEnvCfg(DoorRevoluteEnvCfg):
 
 
 @configclass
+class DoorRevoluteLearnedBaseFixedEnvCfg(DoorRevoluteLearnedBaseEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.arm.controller_cfg.impedance_mode = "fixed"
+        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
+
+
+@configclass
 class DoorSlidingFixedEnvCfg(DoorEnvCfg):
     """Kontrolna skupina za klizna vrata. Ista logika kao zakretna varijanta:
     politika uci samo kamo pomicati referencu, ne i koliko biti kruta."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.arm.controller_cfg.impedance_mode = "fixed"
+        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
+
+
+@configclass
+class DoorSlidingLearnedBaseEnvCfg(DoorEnvCfg):
+    """Klizna vrata s bazom u prostoru akcije.
+
+    Zrcalna klasa DoorRevoluteLearnedBaseEnvCfg, samo nasljeduje bazicnu
+    (kliznu) konfiguraciju. Skale su iste, pa su dva tipa vrata usporediva.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.actions.base = JointVelocityActionCfg(
+            asset_name="robot",
+            joint_names=["base_x_joint", "base_y_joint", "base_theta_joint"],
+            # Uz izlaz politike reda ±3 to daje ~0.3 m/s i ~0.5 rad/s, isti
+            # red velicine kao gornje granice admitancijskog zakona.
+            scale={
+                "base_x_joint": 0.1,
+                "base_y_joint": 0.1,
+                "base_theta_joint": 0.17,
+            },
+            use_default_offset=False,
+        )
+
+
+@configclass
+class DoorSlidingLearnedBaseFixedEnvCfg(DoorSlidingLearnedBaseEnvCfg):
+    """Kontrolna skupina za klizna vrata s naucenom bazom."""
 
     def __post_init__(self):
         super().__post_init__()

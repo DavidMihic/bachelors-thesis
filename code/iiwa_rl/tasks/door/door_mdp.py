@@ -49,6 +49,9 @@ DOOR_BASE_YAW = 3.14159265  # vrata gledaju natrag prema robotu
 
 Z_AXIS = torch.tensor([0.0, 0.0, 1.0])
 
+# Sirina krila iz URDF-a. Krilo se pruza od sarke duz lokalne +Y osi.
+LEAF_WIDTH_M = 0.85
+
 
 # --------------------------------------------------------------------------
 # Pomocne
@@ -331,6 +334,67 @@ def joint_saturation_penalty(
     upper = robot.data.soft_joint_pos_limits[:, ids, 1]
     fraction = (q - lower) / (upper - lower + 1e-6)
     return ((fraction - 0.5).abs() - comfort_band).clamp(min=0.0).sum(dim=-1)
+
+
+def base_leaf_proximity(
+    env: "ManagerBasedRLEnv",
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Vodoravna udaljenost baze od KRILA vrata, (num_envs,).
+
+    Mjeri se do najblize tocke na krilu, ne do njegovog ishodista: okvir
+    door_leafa je u osi sarke, a krilo se pruza 0.85 m od nje, pa bi
+    udaljenost do ishodista bila besmislena kad su vrata poluotvorena.
+
+    ZASTO POSTOJI: bez zida u sceni nista ne prijeci bazi da se provoze kroz
+    krilo i time ga rasklopi. Politika s bazom u prostoru akcije upravo to i
+    nauci - door dof dosegne puni limit dok baza odlazi dva metra naprijed.
+    Mjeri se udaljenost od KRILA, a ne od ravnine zatvorenih vrata, jer krilo
+    se mice: kad su vrata otvorena, prostor iza te ravnine je slobodan i
+    robot kroz njega u stvarnosti prolazi.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    door: Articulation = env.scene[door_cfg.name]
+
+    base = robot.data.body_pos_w[:, _bodies(robot, "base", BASE_BODY)[0]][:, :2]
+
+    leaf_idx = _bodies(door, "leaf", DOOR_LEAF_BODY)[0]
+    hinge = door.data.body_pos_w[:, leaf_idx]
+    span = torch.zeros_like(hinge)
+    span[:, 1] = LEAF_WIDTH_M
+    far_edge = hinge + quat_apply(door.data.body_quat_w[:, leaf_idx], span)
+
+    # Najbliza tocka na duzini sarka -> slobodni rub, u vodoravnoj ravnini.
+    p0, p1 = hinge[:, :2], far_edge[:, :2]
+    edge = p1 - p0
+    t = ((base - p0) * edge).sum(dim=-1) / (edge * edge).sum(dim=-1).clamp(min=1e-6)
+    closest = p0 + t.clamp(0.0, 1.0).unsqueeze(-1) * edge
+    return (base - closest).norm(dim=-1)
+
+
+def base_intrusion_penalty(
+    env: "ManagerBasedRLEnv",
+    min_distance: float,
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Kazna kad baza pride krilu blize od min_distance."""
+    distance = base_leaf_proximity(env, robot_cfg, door_cfg)
+    return (min_distance - distance).clamp(min=0.0)
+
+
+def base_hit_leaf(
+    env: "ManagerBasedRLEnv",
+    min_distance: float,
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+    grace_steps: int = 10,
+) -> torch.Tensor:
+    """Terminacija: baza je usla u krilo. Kazna sama guranje samo poskupljuje,
+    a ono se politici i dalje isplati jer otvara vrata do punog limita."""
+    distance = base_leaf_proximity(env, robot_cfg, door_cfg)
+    return (distance < min_distance) & _past_grace(env, grace_steps)
 
 
 def is_open(
