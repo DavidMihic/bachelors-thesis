@@ -29,6 +29,7 @@ setup(
             "door_open = kmr_iiwa_task.door_open:main",
             "door_pull_base = kmr_iiwa_task.door_pull_base:main",
             "door_pull_base_arc = kmr_iiwa_task.door_pull_base_arc:main",
+            "rl_door_inference = kmr_iiwa_task.rl_door_inference:main",
         ],
     },
 )
