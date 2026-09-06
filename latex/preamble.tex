@@ -1,0 +1,236 @@
+% ============================================================================
+%  preamble.tex — paketi, lokalizacija, stil
+%  Struktura preuzeta iz: AndrijaAdamovic/bachelors-thesis (tex/bachelors_thesis.tex)
+%  Oblikovanje usklađeno sa službenim predloškom FSB-a (Predlozak_zavrsni.docx):
+%  Times New Roman 12pt, prored 1,5, margine 25mm, numeriranje 1. / 1.1. / 1.1.1.,
+%  slike i tablice numerirane kontinuirano, potpisi centrirani bold 11pt.
+% ============================================================================
+
+% --- Kodiranje i jezik --------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[croatian]{babel}
+% \usepackage{mathptmx}                   % Times New Roman (po službenom predlošku FSB-a)
+\usepackage{lmodern}
+\usepackage{setspace}
+\onehalfspacing                          % prored 1,5 (stil TEKST)
+
+% --- Stranica ----------------------------------------------------------------
+\usepackage[a4paper,margin=25mm,headheight=15pt]{geometry}
+% 25mm sa svih strana — po službenom predlošku FSB-a (sectPr: 1418 twips).
+
+% --- Matematika --------------------------------------------------------------
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{bm}
+
+% --- Tablice -----------------------------------------------------------------
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{arydshln}
+
+% --- Slike, kod, ostalo ------------------------------------------------------
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{pdfpages}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage{chngcntr}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{calc, patterns, decorations.pathmorphing, arrows.meta, positioning}
+
+% --- Mjerne jedinice s hrvatskim decimalnim zarezom ---------------------------
+\usepackage{siunitx}
+\sisetup{
+    output-decimal-marker = {,},
+    group-separator       = {.},
+    group-minimum-digits  = 4,
+    per-mode              = symbol,
+    range-units           = single
+}
+% Upotreba: \SI{0.1}{\milli\metre} -> 0,1 mm ; \SI{3.6}{\kilo\metre\per\hour}
+
+% --- Hiperveze (uvijek zadnje od "običnih" paketa) ---------------------------
+\usepackage[
+    pdfpagelabels,
+    plainpages=false,
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+]{hyperref}
+\hypersetup{
+    pdfborder={0 0 0},
+    linktoc=all,
+    pageanchor=false
+}
+
+% ============================================================================
+%  Hrvatski nazivi fiksnih naslova
+% ============================================================================
+\addto\captionscroatian{%
+    \renewcommand{\contentsname}{SADRŽAJ}%
+    \renewcommand{\listfigurename}{POPIS SLIKA}%
+    \renewcommand{\listtablename}{POPIS TABLICA}%
+    \renewcommand{\bibname}{LITERATURA}%
+    \renewcommand{\appendixname}{Prilog}%
+    \renewcommand{\figurename}{Slika}%
+    \renewcommand{\tablename}{Tablica}%
+}
+
+% ============================================================================
+%  Tipografija i razmaci
+% ============================================================================
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+
+\setlength{\cftbeforechapskip}{5pt}
+\setlength{\cftbeforesecskip}{2pt}
+\setlength{\cftbeforesubsecskip}{1pt}
+\setlength{\cftbeforefigskip}{5pt}
+\setlength{\cftbeforetabskip}{5pt}
+
+\DeclareCaptionLabelFormat{fsb}{#1~#2.}
+\captionsetup{
+    font          = {small,bf},
+    labelformat   = fsb,
+    labelsep      = quad,
+    justification = centering,
+    singlelinecheck = false
+}
+
+% --- Numeriranje s točkom na kraju: 1. / 1.1. / 1.1.1. / 1.1.1.1. -------------
+\renewcommand{\thechapter}{\arabic{chapter}.}
+\renewcommand{\thesection}{\thechapter\arabic{section}.}
+\renewcommand{\thesubsection}{\thesection\arabic{subsection}.}
+\renewcommand{\thesubsubsection}{\thesubsection\arabic{subsubsection}.}
+
+% --- Slike, tablice i jednadžbe numerirane kontinuirano kroz cijeli rad ------
+\counterwithout{figure}{chapter}
+\counterwithout{table}{chapter}
+\counterwithout{equation}{chapter}
+
+% --- Izgled naslova ---------------------------------------------------------
+\titleformat{\chapter}[hang]
+{\normalfont\large\bfseries}{\thechapter}{1em}{}
+\titleformat{name=\chapter,numberless}[hang]
+{\normalfont\large\bfseries}{}{0pt}{}
+\titleformat{\section}[hang]
+{\normalfont\normalsize\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}[hang]
+{\normalfont\normalsize\bfseries\itshape}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}[hang]
+{\normalfont\normalsize\itshape}{\thesubsubsection}{1em}{}
+\titlespacing*{\chapter}{0pt}{0pt}{18pt}
+\titlespacing*{\section}{0pt}{14pt}{12pt}
+\titlespacing*{\subsection}{0pt}{12pt}{12pt}
+\titlespacing*{\subsubsection}{0pt}{12pt}{12pt}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% Šire polje za brojeve u sadržaju (jer brojevi imaju točku na kraju)
+\setlength{\cftchapnumwidth}{2.4em}
+\setlength{\cftsecnumwidth}{3.2em}
+\setlength{\cftsubsecnumwidth}{4.0em}
+
+% ============================================================================
+%  Metapodaci rada — IZMIJENI OVDJE
+% ============================================================================
+\newcommand{\sveuciliste}{Sveučilište u Zagrebu}
+\newcommand{\fakultet}{Fakultet strojarstva i brodogradnje}
+\newcommand{\vrstarada}{Završni rad}
+\newcommand{\autorime}{David Mihić}
+\newcommand{\mentorjedan}{Dr. sc. Bojan Šekoranja, mag.ing.}
+\newcommand{\mentordva}{}
+\newcommand{\mjestogodina}{Zagreb, 2026.}
+\newcommand{\naslovrada}{Autonomna interakcija mobilnog manipulatora s okolinom}
+\newcommand{\naslovradaen}{Autonomous interaction of a mobile manipulator with the environment}
+
+% ============================================================================
+%  Zaglavlje i podnožje
+% ============================================================================
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small \autorime}
+\fancyhead[R]{\small \vrstarada}
+\fancyfoot[L]{\small\textit{\fakultet{}}}
+\fancyfoot[R]{\small\textit{\thepage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\fancypagestyle{plain}{%
+    \fancyhf{}
+    \fancyhead[L]{\small \autorime}
+    \fancyhead[R]{\small \vrstarada}
+    \fancyfoot[L]{\small\textit{\fakultet{}}}
+    \fancyfoot[R]{\small\textit{\thepage}}
+    \renewcommand{\headrulewidth}{0.4pt}
+    \renewcommand{\footrulewidth}{0.4pt}
+}
+
+% ============================================================================
+%  Pomoćne naredbe
+% ============================================================================
+% Nenumerirano poglavlje koje se ipak pojavi u sadržaju (SAŽETAK, POPIS OZNAKA...)
+\newcommand{\frontmatterchapter}[1]{%
+    \chapter*{#1}%
+    \addcontentsline{toc}{chapter}{#1}%
+}
+
+\newcommand{\clearemptypage}{%
+    \clearpage
+    \thispagestyle{empty}%
+}
+
+\newtheorem{definicija}{Definicija}
+\newtheorem{teorem}{Teorem}
+
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\transp}{^{\mathsf{T}}}
+
+% Kratice specifične za rad (da se piše konzistentno)
+\newcommand{\kmr}{KMR~iiwa}
+\newcommand{\lbr}{LBR~iiwa}
+
+% ============================================================================
+%  Stil za isječke koda (Python / XML / YAML)
+% ============================================================================
+\definecolor{codegray}{gray}{0.95}
+\definecolor{codekey}{RGB}{0,0,180}
+\definecolor{codecom}{RGB}{0,128,0}
+\definecolor{codestr}{RGB}{180,0,0}
+
+\lstset{
+    basicstyle      = \ttfamily\footnotesize,
+    keywordstyle    = \color{codekey}\bfseries,
+    commentstyle    = \color{codecom}\itshape,
+    stringstyle     = \color{codestr},
+    backgroundcolor = \color{codegray},
+    numbers         = left,
+    numberstyle     = \tiny\color{gray},
+    numbersep       = 8pt,
+    frame           = single,
+    rulecolor       = \color{gray},
+    breaklines      = true,
+    breakatwhitespace = true,
+    showstringspaces  = false,
+    tabsize         = 4,
+    captionpos      = b,
+    inputencoding   = utf8,
+    extendedchars   = true,
+    literate        = {č}{{\v{c}}}1 {ć}{{\'{c}}}1 {ž}{{\v{z}}}1
+        {š}{{\v{s}}}1 {đ}{{d}}1
+        {Č}{{\v{C}}}1 {Ć}{{\'{C}}}1 {Ž}{{\v{Z}}}1
+        {Š}{{\v{S}}}1 {Đ}{{D}}1
+}
+\renewcommand{\lstlistingname}{Programski isječak}

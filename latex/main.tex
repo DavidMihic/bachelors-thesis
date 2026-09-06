@@ -1,0 +1,157 @@
+% ============================================================================
+%  ZAVRŠNI RAD — David Mihić
+%  Prevođenje:  latexmk -pdf main.tex     (ili: make)
+% ============================================================================
+\documentclass[12pt,a4paper]{report}
+
+\input{preamble}
+
+\begin{document}
+
+% ----------------------------------------------------------------------------
+%  Naslovnica 1 — jednostavna
+% ----------------------------------------------------------------------------
+\begin{titlepage}
+    \centering
+    \thispagestyle{empty}
+
+    {\large\scshape \sveuciliste\par}
+    \vspace{3mm}
+    {\large\scshape \fakultet\par}
+
+    \vspace*{80mm}
+    {\Huge\scshape \MakeUppercase{\vrstarada}\par}
+
+    \vspace{38mm}
+    \begin{flushright}
+        {\Large \autorime\par}
+    \end{flushright}
+
+    \vfill
+    {\large\scshape \mjestogodina\par}
+\end{titlepage}
+
+% ----------------------------------------------------------------------------
+%  Naslovnica 2 — s poljima mentora i studenta
+% ----------------------------------------------------------------------------
+\begin{titlepage}
+    \centering
+    \thispagestyle{empty}
+
+    {\Large\scshape \sveuciliste\par}
+    \vspace{3mm}
+    {\Large\scshape \fakultet\par}
+
+    \vspace*{80mm}
+    {\Huge\scshape \MakeUppercase{\vrstarada}\par}
+
+    \vspace{38mm}
+    \noindent
+    \begin{minipage}[t]{0.52\textwidth}
+        \raggedright{}
+        {\Large Mentor:\par}
+        \vspace{9mm}
+        {\Large \mentorjedan\par}
+        \ifx\mentordva\empty\else
+            \vspace{3mm}
+            {\Large \mentordva\par}
+        \fi
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.34\textwidth}
+        \raggedleft{}
+        {\Large Student:\par}
+        \vspace{9mm}
+        {\Large \autorime\par}
+    \end{minipage}
+
+    \vfill
+    {\large\scshape \mjestogodina\par}
+\end{titlepage}
+
+% ----------------------------------------------------------------------------
+%  Izjava o samostalnosti izrade + zahvale
+% ----------------------------------------------------------------------------
+\clearemptypage{}
+\vspace*{\fill}
+\noindent Izjavljujem da sam ovaj rad izradio samostalno koristeći znanja stečena
+tijekom studija i navedenu literaturu.
+
+\vspace{8mm}
+\quad TODO: zahvala mentoru.
+
+\quad TODO: zahvala obitelji i prijateljima.
+
+\vspace{10mm}
+\begin{flushright}
+    \autorime{}
+\end{flushright}
+\vspace*{\fill}
+\clearpage
+
+% ----------------------------------------------------------------------------
+%  Službeni tekst zadatka (PDF od mentora)
+%  Odkomentiraj kad dobiješ figures/zadatak.pdf
+% ----------------------------------------------------------------------------
+% \includepdf[
+%     pages=1,
+%     pagecommand={\thispagestyle{empty}},
+%     width={\paperwidth}
+% ]{figures/zadatak.pdf}
+
+% ----------------------------------------------------------------------------
+%  Prednji dio — rimska numeracija
+% ----------------------------------------------------------------------------
+\pagenumbering{roman}
+\setcounter{page}{1}
+\pagestyle{fancy}
+\hypersetup{pageanchor=true}
+
+\phantomsection{}
+\addcontentsline{toc}{chapter}{SADRŽAJ}
+\tableofcontents
+\clearpage
+
+\phantomsection{}
+\addcontentsline{toc}{chapter}{POPIS SLIKA}
+\listoffigures
+\clearpage
+
+\phantomsection{}
+\addcontentsline{toc}{chapter}{POPIS TABLICA}
+\listoftables
+\clearpage
+
+\input{frontmatter/popis_oznaka}
+\input{frontmatter/popis_kratica}
+\input{frontmatter/sazetak}
+\input{frontmatter/abstract}
+
+% ----------------------------------------------------------------------------
+%  Glavni dio — arapska numeracija
+% ----------------------------------------------------------------------------
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\include{chapters/01_uvod}
+\include{chapters/02_pregled}
+\include{chapters/03_robotski_sustav}
+\include{chapters/04_percepcija}
+\include{chapters/05_procjena_okoline}
+\include{chapters/06_klasicni_pristup}
+\include{chapters/07_ucenje}
+\include{chapters/08_rezultati}
+\include{chapters/09_zakljucak}
+
+% ----------------------------------------------------------------------------
+%  Literatura
+% ----------------------------------------------------------------------------
+\clearpage
+\phantomsection{}
+\addcontentsline{toc}{chapter}{LITERATURA}
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\include{chapters/prilog}
+
+\end{document}

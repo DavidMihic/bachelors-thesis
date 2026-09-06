@@ -1,0 +1,37 @@
+\chapter{ROBOTSKI SUSTAV I SIMULACIJSKO OKRUŽENJE}
+\label{ch:sustav}
+
+Izvor: \texttt{gripper\_implementation\_handoff.md}, repozitorij
+\texttt{code/ros2\_ws/src/kmr\_iiwa\_description}.
+
+\section{KMR iiwa — mobilna platforma i manipulator}
+\label{sec:kmr}
+
+TODO: KMP omniMove baza (Mecanum kotači, omnidirekcionalno gibanje), LBR iiwa 14 R820
+(7 osi, senzori momenta u svakoj osi). Tablica tehničkih podataka iz KUKA kataloga
+\cite{kuka2024kmriiwa}.
+
+\section{Prihvatnica}
+\label{sec:gripper}
+
+TODO: 4-prsta samocentrirajuća prihvatnica, geometrija, mase, hod prsta, TCP.
+Napomena o tome da je prihvatnica projektirana za simulaciju (prirubnica estetska).
+
+\section{Model robota: URDF i pretvorba u USD}
+\label{sec:urdf-usd}
+
+TODO: xacro struktura, \texttt{gripper\_wrist\_joint} kao mjesto očitanja sile i momenta,
+konvertiranje s \texttt{convex\_decomposition} kolidera, krutost/prigušenje pogona,
+problem instanciranja pri pridruživanju materijala trenja.
+
+\section{Simulacijsko okruženje}
+\label{sec:isaac}
+
+TODO: Isaac Sim / Isaac Lab, fizika kontakta, model vrata (zakretna i klizna).
+
+\section{Programska arhitektura i ROS 2 sučelje}
+\label{sec:ros2}
+
+TODO: ROS 2 Humble, most prema simulatoru, upravljanje bazom (\texttt{cmd\_vel}) i
+prihvatnicom (\texttt{/gripper\_cmd}, \texttt{/gripper\_state}, \texttt{/gripper\_stalled}).
+Argument za generičko sučelje prihvatnice.

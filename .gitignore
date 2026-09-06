@@ -19,10 +19,19 @@ code/ros2_ws/log
 
 # LaTeX build
 *.aux
+*.bbl
+*.blg
 *.log
 *.out
-*.pdf
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
 *.synctex.gz
+*.nav
+*.snm
+*.vrb
 
 # VS Code config
 .vscode
