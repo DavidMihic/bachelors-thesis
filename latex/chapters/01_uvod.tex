@@ -6,16 +6,73 @@ TODO: piše se PRETPOSLJEDNJE (prije zaključka), kad su rezultati poznati.
 \section{Motivacija}
 \label{sec:motivacija}
 
-TODO: zašto mobilna manipulacija s fizičkom interakcijom; zašto otvaranje vrata kao
-reprezentativan zadatak (artikulirani objekt, nepoznata kinematika, kontaktne sile).
+Industrijska robotika od svog začetka počiva na pretpostavci strukturirane okoline. Robot je
+ograđen zaštitnom ogradom, radni komadi nalaze se na predodređenom mjestu, a zadatak
+se svodi na ponavljanje prethodno naučene i isprogramirane radnje. U takvim uvjetima pozicijsko
+upravljanje visoke krutosti daje izvrsne rezultate, robot vrlo ponovljivo i bez većih odstupanja
+slijedi zadanu putanju bez obzira na smetnje.
 
-\section{Zadatak rada}
-\label{sec:zadatak}
+Ta se pretpostavka ruši čim robot izađe iz kaveza. Industrijska okruženja puna su ljudi koji istovremeno
+obavljaju svoje poslove, servise, logističke zadatke i okolnosti koje se mijenjaju između dva izvođenja istog zadatka.
+Odgovor na takve probleme su mobilni manipulatori - sustavi koji integriraju svestranost mobilne platforme
+s artikuliranošću robotske ruke i time uklanjaju ograničenje dosega koje veže nepokretni manipulator za jedno radno mjesto.
 
-TODO: doslovan tekst zadatka (vidi \texttt{thesis\_writing\_handoff.md} \S1), zatim
-eksplicitno mapiranje svake stavke zadatka na poglavlje ovog rada.
+Najčešća primjena industrijskih robota je za tzv. \textit{pick-and-place} radnje, ali postoji
+i veliki broj operacija za koje je potrebna uspostava i održavanje fizičkog kontakta, primjerice
+otvaranje vrata i ladica, umetanje predmeta, posluživanje stroja ili pomicanje objekata.
+Postojanje kontakta uvelike mijenja problem upravljanja. Dok se robot giba u slobodnom prostoru,
+greška položaja je relativno mala i nema brige da će robot oštetiti okolinu.
+U kontaktu s krutom okolinom ista greška položaja proizvodi silu koja raste s krutošću regulatora
+i može oštetiti predmet, okolinu ili samog robota. Zbog toga upravljanje u kontaktu ne može biti
+čisto pozicijsko, već mora regulirati odnos između položaja i sile \cite{raibert1981hybrid}.
+
+Otvaranje vrata reprezentativan je predstavnik te klase zadataka i zbog toga se u literaturi
+često koristi kao referentni problem \cite{ott2005door}. Vrata su artikulirani objekt čije je gibanje ograničeno
+na jedan stupanj slobode, ali robot taj stupanj slobode ne poznaje unaprijed.
+Drugim riječima, robot ne zna gdje je os šarke, u kojem smjeru se krilo otvara ili koliki je otpor u zglobu.
+Sve to mora zaključiti iz vlastitih mjerenja tijekom interakcije \cite{sturm2011probabilistic}.
+Uz to, hod krila redovito premašuje doseg ruke pri nepomičnoj
+bazi, pa zadatak traži i koordinaciju platforme i manipulatora. Zadatak time istovremeno
+obuhvaća percepciju, procjenu svojstava okoline i upravljanje u kontaktu, što ga čini prikladnim
+ispitnim slučajem za cjelovit sustav.
+
+Postoje dva prevladavajuća pristupa takvim zadacima. Klasični pristup temeljen na
+modelu oslanja se na eksplicitan opis zadatka: procijeni se geometrija ograničenja, iz nje se
+generira referentna putanja, a impedancijski ili hibridni silno-pozicijski regulator izvodi
+gibanje uz propisanu popustljivost \cite{khatib1987operational}. Prednost je razumljivost i
+predvidljivost, svaki je korak moguće analizirati i obrazložiti. Slabost je osjetljivost na
+kvalitetu procjene: pogreška u procijenjenoj geometriji ograničenja izravno se pretvara u
+kontaktnu silu. Pristup temeljen na učenju ne zahtijeva eksplicitan model, već strategiju
+upravljanja stječe kroz interakciju sa simuliranom okolinom. Novije formulacije akcijskim
+prostorom politike čine samu krutost regulatora, pa politika uči ne samo kamo se gibati nego i
+koliko biti popustljiva u pojedinom trenutku \cite{martinmartin2019variable}. Cijena je gubitak
+uvida u razloge odluke i ovisnost o vjernosti simulacije.
+
+Usporedba tih dvaju pristupa ima smisla samo ako se provodi na istom zadatku, istom robotu i istoj fizici okoline.
+Ovaj rad zato oba pristupa razvija za isti sustav (mobilni manipulator KUKA KMR iiwa u simulacijskom okruženju),
+i uspoređuje ih na istim mjerilima uspješnosti.
 
 \section{Struktura rada}
 \label{sec:struktura}
 
-TODO: kratak pregled poglavlja, jedan odlomak.
+Poglavlje \ref{ch:pregled} daje pregled dosadašnjih istraživanja, od klasičnih zakona
+upravljanja u kontaktu preko procjene kinematičkih modela artikuliranih objekata do novijih
+pristupa temeljenih na podržanom učenju. Poglavlje \ref{ch:sustav} opisuje robotski sustav i
+simulacijsko okruženje: mobilni manipulator KMR iiwa, prihvatnicu izrađenu za ovaj zadatak,
+modele vrata te programsku arhitekturu koja povezuje simulator i upravljački kod.
+
+Poglavlja \ref{ch:percepcija} i \ref{ch:procjena} obrađuju ulazne module sustava. Prvo opisuje
+određivanje položaja i orijentacije kvake iz slike, a drugo procjenu sile i momenta na vrhu
+alata te postupak kojim sustav iz izmjerenog odziva zaključuje o ograničenju gibanja i krutosti
+okoline.
+
+Poglavlja \ref{ch:klasicni} i \ref{ch:rl} predstavljaju dva uspoređivana pristupa upravljanju.
+Prvo opisuje rješenje temeljeno na modelu, organizirano kao slijed faza s eksplicitnom procjenom
+geometrije ograničenja. Drugo opisuje formulaciju zadatka kao Markovljevog procesa odlučivanja,
+prostor stanja i akcija s promjenjivom impedancijom, oblikovanje funkcije nagrade i postupak
+učenja.
+
+Poglavlje \ref{ch:rezultati} donosi eksperimentalne rezultate, ablacijske studije i usporedbu
+dvaju pristupa na istoj fizici okoline, uz raspravu o ograničenjima provedene usporedbe.
+
+Poglavlje \ref{ch:zakljucak} sažima postignuto i navodi smjernice za daljnji rad.

@@ -1,8 +1,7 @@
 % ============================================================================
 %  preamble.tex — paketi, lokalizacija, stil
-%  Struktura preuzeta iz: AndrijaAdamovic/bachelors-thesis (tex/bachelors_thesis.tex)
 %  Oblikovanje usklađeno sa službenim predloškom FSB-a (Predlozak_zavrsni.docx):
-%  Times New Roman 12pt, prored 1,5, margine 25mm, numeriranje 1. / 1.1. / 1.1.1.,
+%  Prored 1,5, margine 25mm, numeriranje 1. / 1.1. / 1.1.1.,
 %  slike i tablice numerirane kontinuirano, potpisi centrirani bold 11pt.
 % ============================================================================
 
@@ -39,6 +38,7 @@
 \usepackage{pdfpages}
 \usepackage{xcolor}
 \usepackage{fancyhdr}
+\usepackage{float}
 \usepackage{titlesec}
 \usepackage{tocloft}
 \usepackage{chngcntr}
@@ -46,8 +46,7 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage{tikz}
-\usetikzlibrary{calc, patterns, decorations.pathmorphing, arrows.meta, positioning}
-
+\usetikzlibrary{calc, patterns, decorations.pathmorphing, arrows.meta, positioning, fit, backgrounds}
 % --- Mjerne jedinice s hrvatskim decimalnim zarezom ---------------------------
 \usepackage{siunitx}
 \sisetup{
@@ -149,7 +148,7 @@
 \newcommand{\fakultet}{Fakultet strojarstva i brodogradnje}
 \newcommand{\vrstarada}{Završni rad}
 \newcommand{\autorime}{David Mihić}
-\newcommand{\mentorjedan}{Dr. sc. Bojan Šekoranja, mag.ing.}
+\newcommand{\mentorjedan}{Doc. dr. sc. Bojan Šekoranja, mag.ing.}
 \newcommand{\mentordva}{}
 \newcommand{\mjestogodina}{Zagreb, 2026.}
 \newcommand{\naslovrada}{Autonomna interakcija mobilnog manipulatora s okolinom}

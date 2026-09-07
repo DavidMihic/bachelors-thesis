@@ -8,14 +8,14 @@
 % ============================================================================
 
 % ---------------------------------------------------------------- klasični ---
-@article{hogan1985impedance,
-  author  = {Hogan, Neville},
-  title   = {Impedance Control: An Approach to Manipulation: Part {I}---Theory},
-  journal = {Journal of Dynamic Systems, Measurement, and Control},
-  volume  = {107},
-  number  = {1},
-  pages   = {1--7},
-  year    = {1985}
+@inproceedings{ott2005door,
+  author    = {Ott, Christian and B{\"a}uml, Berthold and Borst, Christoph and
+               Hirzinger, Gerd},
+  title     = {Employing Cartesian Impedance Control for the Opening of a Door:
+               A Case Study in Mobile Manipulation},
+  booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems
+               (IROS), Workshop on Mobile Manipulators},
+  year      = {2005}
 }
 
 @article{raibert1981hybrid,
@@ -59,12 +59,14 @@
   year    = {2011}
 }
 
-% PROVJERI: Rizzi et al., interakcija s artikuliranim objektima, IEEE T-RO 2023.
-% Nisam siguran u pune autore/naslov/stranice -- ne prepisuj ovo naslijepo.
 @article{rizzi2023articulated,
-  author  = {Rizzi, TODO},
-  title   = {TODO},
+  author  = {Rizzi, Giuseppe and Chung, Jen Jen and Gawel, Abel and Ott, Lionel and
+             Tognon, Marco and Siegwart, Roland},
+  title   = {Robust Sampling-Based Control of Mobile Manipulators for Interaction
+             with Articulated Objects},
   journal = {IEEE Transactions on Robotics},
+  volume  = {39},
+  number  = {3},
   year    = {2023}
 }
 
@@ -89,12 +91,12 @@
   year    = {2023}
 }
 
-% PROVJERI: Schneider / Honerkamp et al., co-design rad. Točan naslov i mjesto
-% objave nisu potvrđeni.
-@misc{schneider_codesign,
-  author = {Schneider, TODO and Honerkamp, Daniel and TODO},
-  title  = {TODO},
-  year   = {TODO}
+@article{schneider2024codesign,
+  author  = {Schneider, Raphael and Honerkamp, Daniel and Welschehold, Tim and
+             Valada, Abhinav},
+  title   = {Task-Driven Co-Design of Mobile Manipulators},
+  journal = {arXiv preprint arXiv:2412.16635},
+  year    = {2024}
 }
 
 % ------------------------------------------------------------- percepcija ----
@@ -104,6 +106,13 @@
   booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
   pages     = {3400--3407},
   year      = {2011}
+}
+
+@misc{iiwastack,
+  author       = {Hennersperger, Christoph and Virga, Salvatore and others},
+  title        = {{iiwa\_stack}: {ROS} integration for {KUKA LBR IIWA} robots},
+  howpublished = {\url{https://github.com/IFL-CAMP/iiwa_stack}},
+  note         = {Technische Universit\"at M\"unchen, IFL-CAMP}
 }
 
 % -------------------------------------------------------- alati i hardver ----
@@ -149,4 +158,11 @@
              Learning Environments},
   journal = {IEEE Robotics and Automation Letters},
   year    = {2023}
+}
+
+@misc{mecanumsource,
+  author       = {RobotShop},
+  title        = {AndyMark BB Mecanum Wheel},
+  howpublished = {\url{https://www.robotshop.com/products/andymark-4in-bb-mecanum-wheel-05in-hex-bore-right}},
+  note         = {pristupljeno: 07.09.2026.}
 }
