@@ -15,7 +15,7 @@
     - hvat se zatvara duž osi X baze; šipka/kvaka leži duž osi Y baze
     - hod po prstu: 0..25mm; q=0 = POTPUNO OTVOREN (stopalo na vanjskom kraju utora),
       q=0.025 = POTPUNO ZATVOREN (namjerni preklop ~1.5mm sa šipkom Ø28 u centru)
-    - unutarnji luk kuke: r=14.45mm, centar na z=74.85mm iznad prirubnice
+    - unutarnji luk kuke: r=16mm, centar na z=74.85mm iznad prirubnice
       (= visina osi šipke u hvatu = z gripper_tcp okvira)
 
   F/T očitanje: gripper_wrist_joint (fixed, iiwa_link_ee -> gripper_base)
