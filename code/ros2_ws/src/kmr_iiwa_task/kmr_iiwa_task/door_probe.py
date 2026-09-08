@@ -76,7 +76,7 @@ def main():
     moveit2.max_acceleration = 0.05
 
     # Wrench na zasebnom nodu i izvrsavacu - MoveIt2-ova pozadinska aktivnost
-    # inace gladuje obicne pretplate na istom nodu.
+    # inace mijesa obicne pretplate na istom nodu.
     sensor_node = Node("door_probe_sensor")
     wrench = {"f": None}
 
