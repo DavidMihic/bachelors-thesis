@@ -1,24 +1,288 @@
 \chapter{KLASIČNI PRISTUP UPRAVLJANJU}
 \label{ch:klasicni}
 
+Klasični pristup rješava zadatak otvaranja vrata kao slijed jasno odvojenih faza, od kojih
+svaka koristi eksplicitno poznavanje geometrije zadatka --- poze kvake iz percepcije, poznatog
+oblika prihvatnice i, za zakretna vrata, geometrijski izračunate osi šarke. To je bitna razlika
+prema pristupu iz poglavlja \ref{ch:rl}, na koju se poglavlje \ref{ch:rezultati} vraća.
+
 \section{Struktura zadatka}
 \label{sec:faze}
 
-TODO: prilaz $\rightarrow$ hvat $\rightarrow$ procjena $\rightarrow$ otvaranje;
-konačni automat, uvjeti prijelaza.
+Zadatak je organiziran u tri faze: prilaz, hvat i otvaranje. Faza otvaranja dalje se grana
+prema tipu vrata, jer klizna i zakretna vrata zahtijevaju kinematički različito gibanje baze,
+opisano u potpoglavlju \ref{sec:otvaranje}. Slijed je prikazan na slici \ref{fig:faze}.
 
-\section{Upravljanje u fazi prilaza i hvata}
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            font       = \small,
+            box/.style = {draw, rounded corners=2pt, align=center, inner sep=5pt,
+                    minimum height=10mm, minimum width=26mm, fill=black!5},
+            term/.style= {box, fill=black!12},
+            ar/.style  = {-{Stealth[length=2mm]}, semithick}
+        ]
+        \node[term] (start) at (0,0)     {start};
+        \node[box]  (prilaz) at (3.3,0)  {prilaz};
+        \node[box]  (hvat)   at (6.6,0)  {hvat};
+        \node[box]  (slide)  at (10.4,0.9)  {\texttt{door\_pull\_base}\\[-1pt]\scriptsize klizna vrata};
+        \node[box]  (arc)    at (10.4,-0.9) {\texttt{door\_pull\_base\_arc}\\[-1pt]\scriptsize zakretna vrata};
+        \node[term] (end)    at (13.9,0) {kraj};
+
+        \draw[ar] (start) -- (prilaz);
+        \draw[ar] (prilaz) -- (hvat);
+        \draw[ar] (hvat.north) |- (slide.west);
+        \draw[ar] (hvat.south) |- (arc.west);
+        \draw[ar] (slide.east) -| (end.north);
+        \draw[ar] (arc.east)   -| (end.south);
+    \end{tikzpicture}
+    \caption{Slijed faza klasičnog pristupa}
+    \label{fig:faze}
+\end{figure}
+
+\section{Faza prilaza i hvata}
 \label{sec:prilaz}
 
-TODO.
+Prilaz i hvat izvode se dvama čvorovima. Prvi regulira položaj platforme prema velikoj oznaci
+na sredini vrata: umjesto potpunog poravnanja orijentacije, koristi se regulacija smjera prema
+oznaci, koja platformu dovodi do točke na udaljenosti opisanoj u potpoglavlju
+\ref{sec:perception-iface}, nakon čega se platforma zaustavlja i više se ne pomiče do kraja
+zadatka. Parametar tipa kvake (vodoravna poluga zakretnih vrata ili okomita šipka kliznih vrata)
+zadaje se pri pokretanju i određuje početnu pozu manipulatora u nastavku.
 
-\section{Upravljanje u fazi otvaranja}
+Kada se platforma zaustavi pred vratima, drugi čvor preuzima izvođenje hvata:
+
+\begin{enumerate}
+    \item \textbf{Ponovno čitanje poze.} Na početnoj udaljenosti kvaka je izvan dosega
+          manipulatora pri nepomičnoj platformi, pa se platforma nakon prvog očitanja poze
+          dodatno primakne. Kako platforma nema odometriju, poza kvake se pritom ne prati nego
+          se rekonstruira iz njezina nepromjenjivog odnosa prema velikoj oznaci, koja ostaje u
+          vidnom polju tijekom cijelog primicanja.
+    \item \textbf{Početna poza.} Manipulator odlazi u jednu od dviju unaprijed zadanih poza,
+          ovisno o tipu kvake, čime se izbjegava ispruženo, singularno stanje na početku
+          gibanja.
+    \item \textbf{Prilaz.} Manipulator se dovodi u pozu prilaska ispred kvake
+          te se zatim približava do konačne poze hvata.
+    \item \textbf{Bočna korekcija.} Parovi prstiju prihvatnice ne gibaju se savršeno
+          simetrično, pa se hvat sam od sebe ne centrira nad predmetom. Umjesto da se ta
+          asimetrija ukloni, ona se mjeri: uspoređuju se položaji suprotnih prstiju tijekom
+          zatvaranja, a iz njihove razlike izračunava se bočna korekcija kojom se prihvatnica
+          poravna nad kvakom prije konačnog zatvaranja.
+    \item \textbf{Korekcija dubine (engl. \textit{Hill-climbing}).} Prihvatnica postupno
+          prilagođava svoju dubinu duž osi prilaza kako bi šipka kvake u potpunosti
+          sjela u utor prstiju. Pri svakom pokušaju prsti se zatvaraju do zaustavljanja i
+          mjeri se ostvareni stupanj zatvorenosti (frakcija hoda); ako se mjera pogorša u
+          odnosu na prethodni pokušaj, algoritam mijenja smjer pomaka i vraća se na dotad
+          najbolju poziciju sve dok se ne postigne željena dubina hvata ili se ne obavi
+          maksimalni broj pokušaja.
+\end{enumerate}
+
+\section{Faza otvaranja}
 \label{sec:otvaranje}
 
-TODO: vođenje po procijenjenoj kružnici/pravcu, popustljivost ruke, koordinacija baze.
+Nakon uspješnog hvata, manipulator ostaje ukočen u dostignutoj konfiguraciji za preostali dio
+zadatka, a cjelokupno gibanje izvodi platforma. Ta je odluka namjerna i vezana je uz procjenu
+sile opisanu u poglavlju \ref{ch:procjena}: postupak umjeravanja procjenitelja momenta vrijedi
+za konfiguraciju u kojoj je proveden (potpoglavlje \ref{sec:wrench-svojstva}), pa bi svaki pomak
+manipulatora tijekom otvaranja tu procjenu učinio nevaljanom. Rotacija oko okomite osi ne mijenja
+odnos manipulatora prema gravitacijskom polju, pa je gibanje u cijelosti prepušteno platformi.
+
+\subsection{Klizna vrata}
+\label{sec:otvaranje-klizna}
+
+Kod kliznih vrata smjer gibanja poznat je unaprijed --- translacija duž osi kvake --- pa se
+platformi jednostavno zadaje trapezni profil brzine u tom smjeru, s ubrzanjem, ravnomjernom
+fazom pri brzini od 0,22 m/s i usporavanjem. Regulacija brzine prema izmjerenoj sili namjerno
+nije korištena: sila uvijek naraste u trenutku kretanja platforme iz mirovanja, pa bi svaki
+takav povratni regulator uveo zastajkivanje umjesto glatkog gibanja.
+
+\subsection{Zakretna vrata}
+\label{sec:otvaranje-zakretna}
+
+Kod zakretnih vrata gibanje platforme nije jednostavna translacija, nego rotacija oko osi
+šarke, uz koju vrh alata mora ostati na kvaki. Budući da su platforma i vrata za vrijeme
+otvaranja kruto spojeni preko uhvaćene kvake, jedan jedini parametar --- kut zakreta ---
+određuje istovremeno i rotaciju i potrebnu translaciju platforme.
+
+\paragraph{Kinematika gibanja po luku.}
+Sučelje kojim se platforma upravlja zadaje brzinu njezina ishodišta, a ne brzinu vrha alata.
+Ako bi se platformi naredila samo kutna brzina, bez pripadne translacije, platforma bi se
+vrtjela oko vlastitog ishodišta dok bi vrh alata, koji je krut u odnosu na kvaku, klizio po
+njoj --- pogrešno gibanje koje bi hvat brzo odvojilo od kvake.
+
+Neka je $\bm{c}$ položaj osi šarke, a $\bm{p}_{\mathrm{tcp}}$ položaj vrha alata, oboje
+izraženo u vodoravnoj ravnini koordinatnog sustava platforme ($\hat{\bm{z}}$ je jedinični vektor $z$ osi).
+Za rotaciju cijelog sklopa kutnom brzinom $\omega$ oko $\bm{c}$, brzina vrha alata iznosi
+
+\begin{equation}
+    \bm{v}_{\mathrm{tcp}} = \omega\,\hat{\bm{z}} \times (\bm{p}_{\mathrm{tcp}} - \bm{c}) .
+    \label{eq:v-tcp}
+\end{equation}
+
+S druge strane, za platformu koja se giba brzinom ishodišta $\bm{v}_0$ i kutnom brzinom
+$\omega$, brzina bilo koje točke krute uz nju, pa tako i vrha alata, dana je općim izrazom
+gibanja krutog tijela:
+
+\begin{equation}
+    \bm{v}_{\mathrm{tcp}} = \bm{v}_0 + \omega\,\hat{\bm{z}} \times \bm{p}_{\mathrm{tcp}} .
+    \label{eq:v-rigid}
+\end{equation}
+
+Izjednačavanjem izraza \eqref{eq:v-tcp} i \eqref{eq:v-rigid} slijedi brzina ishodišta koju
+treba narediti platformi:
+
+\begin{equation}
+    \bm{v}_0 = -\omega\,\hat{\bm{z}} \times \bm{c}
+    = \omega \begin{pmatrix} c_y \\ -c_x \end{pmatrix} .
+    \label{eq:v0}
+\end{equation}
+
+Izraz \eqref{eq:v0} zadaje se kao naredba platformi zajedno sa zadanom kutnom brzinom $\omega$,
+čime se rotacija oko udaljene osi $\bm{c}$ ostvaruje pravilnom kombinacijom translacije i rotacije
+platforme, a ne rotacijom oko vlastitog ishodišta. Ispravnost izraza potvrđena je brojčano:
+uz izraz \eqref{eq:v0} odstupanje hvatišta od zadanog luka ostaje na redu veličine nekoliko milimetara,
+dok bi rotacija bez pripadne translacije hvatište odvela na odstupanje reda veličine stotinu milimetara.
+
+\paragraph{Procjena položaja osi šarke.} Za razliku od procjene ograničenja iz poglavlja
+\ref{ch:procjena}, os šarke se ovdje ne procjenjuje iz gibanja, nego se izravno izračunava iz
+geometrije poznate percepciji. Neka je $\bm{p}_{\mathrm{tag}}$ položaj velike oznake na sredini
+krila, širine $w$. Os šarke leži na suprotnom rubu krila od kvake, pa se do nje dolazi tako da
+se od oznake krene u smjeru od vrha alata prema oznaci, projiciranom u ravninu vrata, i produlji
+za polovicu širine krila:
+
+\begin{equation}
+    \bm{c} = \bm{p}_{\mathrm{tag}}
+    + \frac{w}{2} \, \frac{\Pi_{\mathrm{vrata}}(\bm{p}_{\mathrm{tag}} -
+        \bm{p}_{\mathrm{tcp}})}
+    {\left\lVert \Pi_{\mathrm{vrata}}(\bm{p}_{\mathrm{tag}} - \bm{p}_{\mathrm{tcp}})
+        \right\rVert} ,
+    \label{eq:axis}
+\end{equation}
+
+gdje $\Pi_{\mathrm{vrata}}$ označava projekciju na ravninu vrata. Projekcija je nužna jer kvaka
+strši iz plohe krila, pa neprojicirani vektor od vrha alata do oznake ima i komponentu okomitu
+na vrata; produljenje takvog vektora za polovicu širine krila odvelo bi procjenu izvan ravnine
+vrata i pogrešku reda stotinjak milimetara. Slika \ref{fig:os-sarke} prikazuje konstrukciju u tlocrtu.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+            font    = \small,
+            pt/.style   = {circle, fill=black, inner sep=1.3pt},
+            leaf/.style = {very thick},
+            vec/.style  = {-{Stealth[length=2mm]}, semithick},
+            dvec/.style = {-{Stealth[length=2mm]}, densely dashed, semithick, gray!70!black}
+        ]
+        % os y = duz krila, os x (na papiru "gore") = okomito na vrata
+        \coordinate (hinge) at (0,0);
+        \coordinate (tag)   at (4.25,0);
+        \coordinate (edge)  at (8.5,0);
+        \coordinate (tcp)   at (7.6,1.7);
+
+        \draw[leaf] (hinge) -- (edge);
+        \node[pt] at (hinge) {}; \node[below=2pt] at (hinge) {$\bm{c}$ (šarka)};
+        \node[pt] at (tag)   {}; \node[below=2pt] at (tag)   {$\bm{p}_{\mathrm{tag}}$};
+        \node[pt] at (edge)  {}; \node[below=2pt] at (edge)  {slobodni rub};
+        \node[pt] at (tcp)   {}; \node[above=2pt] at (tcp)   {$\bm{p}_{\mathrm{tcp}}$ (kvaka)};
+
+        % sirovi vektor tcp->tag (iskosa, ima komponentu okomitu na vrata)
+        \draw[dvec] (tcp) -- (tag);
+        \node[gray!70!black] at (6.5,1.05) {\scriptsize sirovi smjer};
+
+        % projekcija na ravninu vrata (dio od podnozja tcp do tag, duz linije vrata)
+        \coordinate (foot) at (7.6,0);
+        \draw[vec] (foot) -- (tag) node[midway, below=2pt] {\scriptsize $\Pi_{\mathrm{vrata}}(\cdot)$};
+        \draw[densely dotted] (tcp) -- (foot);
+
+        % produljenje od tag do hinge, oznaceno kao w/2
+        \draw[vec, thick] (tag) -- (hinge);
+        \draw[<->] (0,-0.9) -- node[fill=white,inner sep=1pt] {\scriptsize $w/2$} (4.25,-0.9);
+        \draw[<->] (4.25,-0.9) -- node[fill=white,inner sep=1pt] {\scriptsize $w/2$} (8.5,-0.9);
+    \end{tikzpicture}
+    \caption{Konstrukcija procjene osi šarke iz poze velike oznake i vrha alata, tlocrt}
+    \label{fig:os-sarke}
+\end{figure}
+
+Procjena ne mora biti izrazito precizna da bi gibanje po luku uspjelo: unesena pogreška od
+100 mm u položaju osi u simulaciji je napredak otvaranja smanjila za oko 10 \%, dakle
+usporila ga je, ali ga nije zaustavila, jer geometrija samih vrata dio pogreške sama ispravlja.
+Za usporedbu, pogreška izmjerenog polumjera vrata iznosi oko 2 \% s nazivnim polumjerom
+0,64 m iz geometrijskog modela vrata, što potvrđuje da je pretpostavka o polovici širine krila
+razumna aproksimacija.
+
+Os se preračunava iz svježe poze oznake u svakom koraku upravljanja, jer je izražena u
+koordinatnom sustavu platforme, koji se sam giba i rotira tijekom otvaranja. Procjena osi iz
+zakreta samog vrha alata ovdje nije moguća, jer je manipulator ukočen: transformacija od
+platforme do vrha alata je po definiciji konstantna, pa bi takva procjena mjerila isključivo
+gibanje platforme, ne i vrata.
+
+\section{Rezultati}
+\label{sec:rezultati-klasicni}
+
+Tablica \ref{tab:rezultati-klasicni} sažima izmjerene vrijednosti otvaranja za oba tipa vrata,
+u sceni bez slučajnog otpora opisanoj u potpoglavlju \ref{sec:isaac}.
+
+TODO ponovi mjerenja
+\begin{table}[H]
+    \centering
+    \caption{Rezultati otvaranja vrata klasičnim pristupom}
+    \label{tab:rezultati-klasicni}
+    \begin{tabular}{@{}lccc@{}}
+        \toprule
+        Tip vrata & Ostvareni pomak                      & Sila, prosječna                & Sila, najveća \\
+        \midrule
+        klizna    & 0,17 m od 0,8 m hoda                 & \multicolumn{2}{c}{270--290 N}                 \\
+        zakretna  & 31,9\textdegree{} od 90\textdegree{} & 231 N                          & 344 N         \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Kod kliznih vrata izmjerena sila ne odražava prvenstveno otpor vrata, nego je većim dijelom
+tranzijent ubrzanja platforme prenesen kroz krutu vezu manipulatora i kvake; to je razlog zašto
+su rasponi otpora korišteni u okruženju za učenje (tablica \ref{tab:randomizacija}) određeni
+neovisno o ovoj brojci, a ne prema njoj.
+
+Kod zakretnih vrata otvaranje je dovršeno bez prekida, ali daleko od punog raspona zgloba.
+Uzrok je opisan u potpoglavlju \ref{sec:klasicni-limits}: dio profila brzine utroši se ispod
+praga statičkog trenja platforme, pa se stvarno ostvareni kut zakreta zaustavlja znatno prije
+mehaničke granice.
 
 \section{Ograničenja}
 \label{sec:klasicni-limits}
 
-TODO: brava je zavarena u obje scene (kvaka se ne okreće) --- svjesno pojednostavljenje
-opsega, primijenjeno jednako na oba pristupa.
+\textbf{Kvaka je zavarena.} Kako je navedeno u potpoglavlju \ref{sec:vrata}, zglob koji bi
+omogućio zakretanje kvake u konačnom je modelu nepomičan. Ta je odluka svjesno smanjenje opsega
+rada, ne nedostatak: zakretanje kvake bilo je u ranijoj fazi razvoja najproblematičniji dio
+zadatka, jer je kruto pozicijsko upravljanje tim dodatnim stupnjem slobode davalo velike
+kontaktne sile na svako odstupanje procjene. Uklanjanjem tog stupnja slobode zadatak je sveden
+na jedan stupanj slobode po tipu vrata, čime je omogućeno da se otvaranje zakretnih vrata uopće
+ostvari u opsegu ovog rada. Ista je odluka primijenjena i u pristupu temeljenom na učenju,
+opisanom u poglavlju \ref{ch:rl}, čime ostaje osnova za poštenu usporedbu dvaju pristupa.
+
+\textbf{Procjena ne sudjeluje u odluci o izvođenju.} Sustav sadrži zaseban postupak procjene
+geometrije ograničenja iz odnosa sile i gibanja, opisan u poglavlju \ref{ch:procjena}, ali on u
+klasičnom pristupu nije povezan s izvođenjem: os šarke koristi se u fazi otvaranja i izračunava
+se geometrijski iz percepcije, a procjena iz gibanja postoji samo kao zasebno provjeren
+postupak. Sustav zna i procijeniti ograničenje iz gibanja i otvoriti vrata, ali te dvije
+sposobnosti nisu spojene u jedan tijek izvođenja. Najmanji korak koji bi to povezao jest
+pokretanje procjene odmah nakon hvata i odabir odgovarajuće naredbe otvaranja na temelju njezina
+ishoda, umjesto oslanjanja na parametar tipa kvake zadan pri pokretanju.
+
+\textbf{Zakretna vrata ne dosežu puni raspon.} Profil brzine platforme uključuje razdoblje ispod
+praga statičkog trenja, koje se ne može ukloniti bez odricanja od blagog starta gibanja. To
+razdoblje troši dio ukupnog kuta prije nego što platforma uopće počne prelaziti prag, pa se
+ostvareni pomak zaustavlja znatno prije mehaničke granice zgloba. Guranje kroz tu granicu
+nasilnim povećanjem brzine nije razmatrano kao rješenje, jer bi na stvarnim vratima to značilo
+oštećenje.
+
+\textbf{Nema svjesnosti o okolnim preprekama.} Platforma se giba po proračunatom luku kroz
+prostor za koji se pretpostavlja da je prazan i nema načina saznati bi li tijekom rotacije
+udarila u dovratnik ili okolnu prepreku. Ograničenje dijeli i pristup temeljen na učenju, jer
+ni on ne prima informaciju o okolnim preprekama, kako je navedeno u poglavlju \ref{ch:rl}.
+
+\textbf{Prijeđeni put platforme nije mjerena veličina.} Iznosi u tablici
+\ref{tab:rezultati-klasicni} dobiveni su iz integracije naredbi zadanih platformi, ne iz
+neovisno mjerenog gibanja, pa mogu odstupati od stvarnog pomaka. Neovisna provjera zahtijevala
+bi očitanje stanja zgloba vrata izravno u simulatoru, što je legitimno kao provjera nakon
+izvođenja, ali se namjerno ne koristi u regulacijskoj petlji, kako je obrazloženo u poglavlju
+\ref{ch:procjena}.
