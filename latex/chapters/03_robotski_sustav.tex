@@ -9,7 +9,7 @@ simulaciji; razlozi i posljedice tog izbora navedeni su u potpoglavlju \ref{sec:
 \section{KMR iiwa — mobilna platforma i manipulator}
 \label{sec:kmr}
 
-KUKA KMR iiwa mobilni je manipulator sastavljen od dviju serijskih komponenti: omnidirekcijske
+KUKA KMR iiwa (slika \ref{fig:kmr-iiwa}) mobilni je manipulator sastavljen od dviju serijskih komponenti: omnidirekcijske
 mobilne platforme KMP 200 omniMove i laganog robota LBR iiwa. Na prirubnicu manipulatora
 dodana je prihvatnica opisana u potpoglavlju \ref{sec:gripper}. Kombinacija pokretljive
 platforme i osjetljivog manipulatora namijenjena je radu bez zaštitne ograde, u okolini u
@@ -25,16 +25,16 @@ kojoj se robot kreće između radnih mjesta \cite{kuka2024kmriiwa}.
 \subsection{Mobilna platforma}
 \label{sec:platforma}
 
-Platforma se giba pomoću četiriju Mecanum kotača. Svaki se kotač sastoji od niza valjaka
+Platforma se giba pomoću četiriju Mecanum kotača (slika \ref{fig:mecanum-wheel}). Svaki se kotač sastoji od niza valjaka
 postavljenih pod kutom od 45\textdegree{} u odnosu na os kotača, čime se postiže
 omnidirekcijsko gibanje --- platforma se može gibati u proizvoljnom smjeru u ravnini i
 istovremeno se zakretati, bez potrebe za promjenom orijentacije prije translacije. Ta je
 osobina bitna za zadatak otvaranja vrata, jer omogućuje da baza slijedi luk krila bez
-manevriranja.
+manevriranja. Tehnički podaci mobilne platforme nalaze se u tablici \ref{tab:platforma}.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.55\textwidth]{figures/mecanum.jpg}
+    \includegraphics[width=0.45\textwidth]{figures/mecanum.jpg}
     \caption[Građa Mecanum kotača]{Građa Mecanum kotača \cite{mecanumsource}}
     \label{fig:mecanum-wheel}
 \end{figure}
@@ -66,8 +66,8 @@ rotacijskih osi. Za ovaj je rad ključno da manipulator ima senzor momenta u sva
 omogućuje procjenu sile i momenta na vrhu alata bez zasebnog senzora sile na zapešću.
 Postupak te procjene opisan je u poglavlju \ref{ch:procjena}. Sedma os čini strukturu
 redundantnom u odnosu na šest stupnjeva slobode zadatka, pa isti položaj i orijentaciju vrha
-alata ostvaruje kontinuum konfiguracija - svojstvo koje se u poglavlju \ref{ch:rezultati}
-pokazalo dosta važnim.
+alata ostvaruje kontinuum konfiguracija --- svojstvo koje se u poglavlju \ref{ch:rezultati}
+pokazalo dosta važnim. Tehnički podaci manipulatora nalaze se u tablici \ref{tab:lbr}.
 
 \begin{table}[H]
     \centering
@@ -109,7 +109,7 @@ Granični momenti pojedinih zglobova navedeni su u tablici \ref{tab:momenti}.
 \section{Prihvatnica}
 \label{sec:gripper}
 
-Za hvatanje kvake izrađena je prilagođena prihvatnica. Budući da se rad provodi isključivo u
+Za hvatanje kvake izrađena je prilagođena prihvatnica (slika \ref{fig:gripper-render}). Budući da se rad provodi isključivo u
 simulaciji, a stvarni prihvatni uređaj nije bio zadan, prihvatnica je oblikovana kao
 zamjenjiva komponenta, tj. upravljanje njome potpuno je odvojeno od ostatka softvera
 (potpoglavlje \ref{sec:ros2}), pa se može zamijeniti bez izmjena u ostatku sustava.
@@ -119,6 +119,8 @@ uhvaćena šipka leži duž osi $y$. Svaki prst na sebi ima utor čiji je unutar
 šipki kvake promjera 28 mm. Pri potpuno zatvorenom hvatu otvor između prstiju uži je od šipke,
 pa hvat ne počiva na geometrijskom dosjedanju nego na sili pogona i popustljivosti prstiju.
 Time se izbjegava zazor koji bi pri vučenju vrata dopustio da se kvaka pomiče unutar hvata.
+Položaj vrha alata (\textit{TCP}, engl. \textit{tool center point}) može se vidjeti na slici \ref{fig:gripper-tcp}.
+Značajke prihvatnice nalaze se u tablici \ref{tab:gripper}.
 
 Parovi prstiju ne gibaju se savršeno simetrično, pa se predmet ne centrira sam od sebe.
 Ta se asimetrija ne pokušava ukloniti, nego se mjeri: tijekom prilaza kvaki uspoređuju se
@@ -136,8 +138,8 @@ poravna nad kvakom prije nego što se hvat zatvori. Postupak je opisan u potpogl
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.45\textwidth]{figures/gripper_tcp.jpg}
-    \caption{Položaj vrha alata}
-    \label{fig:gripper-dim}
+    \caption{Položaj vrha alata (\textit{TCP})}
+    \label{fig:gripper-tcp}
 \end{figure}
 
 \begin{table}[H]
@@ -174,17 +176,56 @@ dva od četiriju prstiju, jer jedan par radi protiv vlastitog pogona, pa je djel
 hvata polovica nominalne. Ta je pojedinost bitna za tumačenje rezultata u poglavlju
 \ref{ch:rezultati}.
 
-\section{Modeli vrata}
-\label{sec:vrata}
+\section{Kamera i njezin nosač}
+\label{sec:kamera-nosac}
 
-Radnu okolinu čine dva modela vrata, zakretna i klizna. Oba su izgrađena od osnovnih
-geometrijskih tijela, s istim krilom, a razlikuju se stupnjem slobode gibanja i oblikom
-kvake. Zajednička geometrija je namjerna: razlika u ponašanju dvaju pristupa time se ne može
-pripisati razlici u dimenzijama ili masi krila.
+Za detekciju kvake robot je opremljen kamerom Intel RealSense D435, postavljenom na mobilnu
+platformu pomoću vlastito izrađenog nosača (slika \ref{fig:camera-mount}).
+Sam postupak detekcije i procjene poze opisan je u poglavlju \ref{ch:percepcija};
+ovdje je opisana samo montaža i pripadni koordinatni sustavi.
+
+Nosač kamere oblikovan je tako da iskoristi postojeće provrte na platformi. Manipulator se na
+platformu pričvršćuje preko četiri provrta promjera 13,3 mm raspoređena po kružnici polumjera
+108 mm. Ta je kružnica na platformi izvedena zrcalno s obje strane, a strana suprotna
+manipulatoru ostaje slobodna, pa je nosač kamere postavljen upravo na nju. Time montaža ne
+zahtijeva nikakvu izmjenu platforme.
 
 \begin{figure}[H]
     \centering
-    % \includegraphics[width=0.9\textwidth]{figures/doors.png}
+    \includegraphics[width=0.7\textwidth]{figures/camera.jpg}
+    \caption{Kamera i nosač kamere postavljeni na robotu}
+    \label{fig:camera-mount}
+\end{figure}
+
+Kamera je smještena na visini gornje plohe platforme, bočno pomaknuta u odnosu na
+manipulator. Time je kvaka u vidnom polju i tijekom prilaza i tijekom hvata, a kamera ne
+ulazi u radni prostor manipulatora. Nosač je zamišljen kao izradak aditivnom proizvodnjom;
+masa od 193 g izračunata je iz obujma modela uz gustoću materijala PETG od
+1270 kg/m\textsuperscript{3}.
+
+Kamera u modelu ima dva koordinatna sustava. Prvi je vezan uz kućište i služi za montažu,
+a drugi je optički koordinatni sustav u kojem se izražavaju rezultati detekcije. Optički je
+zaokrenut u odnosu na kućište prema uobičajenoj konvenciji, pri čemu os $z$ gleda u smjeru
+promatranja, a osi $x$ i $y$ leže u ravnini slike. Ta konvencija nije proizvoljna nego je
+očekuju biblioteke za obradu slike, pa je zadržana kako procjena poze ne bi zahtijevala
+dodatnu pretvorbu.
+
+Kamera podržava i dubinsku sliku, no ona u ovom radu nije korištena. Detekcija vrata i kvake
+odvija se isključivo iz slike u boji, pomoću oznaka AprilTag, a postignuta točnost pokazala se
+dovoljnom i bez dubinske informacije.
+
+\section{Modeli vrata}
+\label{sec:vrata}
+
+Radnu okolinu čine dva modela vrata, zakretna i klizna (slika \ref{fig:vrata}). Oba su izgrađena od osnovnih
+geometrijskih tijela, s istim krilom, a razlikuju se stupnjem slobode gibanja i oblikom
+kvake. Zajednička geometrija je namjerna: razlika u ponašanju dvaju pristupa time se ne može
+pripisati razlici u dimenzijama ili masi krila.
+Geometrijska i inercijska svojstva vrata mogu se vidjeti u tablici \ref{tab:vrata}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/doors.jpg}
     \caption{Modeli zakretnih i kliznih vrata s označenim stupnjem slobode gibanja}
     \label{fig:vrata}
 \end{figure}
@@ -211,8 +252,8 @@ pripisati razlici u dimenzijama ili masi krila.
 \end{table}
 
 Kod zakretnih vrata kvaka je izvedena kao poluga usmjerena prema osi šarke, kako je uobičajeno
-kod stvarnih vrata. Zglob brave, koji bi omogućio zakretanje kvake, \textbf{zavaren je u nepomični
-    zglob u oba pristupa}, pa je jedini pokretni stupanj slobode zakretnih vrata os šarke.
+kod stvarnih vrata. Zglob brave, koji bi omogućio zakretanje kvake, zavaren je u nepomični
+zglob u oba pristupa, pa je jedini pokretni stupanj slobode zakretnih vrata os šarke.
 Okretanje kvake time je izvan opsega rada; razlog i posljedice te odluke navedeni su u
 potpoglavlju \ref{sec:klasicni-limits}. Posljedica koju treba imati na umu jest da se cijeli
 moment šarke prenosi trenjem prstiju na šipki kvake.
@@ -225,7 +266,7 @@ dostupno s prednje strane krila po cijeloj visini šipke.
 
 Otpor vrata nije zapisan u geometrijskom modelu, nego se postavlja pri svakom pokretanju
 epizode iz zadanog raspona. Time politika nije vezana uz jednu vrijednost otpora, nego uči
-raditi na rasponu vrata. Otpor je razdvojen na tri fizikalno različita člana:
+raditi na rasponu vrata. Otpor je razdvojen na dva fizikalno različita člana:
 
 \begin{equation}
     \tau_{\mathrm{otpor}} = \tau_{\mathrm{tr}} + d\,\dot{q} ,
@@ -246,6 +287,8 @@ silom određena sila pri kojoj se vrata pokrenu. Omjer izmjerene sile pokretanja
 kretao se između 1,00 i 1,03 za zadane vrijednosti trenja u rasponu od 5 do 60 N, čime
 je potvrđeno da zadana vrijednost izravno odgovara sili potrebnoj za pokretanje vrata.
 
+U tablici \ref{tab:randomizacija} mogu se vidjeti rasponi iz kojih su birane vrijednosti otpora vrata:
+
 \begin{table}[H]
     \centering
     \caption{Rasponi randomizacije otpora vrata}
@@ -262,8 +305,8 @@ je potvrđeno da zadana vrijednost izravno odgovara sili potrebnoj za pokretanje
 
 Rasponi nisu određeni mjerenjem na stvarnim vratima, nego su usvojeni kao inženjerska
 procjena, sa širinom raspona odabranom tako da obuhvati i lagana i teška vrata. Svrha im nije
-vjerno preslikati određena vrata, nego spriječiti da naučena politika ovisi o jednoj
-vrijednosti otpora. Kod zakretnih vrata otpor potječe isključivo od trenja u šarki.
+vjerno preslikati određena vrata, već spriječiti da naučena politika ovisi o jednoj
+vrijednosti otpora.
 
 \section{Model robota i pretvorba u simulacijski format}
 \label{sec:urdf-usd}
@@ -300,12 +343,12 @@ Na dobiveni model zatim se primjenjuju tri naknadne skripte:
           manipulatora s temama ROS-a 2, čime se model može voditi izvana. Graf mora biti
           ugniježđen unutar stabla osnovnog elementa modela, jer se inače pri referenciranju
           modela u scenu tiho izgubi.
-    \item \texttt{add\_camera\_ros.py} dodaje kameru s izmjerenim unutarnjim parametrima i
+    \item \texttt{add\_camera\_ros\_graph.py} dodaje kameru s izmjerenim unutarnjim parametrima i
           položajem te objavljivanje slike i stabla koordinatnih sustava.
 \end{itemize}
 
-Pojačanja pogona iz pretvorbe se ne zadržavaju, nego se postavljaju u konfiguraciji okruženja
-(potpoglavlje \ref{sec:isaac}).
+Na slici \ref{fig:urdf-usd-pipeline} može se vidjeti dijagram toka pretvorbe datoteka iz URDF formata u
+simulatoru koristive datoteke u USD formatu.
 
 \begin{figure}[H]
     \centering
@@ -380,7 +423,7 @@ Pojačanja pogona iz pretvorbe se ne zadržavaju, nego se postavljaju u konfigur
 
     \end{tikzpicture}
     \caption{Postupak izrade simulacijskog modela iz opisa robota i vrata}
-    \label{fig:pipeline}
+    \label{fig:urdf-usd-pipeline}
 \end{figure}
 
 Za učenje se koristi zasebna inačica modela. Iz modela vrata uklonjeni su nosivi elementi
@@ -427,13 +470,15 @@ regulator djelovali bi jedan protiv drugoga i krutost koju politika zada ne bi i
 Pogon platforme brzinski je, s prigušenjem $10^4$, a pogon prstiju pozicijski, s vrijednostima
 navedenima u potpoglavlju \ref{sec:gripper}.
 
+Programska i sklopovska konfiguracija može se vidjeti u tablici \ref{tab:okruzenje}.
+
 \begin{table}[H]
     \centering
     \caption{Programska i sklopovska konfiguracija}
     \label{tab:okruzenje}
     \begin{tabular}{@{}ll@{}}
         \toprule
-        Komponenta                  & Inačica                            \\
+        Stavka                      & Vrijednost                         \\
         \midrule
         Operacijski sustav          & Ubuntu 22.04 LTS                   \\
         Simulator                   & NVIDIA Isaac Sim 5.1.0             \\
@@ -452,9 +497,9 @@ navedenima u potpoglavlju \ref{sec:gripper}.
 \section{Programska arhitektura}
 \label{sec:ros2}
 
-Programska podrška podijeljena je u pakete unutar radnog prostora ROS 2, navedene u tablici
+Softver je podijeljen u pakete unutar radnog prostora ROS 2, navedene u tablici
 \ref{tab:paketi}. Podjela slijedi funkcionalne cjeline rada: opis robota, percepcija, veza sa
-simulatorom, izvođenje zadatka i pokretanje sustava.
+simulatorom, izvođenje zadatka, konfiguracija i pokretanje sustava.
 
 \begin{table}[H]
     \centering
@@ -482,6 +527,8 @@ ostatak sustava prihvatnicu vidi kroz jedan broj u rasponu od nula do jedan, uz 
 informaciju o trenutnom položaju i o tome je li zaustavljena prije dolaska u zadani položaj.
 Time je zadovoljen zahtjev iz potpoglavlja \ref{sec:gripper} da se prihvatnica može zamijeniti
 bez izmjena u ostatku sustava.
+
+Na slici \ref{fig:arch-klasicni} može se vidjeti dijagram arhitekture za klasično učenje.
 
 \begin{figure}[H]
     \centering
@@ -554,9 +601,9 @@ bez izmjena u ostatku sustava.
     \label{fig:arch-klasicni}
 \end{figure}
 
-Pristup temeljen na učenju koristi bitno jednostavniju arhitekturu. Tijekom učenja ROS 2 nije
+Pristup temeljen na učenju koristi bitno jednostavniju arhitekturu (slika \ref{fig:arch-rl}). Tijekom učenja ROS 2 nije
 u regulacijskoj petlji: okruženje, regulator i politika izvode se unutar Isaac Laba, izravno
-nad tenzorima na grafičkoj kartici. Razlog je paralelizacija - učenje se izvodi u više
+nad tenzorima na grafičkoj kartici. Razlog je paralelizacija --- učenje se izvodi u više
 stotina istovremenih okruženja, a posredovanje kroz ROS 2 bilo bi usko grlo. Veza s ROS-om
 potrebna je tek pri izvođenju naučene politike izvan simulacije, što nije bilo u opsegu ovog
 rada i opisano je u poglavlju \ref{ch:rezultati}.
