@@ -1,0 +1,59 @@
+\babel@toc {croatian}{}\relax 
+\contentsline {chapter}{SADRŽAJ}{i}{section*.1}%
+\contentsline {chapter}{POPIS SLIKA}{iii}{section*.2}%
+\contentsline {chapter}{POPIS TABLICA}{iv}{section*.3}%
+\contentsline {chapter}{POPIS OZNAKA}{v}{chapter*.4}%
+\contentsline {chapter}{POPIS KRATICA}{vi}{chapter*.5}%
+\contentsline {chapter}{SAŽETAK}{vii}{chapter*.6}%
+\contentsline {chapter}{SUMMARY}{viii}{chapter*.7}%
+\contentsline {chapter}{\numberline {1.}UVOD}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1.}Motivacija}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2.}Struktura rada}{2}{section.1.2}%
+\contentsline {chapter}{\numberline {2.}PREGLED DOSADAŠNJIH ISTRAŽIVANJA}{3}{chapter.2}%
+\contentsline {section}{\numberline {2.1.}Klasični pristupi upravljanju u kontaktu}{3}{section.2.1}%
+\contentsline {section}{\numberline {2.2.}Mobilna manipulacija}{3}{section.2.2}%
+\contentsline {section}{\numberline {2.3.}Interakcija s artikuliranim objektima}{3}{section.2.3}%
+\contentsline {section}{\numberline {2.4.}Pristupi temeljeni na učenju}{3}{section.2.4}%
+\contentsline {chapter}{\numberline {3.}ROBOTSKI SUSTAV I SIMULACIJSKO OKRUŽENJE}{4}{chapter.3}%
+\contentsline {section}{\numberline {3.1.}KMR iiwa — mobilna platforma i manipulator}{4}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1.}Mobilna platforma}{4}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.1.2.}Manipulator LBR iiwa 7 R800}{5}{subsection.3.1.2}%
+\contentsline {section}{\numberline {3.2.}Prihvatnica}{6}{section.3.2}%
+\contentsline {section}{\numberline {3.3.}Kamera i njezin nosač}{8}{section.3.3}%
+\contentsline {section}{\numberline {3.4.}Modeli vrata}{9}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1.}Otpor gibanja i njegova randomizacija}{10}{subsection.3.4.1}%
+\contentsline {section}{\numberline {3.5.}Model robota i pretvorba u simulacijski format}{11}{section.3.5}%
+\contentsline {subsection}{\numberline {3.5.1.}Gibanje mobilne platforme}{14}{subsection.3.5.1}%
+\contentsline {section}{\numberline {3.6.}Simulacijsko okruženje}{14}{section.3.6}%
+\contentsline {section}{\numberline {3.7.}Programska arhitektura}{15}{section.3.7}%
+\contentsline {chapter}{\numberline {4.}MODUL PERCEPCIJE}{18}{chapter.4}%
+\contentsline {section}{\numberline {4.1.}Odabir pristupa}{18}{section.4.1}%
+\contentsline {section}{\numberline {4.2.}Raspored oznaka}{18}{section.4.2}%
+\contentsline {section}{\numberline {4.3.}Detekcija oznaka}{20}{section.4.3}%
+\contentsline {section}{\numberline {4.4.}Fuzija dviju oznaka na kvaki}{20}{section.4.4}%
+\contentsline {section}{\numberline {4.5.}Sučelje modula i radni doseg}{21}{section.4.5}%
+\contentsline {section}{\numberline {4.6.}Ograničenja}{21}{section.4.6}%
+\contentsline {chapter}{\numberline {5.}PROCJENA SVOJSTAVA OKOLINE}{23}{chapter.5}%
+\contentsline {section}{\numberline {5.1.}Procjena sile i momenta na vrhu alata}{23}{section.5.1}%
+\contentsline {section}{\numberline {5.2.}Procjena ograničenja gibanja}{23}{section.5.2}%
+\contentsline {section}{\numberline {5.3.}Ispitno gibanje za utvrđivanje stanja brave}{23}{section.5.3}%
+\contentsline {chapter}{\numberline {6.}KLASIČNI PRISTUP UPRAVLJANJU}{24}{chapter.6}%
+\contentsline {section}{\numberline {6.1.}Struktura zadatka}{24}{section.6.1}%
+\contentsline {section}{\numberline {6.2.}Upravljanje u fazi prilaza i hvata}{24}{section.6.2}%
+\contentsline {section}{\numberline {6.3.}Upravljanje u fazi otvaranja}{24}{section.6.3}%
+\contentsline {section}{\numberline {6.4.}Ograničenja}{24}{section.6.4}%
+\contentsline {chapter}{\numberline {7.}PRISTUP TEMELJEN NA UČENJU}{25}{chapter.7}%
+\contentsline {section}{\numberline {7.1.}Formulacija Markovljevog procesa odlučivanja}{25}{section.7.1}%
+\contentsline {subsection}{\numberline {7.1.1.}Prostor stanja}{25}{subsection.7.1.1}%
+\contentsline {subsection}{\numberline {7.1.2.}Prostor akcija}{25}{subsection.7.1.2}%
+\contentsline {subsection}{\numberline {7.1.3.}Funkcija nagrade}{25}{subsection.7.1.3}%
+\contentsline {section}{\numberline {7.2.}Postupak učenja}{25}{section.7.2}%
+\contentsline {section}{\numberline {7.3.}Ablacijske studije}{25}{section.7.3}%
+\contentsline {chapter}{\numberline {8.}EKSPERIMENTALNI REZULTATI I RASPRAVA}{26}{chapter.8}%
+\contentsline {section}{\numberline {8.1.}Metrike i eksperimentalni protokol}{26}{section.8.1}%
+\contentsline {section}{\numberline {8.2.}Rezultati klasičnog pristupa}{26}{section.8.2}%
+\contentsline {section}{\numberline {8.3.}Rezultati pristupa temeljenog na učenju}{26}{section.8.3}%
+\contentsline {section}{\numberline {8.4.}Usporedba pristupa}{26}{section.8.4}%
+\contentsline {section}{\numberline {8.5.}Rasprava}{26}{section.8.5}%
+\contentsline {chapter}{\numberline {9.}ZAKLJUČAK}{27}{chapter.9}%
+\contentsline {chapter}{LITERATURA}{28}{section*.28}%

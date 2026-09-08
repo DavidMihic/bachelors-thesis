@@ -1,0 +1,85 @@
+\begin{thebibliography}{10}
+
+\bibitem{raibert1981hybrid}
+Marc~H. Raibert and John~J. Craig.
+\newblock Hybrid position/force control of manipulators.
+\newblock {\em Journal of Dynamic Systems, Measurement, and Control},
+  103(2):126--133, 1981.
+
+\bibitem{ott2005door}
+Christian Ott, Berthold B{\"a}uml, Christoph Borst, and Gerd Hirzinger.
+\newblock Employing cartesian impedance control for the opening of a door: A
+  case study in mobile manipulation.
+\newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS), Workshop on Mobile Manipulators}, 2005.
+
+\bibitem{sturm2011probabilistic}
+J{\"u}rgen Sturm, Cyrill Stachniss, and Wolfram Burgard.
+\newblock A probabilistic framework for learning kinematic models of
+  articulated objects.
+\newblock {\em Journal of Artificial Intelligence Research}, 41:477--526, 2011.
+
+\bibitem{khatib1987operational}
+Oussama Khatib.
+\newblock A unified approach for motion and force control of robot
+  manipulators: The operational space formulation.
+\newblock {\em IEEE Journal of Robotics and Automation}, 3(1):43--53, 1987.
+
+\bibitem{martinmartin2019variable}
+Roberto Mart{\'i}n-Mart{\'i}n, Michelle~A. Lee, Rachel Gardner, Silvio
+  Savarese, Jeannette Bohg, and Animesh Garg.
+\newblock Variable impedance control in end-effector space: An action space for
+  reinforcement learning in contact-rich tasks.
+\newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS)}, pages 1010--1017, 2019.
+
+\bibitem{pankert2020perceptive}
+Johannes Pankert and Marco Hutter.
+\newblock Perceptive model predictive control for continuous mobile
+  manipulation.
+\newblock {\em IEEE Robotics and Automation Letters}, 5(4):6177--6184, 2020.
+
+\bibitem{honerkamp2023n2m2}
+Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
+\newblock {N$^2$M$^2$}: Learning navigation for arbitrary mobile manipulation
+  motions in unseen and dynamic environments.
+\newblock {\em IEEE Transactions on Robotics}, 2023.
+
+\bibitem{kuka2024kmriiwa}
+{KUKA Deutschland GmbH}.
+\newblock {KMR iiwa} --- always spot-on safely.
+\newblock Katalog proizvoda, PBJ Portfolio (EN) 05/2024, 2024.
+\newblock \url{https://www.kuka.com}.
+
+\bibitem{mecanumsource}
+RobotShop.
+\newblock Andymark bb mecanum wheel.
+\newblock
+  \url{https://www.robotshop.com/products/andymark-4in-bb-mecanum-wheel-05in-hex-bore-right}.
+\newblock pristupljeno: 07.09.2026.
+
+\bibitem{iiwastack}
+Christoph Hennersperger, Salvatore Virga, et~al.
+\newblock {iiwa\_stack}: {ROS} integration for {KUKA LBR IIWA} robots.
+\newblock \url{https://github.com/IFL-CAMP/iiwa_stack}.
+\newblock Technische Universit\"at M\"unchen, IFL-CAMP.
+
+\bibitem{isaaclab}
+{NVIDIA}.
+\newblock {Isaac Lab}: A unified framework for robot learning.
+\newblock \url{https://isaac-sim.github.io/IsaacLab/}, 2024.
+
+\bibitem{stuede2019door}
+Marvin Stuede, Kathrin Nuelle, Svenja Tappe, and Tobias Ortmaier.
+\newblock Door opening and traversal with an industrial cartesian impedance
+  controlled mobile robot.
+\newblock In {\em IEEE International Conference on Robotics and Automation
+  (ICRA)}, 2019.
+
+\bibitem{olson2011apriltag}
+Edwin Olson.
+\newblock {AprilTag}: A robust and flexible visual fiducial system.
+\newblock In {\em IEEE International Conference on Robotics and Automation
+  (ICRA)}, pages 3400--3407, 2011.
+
+\end{thebibliography}
