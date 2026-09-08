@@ -128,6 +128,14 @@ def main():
     ros_thread = threading.Thread(target=rclpy.spin, args=(ros_node,), daemon=True)
     ros_thread.start()
 
+    # from handle_gt_publisher import HandleGroundTruth
+
+    # gt = HandleGroundTruth(
+    #     tag_a_path="/World/Door/handle_tag_a",
+    #     tag_b_path="/World/Door/handle_tag_b",
+    #     base_path="/World/Robot/base_link",
+    # )
+
     print(f"[INFO] Artikulacija: {args.articulation_prim_path}")
     print(f"[INFO] cmd_vel topic: {args.cmd_vel_topic}")
     print("[INFO] Pokrecem simulacijsku petlju. Ctrl+C za izlaz.")
@@ -149,6 +157,7 @@ def main():
             robot.set_angular_velocities(np.array([[0.0, 0.0, ang_z]]))
 
             world.step(render=not args.headless)
+            # gt.publish()
     except KeyboardInterrupt:
         pass
     finally:
