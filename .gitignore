@@ -18,6 +18,7 @@ code/ros2_ws/install
 code/ros2_ws/log
 
 # LaTeX build
+*.aux
 *.log
 *.out
 *.lof
