@@ -161,6 +161,47 @@ kvake očita s ruba radnog dosega, a platforma se tek nakon toga primakne. Kako 
 odometriju, poza kvake pritom se rekonstruira iz njezina nepromjenjivog odnosa prema središnjoj
 oznaci. Postupak je opisan u potpoglavlju \ref{sec:prilaz}.
 
+\section{Preciznost percepcijskog modula}
+\label{sec:perception-error}
+
+Provedeno je testiranje točnosti i preciznosti percepcijskog modula, čiji se rezultati mogu
+vidjeti u tablici \ref{tab:tocnost-percepcije} te na slici \ref{fig:perception-error}.
+Testiranje je provedeno tako da se robot dovodio na nasumične pozicije ispred vrata tako da kamera
+vidi oznake na kvaki. Zatim se uz pomoć vlastito izrađene skripte \texttt{perception\_accuracy\_logger.py}
+očitala poza hvatišta koju daje percepcijski modul i uspoređivala sa stvarnom pozom dobivenom iz simulatora.
+Postupak je ponovljen 15 puta za obje vrste vrata.
+
+\begin{table}[H]
+    \centering
+    \caption{Točnost procjene poze hvatišta, 30 mjernih točaka}
+    \label{tab:tocnost-percepcije}
+    \begin{tabular}{@{}llccc@{}}
+        \toprule
+        Veličina                & Jedinica & Srednja vrijednost & Std. devijacija & Najveća \\
+        \midrule
+        Pogreška položaja       & mm       & 17.07              & 9.01            & 44.82   \\
+        \quad okomito na kvaku  & mm       & 15.59              & 9.47            & 44.81   \\
+        \quad duž kvake         & mm       & 5.74               & 2.70            & 11.95   \\
+        Pogreška smjera kvake   & $^\circ$ & 2.13               & 2.82            & 11.48   \\
+        Pogreška orijentacije   & $^\circ$ & 4.88               & 5.76            & 23.97   \\
+        Rasip procjene položaja & mm       & 1.29               & 0.75            & 3.90    \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/perception_error_vs_distance.pdf}
+    \caption{Ovisnost pogreške položaja i smjera kvake o udaljenosti hvatišta od robota}
+    \label{fig:perception-error}
+\end{figure}
+
+Može se primijetiti da je odstupanje položaja i smjera kvake veće pri većim udaljenostima,
+a pri manjim udaljenostima je pogreška svega desetak milimetara, odnosno par stupnjeva.
+Kako se poza hvatišta traži tek kad je robot dovoljno blizu vratima (1--1.35 m), pogreška
+percepcije je dovoljno mala da ne igra veliku ulogu. Pogreška se kasnije kompenzira
+prilikom faze hvata, kako je opisano u \ref{sec:gripper}. TODO dodaj ref na fazu prilaza kasnije
+
 \section{Ograničenja}
 \label{sec:perception-limits}
 
@@ -188,9 +229,3 @@ manjim udaljenostima trebalo biti izmjereno.
 \textbf{Slika iz simulatora nije izobličena.} Simulator daje sliku iz idealnog modela kamere,
 bez izobličenja leće, pa se koristi izravno. Stvarna kamera zahtijevala bi prethodno
 ispravljanje slike, što je dodatan korak koji u ovom postavu nije bio potreban.
-
-\textbf{Točnost nije brojčano određena.} Rad modula provjeren je posredno, kroz uspješnost
-hvata u cjelovitom zadatku, ali apsolutna pogreška procijenjene poze nije uspoređena sa
-stvarnim položajem kvake u sceni. Takva bi usporedba razdvojila doprinos percepcije od
-doprinosa upravljanja, što je pri ovakvom posrednom vrednovanju nemoguće.
-TODO napravi mjerenje
