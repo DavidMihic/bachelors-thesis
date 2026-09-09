@@ -44,7 +44,12 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    TimerAction,
+    ExecuteProcess,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -120,6 +125,26 @@ def generate_launch_description():
     )
     moveit_rviz_delayed = TimerAction(period=8.0, actions=[moveit_rviz])
 
+    # arm_controller pri aktivaciji drzi svoju pocetnu referencu, a to je nula,
+    # pa ruku povuce iz poze upisane u USD. Vracamo je odmah po dizanju
+    # kontrolera, da ne stoji uspravno i ne zaklanja kameru.
+    park_arm = ExecuteProcess(
+        cmd=[
+            "ros2",
+            "topic",
+            "pub",
+            "--once",
+            "/arm_controller/joint_trajectory",
+            "trajectory_msgs/msg/JointTrajectory",
+            "{joint_names: ['iiwa_joint_1','iiwa_joint_2','iiwa_joint_3',"
+            "'iiwa_joint_4','iiwa_joint_5','iiwa_joint_6','iiwa_joint_7'], "
+            "points: [{positions: [0.0,-0.6,0.0,-2.2,0.0,0.8,0.0], "
+            "time_from_start: {sec: 3}}]}",
+        ],
+        output="screen",
+    )
+    park_arm_delayed = TimerAction(period=8.0, actions=[park_arm])
+
     return LaunchDescription(
         [
             launch_rviz_arg,
@@ -130,5 +155,6 @@ def generate_launch_description():
             gripper_bridge,
             move_group_delayed,
             moveit_rviz_delayed,
+            park_arm_delayed,
         ]
     )

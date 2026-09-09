@@ -48,7 +48,7 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 CRUISE_SPEED_MPS = 0.22  # iznad ovoga sila naglo raste
 ACCEL_SEC = 1.5
 DECEL_SEC = 1.5
-TARGET_DISTANCE_M = 0.50
+TARGET_DISTANCE_M = 0.80
 
 # --- Slanje naredbi ---
 PUBLISH_PERIOD_SEC = 0.02  # 50 Hz, iz zasebne niti
