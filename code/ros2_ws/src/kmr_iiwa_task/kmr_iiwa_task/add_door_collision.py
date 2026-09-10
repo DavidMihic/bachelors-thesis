@@ -22,10 +22,11 @@ Pokretanje:
     ros2 run kmr_iiwa_task add_door_collision
 """
 
-import math
 import threading
 
 import numpy as np
+
+from kmr_iiwa_task.geometry import quat_rotate_vector, rotmat_to_quat
 import rclpy
 from pymoveit2 import MoveIt2
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -58,51 +59,6 @@ COLLISION_PADDING_DEPTH_M = 0.02
 COLLISION_PADDING_WIDTH_HEIGHT_M = 0.15
 
 COLLISION_OBJECT_ID = "door_panel"
-
-
-def quat_rotate_vector(q, v):
-    """Rotiraj vektor v kvaternionom q=(x,y,z,w). Standardna formula."""
-    x, y, z, w = q
-    vx, vy, vz = v
-    tx = 2.0 * (y * vz - z * vy)
-    ty = 2.0 * (z * vx - x * vz)
-    tz = 2.0 * (x * vy - y * vx)
-    rx = vx + w * tx + (y * tz - z * ty)
-    ry = vy + w * ty + (z * tx - x * tz)
-    rz = vz + w * tz + (x * ty - y * tx)
-    return [rx, ry, rz]
-
-
-def rotmat_to_quat(r):
-    """3x3 rotacijska matrica (lista 3 stupca, svaki [x,y,z]) -> kvaternion
-    (x,y,z,w). Standardna Shepperd/trace metoda."""
-    m = np.array(r).T  # stupci u retke za standardnu formulu
-    trace = m[0, 0] + m[1, 1] + m[2, 2]
-    if trace > 0:
-        s = 0.5 / math.sqrt(trace + 1.0)
-        w = 0.25 / s
-        x = (m[2, 1] - m[1, 2]) * s
-        y = (m[0, 2] - m[2, 0]) * s
-        z = (m[1, 0] - m[0, 1]) * s
-    elif m[0, 0] > m[1, 1] and m[0, 0] > m[2, 2]:
-        s = 2.0 * math.sqrt(1.0 + m[0, 0] - m[1, 1] - m[2, 2])
-        w = (m[2, 1] - m[1, 2]) / s
-        x = 0.25 * s
-        y = (m[0, 1] + m[1, 0]) / s
-        z = (m[0, 2] + m[2, 0]) / s
-    elif m[1, 1] > m[2, 2]:
-        s = 2.0 * math.sqrt(1.0 + m[1, 1] - m[0, 0] - m[2, 2])
-        w = (m[0, 2] - m[2, 0]) / s
-        x = (m[0, 1] + m[1, 0]) / s
-        y = 0.25 * s
-        z = (m[1, 2] + m[2, 1]) / s
-    else:
-        s = 2.0 * math.sqrt(1.0 + m[2, 2] - m[0, 0] - m[1, 1])
-        w = (m[1, 0] - m[0, 1]) / s
-        x = (m[0, 2] + m[2, 0]) / s
-        y = (m[1, 2] + m[2, 1]) / s
-        z = 0.25 * s
-    return [x, y, z, w]
 
 
 def build_vertical_panel_orientation(tag_quat):

@@ -30,7 +30,6 @@ Pokretanje:
 """
 
 import json
-import math
 import threading
 import time
 
@@ -45,7 +44,8 @@ from std_msgs.msg import Empty
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
-from kmr_iiwa_task.add_door_collision import quat_rotate_vector, COLLISION_OBJECT_ID
+from kmr_iiwa_task.add_door_collision import COLLISION_OBJECT_ID
+from kmr_iiwa_task.geometry import quat_rotate_vector
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
 

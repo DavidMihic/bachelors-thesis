@@ -36,8 +36,8 @@ iznad zeljene brzine, a vremenska ogranicenja su velikodusna.
 Preduvjet: vrata su otvorena, robot drzi ili je upravo pustio kvaku,
 arm_controller i /scan rade.
 
-Pokretanje:
-    ros2 run kmr_iiwa_task pass_through_door
+Pokrece se iz door_task_node (funkcija run) ili zasebno preko
+`ros2 run kmr_iiwa_task pass_through_door`.
 """
 
 import math
@@ -47,6 +47,7 @@ import time
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Twist
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float32
@@ -54,7 +55,7 @@ from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-from kmr_iiwa_task.add_door_collision import quat_rotate_vector
+from kmr_iiwa_task.geometry import quat_rotate_vector, wrap_pi
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
 # Ista poza koju full_stack.launch.py salje pri dizanju kontrolera.
@@ -102,16 +103,7 @@ PUBLISH_PERIOD_SEC = 0.02
 CONTROL_PERIOD_SEC = 0.05
 
 
-def _wrap_pi(a):
-    while a > math.pi:
-        a -= 2 * math.pi
-    while a < -math.pi:
-        a += 2 * math.pi
-    return a
-
-
-def main():
-    rclpy.init()
+def run():
     node = Node("pass_through_door")
 
     cmd_vel_pub = node.create_publisher(Twist, "/cmd_vel", 10)
@@ -152,7 +144,7 @@ def main():
             angle += msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > limit:
                 continue
-            if abs(_wrap_pi(a)) > mask:
+            if abs(wrap_pi(a)) > mask:
                 continue
             x_l, y_l = r * math.cos(a), r * math.sin(a)
             x_b, y_b, _ = quat_rotate_vector(q, [x_l, y_l, 0.0])
@@ -205,10 +197,14 @@ def main():
         time.sleep(0.5)
         if msg:
             (node.get_logger().error if error else node.get_logger().info)(msg)
+        executor.shutdown()
+        time.sleep(0.2)
         node.destroy_node()
-        rclpy.shutdown()
 
-    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
+    # Vlastiti izvrsavac, ne globalni - vidi isti komentar u open_sliding.
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    threading.Thread(target=executor.spin, daemon=True).start()
     threading.Thread(target=publisher_loop, daemon=True).start()
 
     node.get_logger().info("Cekam /scan...")
@@ -328,6 +324,16 @@ def main():
     node.get_logger().info("=== SAZETAK ===")
     node.get_logger().info(f"  ishod: {outcome}")
     shutdown()
+
+
+def main():
+    """Samostalno pokretanje. Kad se faza poziva iz door_task_node, koristi se
+    run() - kontekst je ondje vec inicijaliziran."""
+    rclpy.init()
+    try:
+        run()
+    finally:
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

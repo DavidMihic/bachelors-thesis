@@ -1,57 +1,39 @@
-"""
-door_task_node.py - state-machine node za zadatak otvaranja vrata.
+"""door_task_node.py - vodi cijeli zadatak otvaranja vrata, od prilaska do
+prolaska kroz otvor.
 
-Faza prilaska: baza se dovede na fiksnu stajnu udaljenost i kut ispred vrata,
-koristeci door_tag_center kao vizualnu referencu, pa se zakljuca kad
-regulacija konvergira.
+Lanac:
+    prilazak i poravnanje -> hvat kvake -> otvaranje -> prolazak
 
-Parametar vertical_bar bira tip kvake: True za okomitu sipku kliznih vrata,
-False za vodoravnu polugu zakretnih.
+Tip vrata se prepoznaje SAM, iz razmaka dvaju tagova na kvaki: okomit vektor
+znaci klizna sipka, vodoravan znaci zakretna poluga (vidi detect_vertical_bar).
+Nema parametra kojim bi se tip zadavao - robot to zakljuci iz percepcije, a iz
+istog podatka slijedi i koja se faza otvaranja pokrece.
 
-Faza hvata: cim je baza zakljucana, pokrece se run_grasp_sequence iz
-handle_approach - ocitanje percepcije, primicanje baze uz rekonstrukciju poze
-kvake preko velikog taga, ready poza, pre-grasp, uron, bocna korekcija i
-hvat. Ista funkcija koristi se i pri samostalnom pokretanju tog modula, pa
-logika hvata postoji samo na jednom mjestu.
+    klizna   -> open_sliding, pa pass_through_door
+    zakretna -> open_revolute (prolazak nije izveden, vidi nize)
 
-Nasumican spawn baze rjesava se u build_integration_scene.py
-(--randomize-spawn), prije ucitavanja scene.
+Prilazak: P regulator vodi bazu na standoff udaljenost duz NORMALE vrata,
+izvedene iz orijentacije taga. Bearing-only prilazak (gledaj u tag) ne
+garantira okomitost - holonomna baza moze zadovoljiti "tag je tocno ispred" iz
+beskonacno mnogo smjerova, ovisno samo o putanji prilaska.
 
-Regulator koristi bearing umjesto poravnanja orijentacije: atan2(ty, tx) u
-base_link frameu, dakle kut izmedju naprijed-osi robota i smjera prema tagu.
-Poravnanje po orijentaciji tag framea trazilo bi pretpostavku o konvenciji
-osi koju apriltag_ros koristi, a bearing je dovoljan da baza zavrsi
-priblizno kvadratno ispred vrata.
+Faze otvaranja i prolaska su obicne funkcije (run) u svojim modulima, pa se
+svaka moze pokrenuti i zasebno preko `ros2 run` za otklanjanje gresaka. One
+stvaraju vlastite nodove, ali ne diraju rclpy.init/shutdown - kontekst je
+ovdje vec inicijaliziran.
 
-TF lanac ne treba dodatni kod: add_camera_ros_graph.py publisha kinematicko
-stablo (base_link -> ... -> camera_color_optical_frame), a apriltag_ros
-dodaje door_tag_center na isti tf2 tree.
-
-Sigurnosna napomena: cmd_vel_bridge.py primjenjuje zadnju primljenu Twist
-poruku svaki fizicki korak i nema failsafe timeout. Zato ovaj node
-eksplicitno publisha nulti Twist cim TF postane nedostupan ili zastario, a
-nakon zakljucavanja baze prestaje publishati bilo sto - vidi
-_tick_base_locked().
-
-Sucelje:
-  PUB  /cmd_vel (geometry_msgs/Twist), u base_link frameu (isto kao
-       cmd_vel_bridge.py ocekuje)
-  Koristi TF (base_frame -> door_tag_frame), bez direktne pretplate na
-  apriltag_ros topice (isti razlog kao u handle_pose_fusion.py).
-
-Logiranje: pri prelasku APPROACHING -> BASE_LOCKED, upisuje jedan JSON red
-u --log-path (default /tmp/kmr_door_task_log.jsonl) s vremenom prilaska i
-finalnim greskama.
+Node se vrti u zasebnoj niti, a glavna nit vodi zadatak sekvencijalno: faze su
+blokirajuce (cekaju izvrsavanje trajektorija) pa ne mogu zivjeti u timer
+callbacku.
 
 Pokretanje:
     ros2 run kmr_iiwa_task door_task_node
-    ros2 run kmr_iiwa_task door_task_node --ros-args \
-        -p standoff_distance_m:=1.35 -p door_tag_frame:=door_tag_center
 """
 
 import json
 import math
 import time
+import numpy as np
 from enum import Enum, auto
 
 import threading
@@ -65,8 +47,11 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
-from kmr_iiwa_task.add_door_collision import quat_rotate_vector
+from kmr_iiwa_task.geometry import quat_rotate_vector
 from kmr_iiwa_task.handle_approach import run_grasp_sequence, spin_node_forever
+from kmr_iiwa_task.open_revolute import run as run_open_revolute
+from kmr_iiwa_task.open_sliding import run as run_open_sliding
+from kmr_iiwa_task.pass_through_door import run as run_pass_through
 
 
 class Phase(Enum):
@@ -105,11 +90,6 @@ class DoorTaskNode(Node):
 
         # --- Cilj prilaska ---
         self.declare_parameter("standoff_distance_m", 1.35)
-
-        # Klizna vrata imaju okomitu sipku, zakretna vodoravnu polugu. O tome
-        # ovisi zakret gripera oko osi alata i smije li se os prilaza
-        # prisiliti na vodoravnu.
-        self.declare_parameter("vertical_bar", True)
 
         # --- P regulator ---
         self.declare_parameter("kp_x", 0.6)
@@ -328,6 +308,62 @@ class DoorTaskNode(Node):
     def _publish_zero_twist(self):
         self.cmd_vel_pub.publish(Twist())
 
+    def detect_vertical_bar(self, timeout_sec=5.0):
+        """Tip kvake iz geometrije, bez parametra.
+
+        Vektor izmedju dva taga na kvaki je OKOMIT kod klizne sipke (tagovi na
+        z=-0.11 i z=+0.11 u sliding_door.urdf) i VODORAVAN kod zakretne poluge
+        (tagovi na y=-0.015 i y=-0.145 u revolute_door.urdf). Razlika je
+        jednoznacna, pa robot tip moze ocitati sam.
+
+        Vraca True za okomitu sipku, False za vodoravnu polugu, None ako se
+        tagovi ne mogu ocitati.
+        """
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline and rclpy.ok():
+            try:
+                a = self.tf_buffer.lookup_transform(
+                    self.base_frame, "handle_tag_a", Time()
+                ).transform.translation
+                b = self.tf_buffer.lookup_transform(
+                    self.base_frame, "handle_tag_b", Time()
+                ).transform.translation
+            except (
+                LookupException,
+                ConnectivityException,
+                ExtrapolationException,
+            ):
+                time.sleep(0.1)
+                continue
+
+            v = np.array([b.x - a.x, b.y - a.y, b.z - a.z])
+            n = float(np.linalg.norm(v))
+            if n < 0.05:
+                time.sleep(0.1)
+                continue
+
+            v = v / n
+            vertical = abs(v[2]) > 0.7
+            tip = (
+                "OKOMITA sipka (klizna vrata)"
+                if vertical
+                else "VODORAVNA poluga (zakretna vrata)"
+            )
+            self.get_logger().info(
+                f"Tip kvake iz geometrije: {tip} - os {np.round(v, 2)}, "
+                f"razmak tagova {n*1000:.0f} mm"
+            )
+            self._append_log(
+                {
+                    "event": "handle_type_detected",
+                    "vertical_bar": bool(vertical),
+                    "axis": [float(c) for c in v],
+                    "tag_spacing_m": n,
+                }
+            )
+            return vertical
+        return None
+
     def _append_log(self, entry: dict):
         entry = {"stamp_unix": time.time(), **entry}
         try:
@@ -362,15 +398,51 @@ def main():
         node.phase = Phase.GRASPING
         node.get_logger().info("Pocinjem hvat kvake.")
 
+        vertical_bar = node.detect_vertical_bar()
+        if vertical_bar is None:
+            node.get_logger().error(
+                "Ne mogu ocitati oba taga na kvaki (handle_tag_a/handle_tag_b) - "
+                "ne znam tip kvake, prekidam."
+            )
+            node.phase = Phase.FAILED
+            node._append_log({"event": "handle_type_detect_failed"})
+            return
+
         ok = run_grasp_sequence(
             node,
             node.tf_buffer,
             callback_group,
-            vertical_bar=node.get_parameter("vertical_bar").value,
+            vertical_bar=vertical_bar,
         )
         node.phase = Phase.GRASPED if ok else Phase.FAILED
         node.get_logger().info("Kvaka uhvacena." if ok else "Hvat kvake nije uspio.")
         node._append_log({"event": "grasp_complete", "success": bool(ok)})
+
+        if not ok:
+            return
+
+        if vertical_bar:
+            node.get_logger().info("=== Otvaram klizna vrata ===")
+            run_open_sliding()
+            node.get_logger().info("=== Prolazim kroz vrata ===")
+            run_pass_through()
+        else:
+            node.get_logger().info("=== Otvaram zakretna vrata ===")
+            run_open_revolute()
+            # Prolazak je izveden samo za klizna vrata: ondje robot cijelo
+            # vrijeme ostaje s iste strane zida, pa mu otvor na kraju ostane
+            # bocno i do njega se dolazi bocnim gibanjem. Kod zakretnih vrata
+            # robot krilo vuce prema sebi i putanja kroz otvor je bitno
+            # drugacija, pa bi trebala zasebna izvedba.
+            node.get_logger().info(
+                "Prolazak kroz zakretna vrata nije izveden - zadatak zavrsava "
+                "nakon otvaranja."
+            )
+
+        node._append_log(
+            {"event": "task_complete", "vertical_bar": bool(vertical_bar)}
+        )
+        node.get_logger().info("=== ZADATAK ZAVRSEN ===")
 
         while rclpy.ok():
             time.sleep(0.2)

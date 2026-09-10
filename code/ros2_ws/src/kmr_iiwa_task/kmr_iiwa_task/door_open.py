@@ -47,7 +47,8 @@ from std_msgs.msg import Empty, Float32
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
-from kmr_iiwa_task.add_door_collision import quat_rotate_vector, COLLISION_OBJECT_ID
+from kmr_iiwa_task.add_door_collision import COLLISION_OBJECT_ID
+from kmr_iiwa_task.geometry import quat_conj, quat_mul, quat_rotate_vector
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
 
@@ -65,22 +66,6 @@ PRISMATIC_MIN_DISP_M = 0.010
 
 LOG_PATH = "/tmp/kmr_door_open.json"
 Z_AXIS = np.array([0.0, 0.0, 1.0])
-
-
-def quat_conj(q):
-    x, y, z, w = q
-    return [-x, -y, -z, w]
-
-
-def quat_mul(q1, q2):
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-    return [
-        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-    ]
 
 
 def yaw_between(q0, q1):

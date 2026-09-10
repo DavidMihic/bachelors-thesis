@@ -56,13 +56,21 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 
 from kmr_iiwa_task.add_door_collision import (
     build_vertical_panel_orientation,
-    quat_rotate_vector,
-    rotmat_to_quat,
     DOOR_PANEL_SIZE,
     TAG_TO_PANEL_CENTER_OFFSET,
     COLLISION_PADDING_DEPTH_M,
     COLLISION_PADDING_WIDTH_HEIGHT_M,
     COLLISION_OBJECT_ID,
+)
+from kmr_iiwa_task.geometry import (
+    math_dist,
+    quat_angle_between,
+    quat_multiply,
+    quat_rotate_vector,
+    quat_z_axis,
+    rotmat_to_quat,
+    tf_compose,
+    tf_inverse,
 )
 
 JOINT_NAMES = [
@@ -155,62 +163,6 @@ FINGER_SIDE_A = ["gripper_finger_1_joint", "gripper_finger_2_joint"]  # +X
 FINGER_SIDE_B = ["gripper_finger_3_joint", "gripper_finger_4_joint"]  # -X
 MAX_LATERAL_CORRECTIONS = 6
 LATERAL_TOLERANCE_M = 0.0015
-
-
-def math_dist(a, b):
-    return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
-
-
-def quat_angle_between(q1, q2):
-    """Kut najkrace rotacije izmedju dvije orijentacije, u radijanima.
-    Apsolutna vrijednost skalarnog produkta jer q i -q predstavljaju istu
-    rotaciju (dvostruko pokrivanje)."""
-    d = abs(sum(a * b for a, b in zip(q1, q2)))
-    return 2.0 * math.acos(min(1.0, d))
-
-
-def quat_multiply(q1, q2):
-    """Hamilton produkt, oba u (x,y,z,w) redoslijedu. q_total = q1 (x) q2 -
-    q2 se primjenjuje kao DODATNA LOKALNA rotacija nakon q1 (standardna
-    konvencija za body-frame kompoziciju)."""
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-    return (
-        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-    )
-
-
-def quat_z_axis(q):
-    """Vrati Z-os (treci stupac rotacijske matrice) direktno iz kvaterniona
-    (x,y,z,w), kompaktna standardna formula - provjereno protiv
-    handle_pose_fusion.py-evog quat_to_rotmat()."""
-    x, y, z, w = q
-    return np.array(
-        [
-            2.0 * (x * z + y * w),
-            2.0 * (y * z - x * w),
-            1.0 - 2.0 * (x * x + y * y),
-        ]
-    )
-
-
-def quat_conj(q):
-    x, y, z, w = q
-    return (-x, -y, -z, w)
-
-
-def tf_compose(pa, qa, pb, qb):
-    """Slozi transformacije: A->B pa B->C daje A->C."""
-    p = np.array(pa) + np.array(quat_rotate_vector(qa, list(pb)))
-    return p, quat_multiply(qa, qb)
-
-
-def tf_inverse(p, q):
-    qi = quat_conj(q)
-    return -np.array(quat_rotate_vector(qi, list(p))), qi
 
 
 def orient_from_handle(q_handle, force_horizontal=True, logger=None):

@@ -55,7 +55,7 @@ class GripperBridgeNode(Node):
         self.declare_parameter("isaac_states_topic", "/isaac_joint_states")
         self.declare_parameter("check_period_sec", 0.1)
         self.declare_parameter("stall_velocity_threshold", 0.0003)
-        self.declare_parameter("stall_position_threshold", 0.0015)
+        self.declare_parameter("stall_position_threshold", 0.0002)
 
         self._lock = threading.Lock()
         self._closing_fraction = 0.0  # pocetno stanje: potpuno otvoren

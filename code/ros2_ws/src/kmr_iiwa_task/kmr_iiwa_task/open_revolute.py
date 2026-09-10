@@ -49,8 +49,8 @@ Ako se ne objavljuje, polja u logu ostaju null i sve ostalo radi normalno.
 Preduvjet: door_task_node je uhvatio kvaku (vertical_bar:=false) i miruje;
 tcp_wrench_estimator radi.
 
-Pokretanje:
-    ros2 run kmr_iiwa_task open_revolute
+Pokrece se iz door_task_node (funkcija run) ili zasebno preko
+`ros2 run kmr_iiwa_task open_revolute`.
 """
 
 import json
@@ -70,8 +70,14 @@ from std_msgs.msg import Empty, Float32
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
-from kmr_iiwa_task.add_door_collision import quat_rotate_vector, COLLISION_OBJECT_ID
-from kmr_iiwa_task.handle_approach import quat_angle_between
+from kmr_iiwa_task.add_door_collision import COLLISION_OBJECT_ID
+from kmr_iiwa_task.geometry import (
+    quat_angle_between,
+    quat_conj,
+    quat_mul,
+    quat_rotate_vector,
+    wrap_pi,
+)
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
 
@@ -139,32 +145,7 @@ LIDAR_WALL_ID_RANGE = range(20)
 LOG_PATH = "/tmp/open_revolute.json"
 
 
-def quat_mul(q1, q2):
-    x1, y1, z1, w1 = q1
-    x2, y2, z2, w2 = q2
-    return [
-        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-    ]
-
-
-def quat_conj(q):
-    x, y, z, w = q
-    return [-x, -y, -z, w]
-
-
-def _wrap_pi(a):
-    while a > math.pi:
-        a -= 2 * math.pi
-    while a < -math.pi:
-        a += 2 * math.pi
-    return a
-
-
-def main():
-    rclpy.init()
+def run():
     node = Node("open_revolute")
     cb = ReentrantCallbackGroup()
 
@@ -242,7 +223,7 @@ def main():
             angle += msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
-            if abs(_wrap_pi(a)) > mask_rad:
+            if abs(wrap_pi(a)) > mask_rad:
                 continue
             x_l, y_l = r * math.cos(a), r * math.sin(a)
             x_b, y_b, _ = quat_rotate_vector(q, [x_l, y_l, 0.0])
@@ -359,7 +340,7 @@ def main():
             f"Procijenjeni radijus {radius0:.3f}m izvan "
             f"[{MIN_RADIUS_M},{MAX_RADIUS_M}] - prekidam."
         )
-        rclpy.shutdown()
+        node.destroy_node()
         return
 
     # Smjer otvaranja: tangenta na luk, u smjeru u kojem gripper prilazi vratima.
@@ -441,7 +422,7 @@ def main():
         door_geom["center_y"] = float(center[1])
 
         door_angle_deg = math.degrees(
-            abs(_wrap_pi(door_angle_from_tag(p_tag_now, center) - door_theta0))
+            abs(wrap_pi(door_angle_from_tag(p_tag_now, center) - door_theta0))
         )
         if door_angle_deg >= TARGET_DOOR_ANGLE_DEG:
             outcome = f"USPJEH: vrata otvorena {door_angle_deg:.1f} deg"
@@ -590,7 +571,16 @@ def main():
     time.sleep(0.2)
     node.destroy_node()
     sensor_node.destroy_node()
-    rclpy.shutdown()
+
+
+def main():
+    """Samostalno pokretanje. Kad se faza poziva iz door_task_node, koristi se
+    run() - kontekst je ondje vec inicijaliziran."""
+    rclpy.init()
+    try:
+        run()
+    finally:
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

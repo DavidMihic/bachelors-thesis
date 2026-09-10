@@ -38,8 +38,8 @@ pomak baze bio 120 mm.
 Preduvjet: door_task_node je uhvatio kvaku i miruje; tcp_wrench_estimator
 radi; cmd_vel_bridge vrti door_gt_publisher.
 
-Pokretanje:
-    ros2 run kmr_iiwa_task open_sliding
+Pokrece se iz door_task_node (funkcija run) ili zasebno preko
+`ros2 run kmr_iiwa_task open_sliding`.
 """
 
 import json
@@ -49,11 +49,14 @@ import time
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Twist, WrenchStamped
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Empty, Float32
+from std_msgs.msg import Float32
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+
+from kmr_iiwa_task.geometry import quat_rotate_vector
 
 # --- Trapezni profil ---
 CRUISE_SPEED_MPS = 0.20  # iznad ovoga sila naglo raste
@@ -86,21 +89,6 @@ CONTROL_PERIOD_SEC = 0.05
 LOG_PATH = "/tmp/open_sliding.json"
 
 
-def quat_rotate_vector(q, v):
-    x, y, z, w = q
-    vx, vy, vz = v
-    tx = 2.0 * (y * vz - z * vy)
-    ty = 2.0 * (z * vx - x * vz)
-    tz = 2.0 * (x * vy - y * vx)
-    return np.array(
-        [
-            vx + w * tx + (y * tz - z * ty),
-            vy + w * ty + (z * tx - x * tz),
-            vz + w * tz + (x * ty - y * tx),
-        ]
-    )
-
-
 def profile_duration():
     """Trajanje trapeza za TARGET_DISTANCE_M. Rampe prijedju po pola svoje
     pune brzine, pa zajedno daju (ACCEL+DECEL)/2 * v puta."""
@@ -121,8 +109,7 @@ def trapezoid_speed(elapsed, total):
     return CRUISE_SPEED_MPS * min(up, down)
 
 
-def main():
-    rclpy.init()
+def run():
     node = Node("open_sliding")
 
     wrench = {"f": None}
@@ -143,12 +130,16 @@ def main():
     node.create_subscription(JointState, "/ground_truth/door_joint", _on_gt_joint, 10)
     cmd_vel_pub = node.create_publisher(Twist, "/cmd_vel", 10)
     gripper_pub = node.create_publisher(Float32, "/gripper_cmd", 10)
-    tare_pub = node.create_publisher(Empty, "/estimation/tare", 10)
 
     tf_buffer = Buffer()
     TransformListener(tf_buffer, node)
 
-    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
+    # Vlastiti izvrsavac, ne globalni: rclpy.spin(node) bez izricitog
+    # izvrsavaca koristi GLOBALNI, pa bi ga druga faza (pass_through_door)
+    # vrtjela istovremeno iz svoje niti - "generator already executing".
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    threading.Thread(target=executor.spin, daemon=True).start()
 
     def lookup(frame):
         """Vrati (pozicija, kvaternion, stamp_ns) ili (None, None, None)."""
@@ -188,7 +179,8 @@ def main():
                 "Nema /ground_truth/door_joint - je li door_gt_publisher aktivan u "
                 "cmd_vel_bridgeu? Bez njega nema kriterija zavrsetka."
             )
-            rclpy.shutdown()
+            executor.shutdown()
+            node.destroy_node()
             return
 
     gripper_pub.publish(Float32(data=1.0))
@@ -205,7 +197,8 @@ def main():
         node.get_logger().error(
             "Os zatvaranja je gotovo vertikalna - ne mogu odrediti smjer klizanja."
         )
-        rclpy.shutdown()
+        executor.shutdown()
+        node.destroy_node()
         return
     slide = slide / n
     node.get_logger().info(f"Os klizanja: {np.round(slide, 3)}")
@@ -215,7 +208,8 @@ def main():
     p_tag_start, _, tag_stamp = lookup("door_tag_center")
     if p_tag_start is None:
         node.get_logger().error("Nema door_tag_center - ne mogu odrediti smjer.")
-        rclpy.shutdown()
+        executor.shutdown()
+        node.destroy_node()
         return
     p_tag_start = p_tag_start[:2].copy()
     offset = float(np.dot(p_tcp[:2] - p_tag_start, slide[:2]))
@@ -445,7 +439,19 @@ def main():
         json.dump(log, fh, indent=2)
     node.get_logger().info(f"Detalji u {LOG_PATH}")
 
-    rclpy.shutdown()
+    executor.shutdown()
+    time.sleep(0.2)
+    node.destroy_node()
+
+
+def main():
+    """Samostalno pokretanje. Kad se faza poziva iz door_task_node, koristi se
+    run() - kontekst je ondje vec inicijaliziran."""
+    rclpy.init()
+    try:
+        run()
+    finally:
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
