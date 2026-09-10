@@ -43,12 +43,12 @@ import time
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, Twist, WrenchStamped
 from pymoveit2 import MoveIt2
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, Empty
 from shape_msgs.msg import SolidPrimitive
 from sensor_msgs.msg import JointState
 from tf2_ros import Buffer, TransformListener
@@ -216,16 +216,23 @@ def tf_inverse(p, q):
 def orient_from_handle(q_handle, force_horizontal=True, logger=None):
     """Iz orijentacije kvake izvedi (z_axis, q_gripper) za prilaz.
 
-    Uz force_horizontal os prilaza se projicira na vodoravnu ravninu i
-    orijentacija se ponovno gradi oko poznate okomite sipke, pa se iz
-    percepcije zadrzava samo smjer prema vratima. Bez toga gripper kopira
-    nagib kvake i ulazi ukoso. Vrijedi samo za okomitu sipku, dakle za klizna
-    vrata; kod zakretnih je poluga vodoravna pa se prosljedjuje False.
+    U oba slucaja os prilaza se projicira na vodoravnu ravninu, a
+    orijentacija se ponovno gradi oko POZNATE reference (svjetska
+    vertikala) - iz sirove percepcije zadrzava se samo smjer prema
+    vratima (force_horizontal=True) odnosno opci predznak "koja strana"
+    (force_horizontal=False), NIKAD puni zaokret oko Z osi. Bez toga
+    gripper kopira svaku pristranost detekcije taga oko njegove VLASTITE
+    Z osi - a rotacija oko vlastite Z osi ne mijenja gdje ta os pokazuje,
+    pa se takva greska ne moze uhvatiti ni ponavljanjem pokusaja ni
+    strozom tolerancijom, jer je racun deterministican.
+
+    force_horizontal=True: sipka je okomita (klizna vrata) - y_axis je
+    fiksna svjetska vertikala.
+    force_horizontal=False: sipka je vodoravna (zakretna vrata) -
+    y_axis se rekonstruira kao tocno okomita na projicirani smjer
+    prilaza I na svjetsku vertikalu; predznak dolazi iz sirove percepcije.
     """
     z_axis = quat_z_axis(q_handle)
-    if not force_horizontal:
-        return z_axis, quat_multiply(q_handle, Y_180)
-
     z_flat = np.array([z_axis[0], z_axis[1], 0.0])
     n = np.linalg.norm(z_flat)
     if n < 1e-6:
@@ -235,11 +242,41 @@ def orient_from_handle(q_handle, force_horizontal=True, logger=None):
                 "koristim sirovu orijentaciju iz percepcije."
             )
         return z_axis, quat_multiply(q_handle, Y_180)
-
     z_axis = z_flat / n
-    y_axis = np.array([0.0, 0.0, 1.0])  # sipka je okomita
-    x_axis = np.cross(y_axis, z_axis)
-    x_axis /= np.linalg.norm(x_axis)
+
+    if force_horizontal:
+        y_axis = np.array([0.0, 0.0, 1.0])  # sipka je okomita, fiksno
+        x_axis = np.cross(y_axis, z_axis)
+        x_axis /= np.linalg.norm(x_axis)
+    else:
+        world_up = np.array([0.0, 0.0, 1.0])
+        y_axis = np.cross(world_up, z_axis)
+        yn = np.linalg.norm(y_axis)
+        if yn < 1e-6:
+            if logger is not None:
+                logger.warn(
+                    "Os prilaza je paralelna sa svjetskom vertikalom - ne "
+                    "mogu odrediti vodoravnu os poluge, koristim sirovu "
+                    "orijentaciju iz percepcije."
+                )
+            return z_axis, quat_multiply(q_handle, Y_180)
+        y_axis /= yn
+        # Predznak (koja strana) iz sirove percepcije - zadrzava se SAMO
+        # to, ne i puni kut oko Z, jer je bas taj kut nepouzdan.
+        y_raw = np.array(quat_rotate_vector(q_handle, [0.0, 1.0, 0.0]))
+        if np.dot(y_axis, y_raw) < 0.0:
+            y_axis = -y_axis
+        correction_deg = math.degrees(
+            math.acos(np.clip(np.dot(y_axis, y_raw / np.linalg.norm(y_raw)), -1.0, 1.0))
+        )
+        if logger is not None:
+            logger.info(
+                f"[orient_from_handle] korekcija oko Z: {correction_deg:.1f} deg "
+                f"(sirovi Y={np.round(y_raw,3)}, ispravljeni Y={np.round(y_axis,3)})"
+            )
+        x_axis = np.cross(y_axis, z_axis)
+        x_axis /= np.linalg.norm(x_axis)
+
     q_flat = rotmat_to_quat([x_axis, y_axis, z_axis])
     return z_axis, quat_multiply(q_flat, Y_180)
 
@@ -251,6 +288,31 @@ def compute_target(hp_x, hp_y, hp_z, z_axis, q_gripper, standoff):
         hp_z + standoff * float(z_axis[2]),
     ]
     return position, list(q_gripper)
+
+
+def compute_ik_anchored(moveit2, position, quat_xyzw, seed, logger=None):
+    """IK iz FIKSNOG, poznatog dobrog sjemena (ne iz trenutnog stanja zglobova,
+    koje moze vec biti zanjihano) - sprjecava akumulaciju drifta u redundantnom
+    zglobu (lakat) koji KDL inace bira lokalno, bez ikakve preference, iz
+    trenutnog stanja."""
+    joint_state = moveit2.compute_ik(
+        position=position, quat_xyzw=quat_xyzw, start_joint_state=seed
+    )
+    if joint_state is None:
+        if logger is not None:
+            logger.warn("compute_ik (anchored) nije nasao rjesenje - fallback.")
+        return None
+    if hasattr(joint_state, "name") and hasattr(joint_state, "position"):
+        by_name = dict(zip(joint_state.name, joint_state.position))
+        try:
+            return [by_name[name] for name in JOINT_NAMES]
+        except KeyError as exc:
+            if logger is not None:
+                logger.warn(
+                    f"compute_ik rezultat ne sadrzi ocekivani zglob {exc} - fallback."
+                )
+            return None
+    return list(joint_state)
 
 
 def collect_average_pose(samples, window_sec, wait_timeout_sec=None):
@@ -327,6 +389,17 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
     gripper_node = Node("handle_approach_gripper_monitor")
     gripper_pub = gripper_node.create_publisher(Float32, "/gripper_cmd", 10)
     cmd_vel_pub = gripper_node.create_publisher(Twist, "/cmd_vel", 10)
+    tare_pub = gripper_node.create_publisher(Empty, "/estimation/tare", 10)
+    wrench_now = {"f": None}
+
+    def _on_wrench(msg):
+        wrench_now["f"] = (
+            msg.wrench.force.x**2 + msg.wrench.force.y**2 + msg.wrench.force.z**2
+        ) ** 0.5
+
+    gripper_node.create_subscription(
+        WrenchStamped, "/estimation/tcp_wrench", _on_wrench, 10
+    )
     stalled = {"value": False, "consecutive_true": 0}
     state = {"value": None}
     finger_pos = {"A": None, "B": None}
@@ -546,9 +619,15 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
     # uspije, pa bi bez ove provjere skripta nastavila dalje i kad se ruka
     # uopce nije pomaknula.
     for pre_grasp_attempt in range(3):
-        moveit2.move_to_pose(
-            position=pre_grasp_position, quat_xyzw=pre_grasp_quat, cartesian=False
+        anchored_joints = compute_ik_anchored(
+            moveit2, pre_grasp_position, pre_grasp_quat, ready_pose, node.get_logger()
         )
+        if anchored_joints is not None:
+            moveit2.move_to_configuration(anchored_joints)
+        else:
+            moveit2.move_to_pose(
+                position=pre_grasp_position, quat_xyzw=pre_grasp_quat, cartesian=False
+            )
         moveit2.wait_until_executed()
         pg_error, pg_angle, pg_tf_ok = read_pre_grasp_error()
         node.get_logger().info(
@@ -657,6 +736,16 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
         gripper_node.destroy_node()
         gripper_thread.join(timeout=2.0)
         return False
+
+    # Tara MORA ici dok je gripper OTVOREN. Izmjereno: stiskanje prstiju unosi
+    # ~1400 N u ocitanje procjenitelja, bez ikakvog gibanja ruke. Ako se tarira
+    # poslije hvata, ta napetost se upise u nulu i sve kasnije mjerenje sile je
+    # pomaknuto za nepoznat iznos koji se k tome mijenja s konfiguracijom ruke.
+    gripper_pub.publish(Float32(data=0.0))
+    time.sleep(1.5)
+    tare_pub.publish(Empty())
+    time.sleep(1.0)
+    node.get_logger().info("Tara postavljena s OTVORENIM gripperom (prije stiska).")
 
     # --- Korak 4: pomakni malo naprijed, stisni, otpusti, ponovi - pozicija
     # se AKUMULIRA (ne resetira na originalnu grasp_position izmedju

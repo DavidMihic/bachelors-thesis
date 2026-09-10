@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+  KMR iiwa — 2D lidar mount (placeholder, nema CAD podataka za kucište)
+  ======================================================================
+  Samo goli TF frame (isti princip kao camera_color_optical_frame u
+  camera_mount.xacro) - bez vizuala/kolizije. Sam RTX Lidar prim se
+  dodaje NAKON URDF->USD konverzije, skriptom add_lidar_ros_graph.py
+  (isti razlog kao kod kamere - URDF sensor tagovi se ne parsiraju za
+  nas format, pa link ovdje sluzi samo kao TF/mount tocka).
+
+  Frame konvencija: ista kao base_link (X naprijed, Z gore) - RTX Lidar
+  ne treba body->optical rotaciju kao kamera, 2D scan ravnina je
+  vodoravna po definiciji profila (Example_Rotary_2D).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kmr_lidar">
+
+  <xacro:macro name="kmr_lidar_mount" params="parent:=base_link *origin">
+    <link name="lidar_link"/>
+    <joint name="lidar_joint" type="fixed">
+      <xacro:insert_block name="origin"/>
+      <parent link="${parent}"/>
+      <child link="lidar_link"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Primjer korištenja u kmr_iiwa lancu:
+  <xacro:include filename="$(find kmr_iiwa_description)/xacro/lidar_mount.xacro"/>
+  <xacro:kmr_lidar_mount parent="base_link">
+    <origin xyz="0.57 0 0.08" rpy="0 0 0"/>
+  </xacro:kmr_lidar_mount>
+  -->
+
+</robot>

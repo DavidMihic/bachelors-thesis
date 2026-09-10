@@ -90,6 +90,12 @@ def generate_launch_description():
         output="screen",
     )
 
+    lidar_wall_collision = Node(
+        package="kmr_iiwa_perception",
+        executable="lidar_wall_collision",
+        output="screen",
+    )
+
     tcp_wrench_estimator = Node(
         package="kmr_iiwa_perception",
         executable="tcp_wrench_estimator",
@@ -148,6 +154,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             launch_rviz_arg,
+            lidar_wall_collision,
             ros2_control,
             apriltag,
             handle_pose_fusion,

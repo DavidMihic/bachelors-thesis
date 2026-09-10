@@ -99,6 +99,12 @@
     <origin xyz="${camera_mount_x} ${camera_mount_y} ${camera_mount_z}" rpy="0 0 0"/>
   </xacro:kmr_camera_mount>
   -->
+  <!-- Primjer korištenja u kmr_iiwa lancu:
+  <xacro:include filename="$(find kmr_iiwa_description)/xacro/lidar_mount.xacro"/>
+  <xacro:kmr_lidar_mount parent="base_link">
+    <origin xyz="0.57 0 0.08" rpy="0 0 0"/>
+  </xacro:kmr_lidar_mount>
+  -->
   <!-- ros2_control sucelje za ruku (samo iiwa_joint_1..7) - koristi
        topic_based_ros2_control/TopicBasedSystem hardware interface plugin,
        koji samo cita/pise obicne topice, bez custom C++ hardware interfacea.
@@ -737,6 +743,12 @@
     <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0"/>
     <parent link="camera_link"/>
     <child link="camera_color_optical_frame"/>
+  </joint>
+  <link name="lidar_link"/>
+  <joint name="lidar_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.5700000000000001 0.0 0.08"/>
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
   </joint>
   <ros2_control name="kmr_iiwa_arm" type="system">
     <hardware>

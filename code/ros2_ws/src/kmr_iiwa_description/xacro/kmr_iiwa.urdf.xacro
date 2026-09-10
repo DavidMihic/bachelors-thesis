@@ -6,6 +6,7 @@
   <xacro:include filename="kmr_base.xacro"/>
   <xacro:include filename="gripper.xacro"/>
   <xacro:include filename="camera_mount.xacro"/>
+  <xacro:include filename="lidar_mount.xacro"/>
   <xacro:include filename="iiwa7.xacro"/>
   <xacro:include filename="kmr_iiwa_ros2_control.xacro"/>
 
@@ -38,6 +39,14 @@
   <xacro:kmr_camera_mount parent="base_link" mesh_path="package://kmr_iiwa_description/meshes/camera">
     <origin xyz="${camera_mount_x} ${camera_mount_y} ${camera_mount_z}" rpy="0 0 0"/>
   </xacro:kmr_camera_mount>
+
+  <xacro:property name="lidar_mount_x" value="${kmr_length/2 + 0.03}"/>
+  <xacro:property name="lidar_mount_y" value="0.0"/>
+  <xacro:property name="lidar_mount_z" value="0.08"/>
+
+  <xacro:kmr_lidar_mount parent="base_link">
+    <origin xyz="${lidar_mount_x} ${lidar_mount_y} ${lidar_mount_z}" rpy="0 0 0"/>
+  </xacro:kmr_lidar_mount>
 
   <xacro:kmr_iiwa_ros2_control
       commands_topic="/isaac_joint_commands"

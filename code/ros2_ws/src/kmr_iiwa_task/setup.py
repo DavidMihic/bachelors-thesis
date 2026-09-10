@@ -27,9 +27,10 @@ setup(
             "handle_approach = kmr_iiwa_task.handle_approach:main",
             "door_probe = kmr_iiwa_task.door_probe:main",
             "door_open = kmr_iiwa_task.door_open:main",
-            "door_pull_base = kmr_iiwa_task.door_pull_base:main",
-            "door_pull_base_arc = kmr_iiwa_task.door_pull_base_arc:main",
+            "open_sliding = kmr_iiwa_task.open_sliding:main",
+            "open_revolute = kmr_iiwa_task.open_revolute:main",
             "rl_door_inference = kmr_iiwa_task.rl_door_inference:main",
+            "base_speed_test = kmr_iiwa_task.base_speed_test:main",
         ],
     },
 )

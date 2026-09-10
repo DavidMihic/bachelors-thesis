@@ -36,6 +36,7 @@ setup(
             "handle_pose_fusion = kmr_iiwa_perception.handle_pose_fusion:main",
             "tcp_wrench_estimator = kmr_iiwa_perception.tcp_wrench_estimator:main",
             "perception_accuracy_logger = kmr_iiwa_perception.perception_accuracy_logger:main",
+            "lidar_wall_collision = kmr_iiwa_perception.lidar_wall_collision:main",
         ],
     },
 )

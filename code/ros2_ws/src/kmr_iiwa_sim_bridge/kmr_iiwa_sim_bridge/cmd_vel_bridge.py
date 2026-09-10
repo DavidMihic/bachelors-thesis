@@ -35,14 +35,14 @@ parser.add_argument(
 parser.add_argument("--headless", action="store_true", help="Pokreni bez GUI-ja")
 parser.add_argument(
     "--skip-ground-plane",
-    action="store_true",
+    action="store_false",
     help="Ne dodaji default ground plane - koristi ako ucitavas integracijsku "
     "scenu (npr. build_integration_scene.py output) koja ga vec ima.",
 )
 parser.add_argument(
     "--articulation-prim-path",
     type=str,
-    default="/kmr_iiwa/base_link",
+    default="/World/Robot/base_link",
     help="Prim path root artikulacije (provjeri u check.py ispisu ako se razlikuje)",
 )
 parser.add_argument(
@@ -129,12 +129,15 @@ def main():
     ros_thread.start()
 
     # from handle_gt_publisher import HandleGroundTruth
+    from door_gt_publisher import DoorGroundTruth
 
     # gt = HandleGroundTruth(
     #     tag_a_path="/World/Door/handle_tag_a",
     #     tag_b_path="/World/Door/handle_tag_b",
     #     base_path="/World/Robot/base_link",
     # )
+
+    gt_door = DoorGroundTruth()
 
     print(f"[INFO] Artikulacija: {args.articulation_prim_path}")
     print(f"[INFO] cmd_vel topic: {args.cmd_vel_topic}")
@@ -157,7 +160,16 @@ def main():
             robot.set_angular_velocities(np.array([[0.0, 0.0, ang_z]]))
 
             world.step(render=not args.headless)
+
+            # DIJAGNOSTIKA: usporedi zadanu i stvarnu brzinu odmah nakon koraka
+            # v_meas = robot.get_linear_velocities()[0]
+            # print(
+            #     f"[VEL] zadano ({world_vx:+.3f}, {world_vy:+.3f})  "
+            #     f"izmjereno ({v_meas[0]:+.3f}, {v_meas[1]:+.3f}, {v_meas[2]:+.3f})"
+            # )
+
             # gt.publish()
+            gt_door.publish()
     except KeyboardInterrupt:
         pass
     finally:

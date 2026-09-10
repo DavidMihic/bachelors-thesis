@@ -65,6 +65,7 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 
+from kmr_iiwa_task.add_door_collision import quat_rotate_vector
 from kmr_iiwa_task.handle_approach import run_grasp_sequence, spin_node_forever
 
 
@@ -116,8 +117,8 @@ class DoorTaskNode(Node):
         self.declare_parameter("kp_yaw", 1.2)
 
         # --- Settle kriterij (debounce protiv suma) ---
-        self.declare_parameter("pos_tolerance_m", 0.05)
-        self.declare_parameter("yaw_tolerance_rad", 0.08)
+        self.declare_parameter("pos_tolerance_m", 0.03)
+        self.declare_parameter("yaw_tolerance_rad", 0.04)
         self.declare_parameter("settle_ticks", 10)
 
         # --- Limiti brzine ---
@@ -250,11 +251,30 @@ class DoorTaskNode(Node):
     def _drive_toward_tag(self, transform):
         tx = transform.transform.translation.x
         ty = transform.transform.translation.y
+        q = transform.transform.rotation
 
-        bearing = math.atan2(ty, tx)
-        err_x = tx - self.standoff
-        err_y = ty
-        err_yaw = bearing
+        # Normala vrata (izlazi iz plohe, prema robotu) - ista projekcija
+        # tag Z-osi na vodoravnu ravninu kao u add_door_collision.py
+        # (build_vertical_panel_orientation), jer tag ima nagib/roll sum
+        # koji bi inace pokvario racun. Bearing-only pristup (stara
+        # verzija) ne garantira okomitost - holonomna baza moze
+        # zadovoljiti "tag je tocno ispred" iz beskonacno mnogo smjerova,
+        # ovisno samo o putanji prilaska.
+        nx, ny, _ = quat_rotate_vector([q.x, q.y, q.z, q.w], [0.0, 0.0, 1.0])
+        norm = math.hypot(nx, ny)
+        if norm < 1e-6:
+            # Degenerirano (tag gleda gotovo okomito gore/dolje) - fallback
+            # na stari bearing pristup radije nego da robot stane.
+            bearing = math.atan2(ty, tx)
+            nx, ny = -math.cos(bearing), -math.sin(bearing)
+            norm = 1.0
+        nx, ny = nx / norm, ny / norm
+
+        # Ciljna tocka: standoff duz PRAVE normale, ne "gdje god trenutno
+        # gledam tag". Ciljni yaw: robot okrenut USUPROT normali (u vrata).
+        err_x = tx + self.standoff * nx
+        err_y = ty + self.standoff * ny
+        err_yaw = math.atan2(-ny, -nx)
 
         lin_x = apply_speed_floor(
             self.kp_x * err_x, self.max_lin, self.min_lin, abs(err_x), self.pos_tol

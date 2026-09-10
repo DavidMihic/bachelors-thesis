@@ -31,7 +31,13 @@ parser.add_argument("--static-friction", type=float, default=1.2)
 parser.add_argument("--dynamic-friction", type=float, default=1.0)
 parser.add_argument("--restitution", type=float, default=0.0)
 parser.add_argument(
-    "--material-path", type=str, default="/kmr_iiwa_rl/Looks/GripperFingerFriction"
+    "--material-name",
+    type=str,
+    default="PhysicsMaterial",
+    help="Ime materijala. Stvara se kao DIJETE prima na koji se veze, da ostane "
+    "unutar referenciranog podstabla - apsolutna putanja izvan njega se pri "
+    "referenciranju ne rezolvira i USD je odbaci ('refers to a path outside "
+    "the scope of the reference. Ignoring.').",
 )
 
 AppLauncher.add_app_launcher_args(parser)
@@ -40,7 +46,7 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-from pxr import Usd, UsdPhysics, UsdShade  # noqa: E402
+from pxr import Usd, UsdPhysics, UsdShade, PhysxSchema  # noqa: E402
 
 
 def main():
@@ -86,11 +92,14 @@ def main():
             continue
         # materijal treba postojati i unutar OVOG layera (cross-layer reference na main
         # stage material ne rezolvira se kad se ovaj layer otvori samostalno)
-        sub_mat_prim = sub_stage.DefinePrim(args_cli.material_path, "Material")
+        mat_path = spec.path.AppendChild(args_cli.material_name)
+        sub_mat_prim = sub_stage.DefinePrim(mat_path, "Material")
         sub_phys_mat = UsdPhysics.MaterialAPI.Apply(sub_mat_prim)
         sub_phys_mat.CreateStaticFrictionAttr().Set(args_cli.static_friction)
         sub_phys_mat.CreateDynamicFrictionAttr().Set(args_cli.dynamic_friction)
         sub_phys_mat.CreateRestitutionAttr().Set(args_cli.restitution)
+        physx_mat = PhysxSchema.PhysxMaterialAPI.Apply(sub_mat_prim)
+        physx_mat.CreateFrictionCombineModeAttr().Set("min")
         sub_material = UsdShade.Material(sub_mat_prim)
         UsdShade.MaterialBindingAPI.Apply(sub_prim).Bind(
             sub_material, materialPurpose="physics"
