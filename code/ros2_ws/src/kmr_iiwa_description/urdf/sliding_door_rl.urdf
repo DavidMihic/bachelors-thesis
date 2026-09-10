@@ -127,4 +127,59 @@
     <origin xyz="0.02 0.65 1.0" rpy="0 0 0"/>
   </joint>
 
+  <!-- ===================== WALLS (left/right) ============================
+       Lijevi zid je U RAVNINI vrata (x=0, isto kao kod zakretnih vrata) -
+       krilo nikad ne ide na y<0 (donja granica door_dof_joint je 0), pa tu
+       nema rizika od sudara i flush spoj je ispravan.
+       Desni zid je odmaknut 0.02 m iza straznje plohe krila (x=-0.02),
+       centar x=-0.07 - to je strana u koju krilo ULAZI kad se otvara.
+       Duljina svakog zida 2.5 m, Y-pozicije rub na 0 i na 0.85 - slobodan
+       prolaz ostaje 0.85 m. -->
+
+  <link name="wall_left">
+    <visual>
+      <origin xyz="0 -1.25 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 2.5 2.0"/></geometry>
+      <material name="frame_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 -1.25 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 2.5 2.0"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 -1.25 1.0"/>
+      <mass value="100"/>
+      <inertia ixx="85.4" iyy="33.4" izz="52.1" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="wall_left_joint" type="fixed">
+    <parent link="door_frame"/>
+    <child link="wall_left"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="wall_right">
+    <visual>
+      <origin xyz="0 2.10 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 2.5 2.0"/></geometry>
+      <material name="frame_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 2.10 1.0" rpy="0 0 0"/>
+      <geometry><box size="0.06 2.5 2.0"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 2.10 1.0"/>
+      <mass value="100"/>
+      <inertia ixx="85.4" iyy="33.4" izz="52.1" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="wall_right_joint" type="fixed">
+    <parent link="door_frame"/>
+    <child link="wall_right"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
 </robot>
