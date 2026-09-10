@@ -31,6 +31,7 @@ setup(
             "open_revolute = kmr_iiwa_task.open_revolute:main",
             "rl_door_inference = kmr_iiwa_task.rl_door_inference:main",
             "base_speed_test = kmr_iiwa_task.base_speed_test:main",
+            "pass_through_door = kmr_iiwa_task.pass_through_door:main",
         ],
     },
 )
