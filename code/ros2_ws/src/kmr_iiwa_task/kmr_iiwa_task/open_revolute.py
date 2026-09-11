@@ -87,7 +87,8 @@ TAG_TO_HINGE_M = 0.425
 # Vektor od sredista taga do osi sarke, U OKVIRU TAGA. door_tag_center stoji na
 # xyz="0.021 0.425 1.0" u door_leaf, s rpy="0 1.5708 0" - pa su osi taga:
 #   tagX -> -leafZ,  tagY -> +leafY (sirina krila),  tagZ -> +leafX (normala).
-# Clan -0.021 je odmak taga OD PLOHE krila; bez njega procjena sarke promasuje
+# Clan -0.021 je odmak taga od sredine krila (vrata 40 mm, pola je 20 mm plus 1 mm debljina taga);
+# bez njega procjena sarke promasuje
 # za 21 mm duz normale vrata (izmjereno protiv GT-a).
 TAG_TO_HINGE_VEC = [0.0, -TAG_TO_HINGE_M, -0.021]
 
