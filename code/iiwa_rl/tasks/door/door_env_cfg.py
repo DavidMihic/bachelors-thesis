@@ -492,44 +492,6 @@ class DoorRevoluteLearnedBaseEnvCfg(DoorRevoluteEnvCfg):
         self.rewards.base_alignment.weight = -6.0
 
 
-# --- Ablacija: fiksna impedancija ---------------------------------------
-# Uz pose_rel je maksimalna sila ~ K * position_scale, pa jedna fiksna
-# vrijednost NIJE postena usporedba: preniska ne moze razviti silu za
-# zatvarac (25 Nm / 0.72 m = 35 N), previsoka se bori s ogranicenjem. Zato se
-# pusta vise vrijednosti i izvjestava se NAJBOLJA - inace je usporedba
-# namjestena u korist varijabilne impedancije.
-#
-# Uz position_scale = 0.015:
-#    2000  ->  30 N max, na granici izvedivog
-#    6000  ->  90 N max, srednje
-#   15000  -> 225 N max, isti strop kao varijabilna (kruto upravljanje)
-#
-# MIJENJA SE RUCNO izmedju runova sweepa; posljednja vrijednost ostaje
-# zapisana ovdje pa provjeri je prije nego pokrenes usporedbu.
-FIXED_STIFFNESS_ABLATION = 15000.0
-
-
-@configclass
-class DoorRevoluteFixedEnvCfg(DoorRevoluteEnvCfg):
-    """Kontrolna skupina: politika uci SAMO kamo pomicati referencu, ne i
-    koliko biti kruta. Akcija pada s 12 na 6 brojeva; sve ostalo - nagrada,
-    opazanje, randomizacija, broj iteracija - ostaje identicno, sto je i
-    smisao ablacije."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.actions.arm.controller_cfg.impedance_mode = "fixed"
-        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
-
-
-@configclass
-class DoorRevoluteLearnedBaseFixedEnvCfg(DoorRevoluteLearnedBaseEnvCfg):
-    def __post_init__(self):
-        super().__post_init__()
-        self.actions.arm.controller_cfg.impedance_mode = "fixed"
-        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
-
-
 @configclass
 class DoorSlidingEnvCfg(DoorEnvCfg):
     """Klizna vrata. DoorEnvCfg vec nosi klizne postavke kao default, pa ovdje
@@ -549,17 +511,6 @@ class DoorSlidingEnvCfg(DoorEnvCfg):
         # nulu. Zakretna vrata to ne pokazuju jer se ondje baza jedva zakrece
         # (0.4% od progressa).
         self.rewards.base_alignment.weight = -0.1
-
-
-@configclass
-class DoorSlidingFixedEnvCfg(DoorSlidingEnvCfg):
-    """Kontrolna skupina za klizna vrata. Ista logika kao zakretna varijanta:
-    politika uci samo kamo pomicati referencu, ne i koliko biti kruta."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.actions.arm.controller_cfg.impedance_mode = "fixed"
-        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
 
 
 @configclass
@@ -592,16 +543,6 @@ class DoorSlidingLearnedBaseEnvCfg(DoorSlidingEnvCfg):
         self.rewards.base_alignment.weight = -0.1
 
         self.curriculum = CurriculumCfg()
-
-
-@configclass
-class DoorSlidingLearnedBaseFixedEnvCfg(DoorSlidingLearnedBaseEnvCfg):
-    """Kontrolna skupina za klizna vrata s naucenom bazom."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.actions.arm.controller_cfg.impedance_mode = "fixed"
-        self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
 
 
 @configclass
