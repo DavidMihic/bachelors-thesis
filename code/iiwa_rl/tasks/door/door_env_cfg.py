@@ -453,6 +453,13 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         # samo u konfiguraciji hvata - kandidat za uzrok je izabrana grana
         # inverzne kinematike, ne upravljanje.
 
+        # Prag uspjeha odvojen od normalizacije progressa: 0.5 rad (28.6 st.)
+        # je dovoljno da se vrata "pomaknu", ali premalo da robot prodje.
+        # Krilo je siroko 0.85 m, otvor 0.87 m - tek oko 90 stupnjeva krilo
+        # izlazi iz koridora kojim baza prolazi. Normalizacija progressa ostaje
+        # na SUCCESS_REVOLUTE_RAD da kalibracija tezina ne ode u vjetar.
+        self.rewards.success.params["threshold"] = 1.57
+
 
 @configclass
 class DoorRevoluteLearnedBaseEnvCfg(DoorRevoluteEnvCfg):
