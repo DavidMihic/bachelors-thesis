@@ -9,7 +9,7 @@ import gymnasium as gym
 
 from . import agents
 from .door_env_cfg import (
-    DoorEnvCfg,
+    DoorSlidingEnvCfg,
     DoorSlidingLearnedBaseEnvCfg,
     DoorRevoluteEnvCfg,
     DoorRevoluteLearnedBaseEnvCfg,
@@ -24,7 +24,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": DoorEnvCfg,
+        "env_cfg_entry_point": DoorSlidingEnvCfg,
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DoorPPORunnerCfg",
     },
 )

@@ -98,7 +98,14 @@ def main():
                 proximity = mdp.base_leaf_proximity(
                     env.unwrapped, SceneEntityCfg("robot")
                 )
-                print("baza - krilo:", proximity[0].item())
+                print("razmak baza - krilo:", proximity[0].item())
+                obstacles = env.unwrapped.cfg.rewards.wall_intrusion.params["obstacles"]
+                wall_clearance = mdp.base_wall_clearance(
+                    env.unwrapped, obstacles, SceneEntityCfg("robot")
+                )
+                print("razmak baza - zid:", wall_clearance[0].item())
+                w = mdp.manipulability_index(env.unwrapped, SceneEntityCfg("robot"))
+                print("manipulabilnost w:", w[0].item())
 
             count += 1
 

@@ -37,6 +37,7 @@ from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import GaussianNoiseCfg
@@ -52,6 +53,8 @@ from .door_cfg import (
     REVOLUTE_FREE_RESISTANCE,
     SLIDING_DOOR_CFG,
     SLIDING_RESISTANCE,
+    REVOLUTE_OBSTACLES,
+    SLIDING_OBSTACLES,
 )
 from .door_events import randomize_door_resistance
 from .robot_cfg import KMR_IIWA_CFG
@@ -213,6 +216,17 @@ class ObservationsCfg:
             # pri deploymentu nema.
             noise=GaussianNoiseCfg(mean=0.0, std=0.5),
         )
+        wall_offsets = ObsTerm(
+            func=mdp.wall_offsets_b,
+            params={
+                "obstacles": SLIDING_OBSTACLES,
+                "robot_cfg": SceneEntityCfg("robot"),
+            },
+            # 1 cm, koliko je izmjerena stabilnost sredista otvora iz lidara
+            # kod klasicnog pristupa. Bez suma politika uci na savrsenoj
+            # geometriji koju pri deploymentu nema.
+            noise=GaussianNoiseCfg(mean=0.0, std=0.01),
+        )
         last_action = ObsTerm(func=base_mdp.last_action)
 
         def __post_init__(self):
@@ -244,6 +258,29 @@ class RewardsCfg:
         weight=-2.0,
         params={"comfort_band": 0.35, "robot_cfg": SceneEntityCfg("robot")},
     )
+    singularity = RewTerm(
+        func=mdp.singularity_penalty,
+        # Izmjereno: zaglavljeni env sjedi na w=0.038 (normirano 0.37) kroz
+        # cijelu epizodu, dok uspjesni drzi w=0.10. Uz staru tezinu -5 i
+        # nenormiranu kaznu to je bilo 0.3% od progressa - preslabo da
+        # politika izbjegne stanje iz kojeg nema povratka.
+        weight=-20.0,
+        params={"min_manipulability": 0.06, "robot_cfg": SceneEntityCfg("robot")},
+    )
+    arm_acceleration = RewTerm(
+        func=base_mdp.joint_acc_l2,
+        weight=-0.0005,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names="iiwa_joint_[1-7]")},
+    )
+    arm_jerk = RewTerm(
+        func=mdp.arm_jerk_penalty,
+        # Kalibrirano, ne pogodjeno: pri -1e-5 je clan bio -32.6, dakle ~7x veci
+        # od progressa iz dovrsenog runa (4.69 kod kliznih) - politika bi prvo
+        # naucila ne micati se. Jerk je drugi derivat i skalira s 1/dt^2, pa je
+        # sirova vrijednost reda 3e6; sitna tezina je posljedica toga, ne previd.
+        weight=-1.0e-7,
+        params={"robot_cfg": SceneEntityCfg("robot")},
+    )
     excess_force = RewTerm(
         func=mdp.total_force_penalty,
         weight=-0.05,
@@ -252,12 +289,34 @@ class RewardsCfg:
             "robot_cfg": SceneEntityCfg("robot"),
         },
     )
-    # Baza je siroka 1.08 m, pa 0.5 m od osi krila drzi platformu izvan
-    # njega, a kvaka je na 0.72 m od sarke i ostaje dohvatljiva.
+    gripper_alignment = RewTerm(
+        func=mdp.gripper_alignment_penalty,
+        weight=-3.0,
+        params={"robot_cfg": SceneEntityCfg("robot")},
+    )
+    base_alignment = RewTerm(
+        func=mdp.base_alignment_penalty,
+        weight=-1.0,
+        params={"robot_cfg": SceneEntityCfg("robot")},
+    )
     base_intrusion = RewTerm(
         func=mdp.base_intrusion_penalty,
         weight=-20.0,
-        params={"min_distance": 0.5, "robot_cfg": SceneEntityCfg("robot")},
+        # Spusteno s 0.10: uz kaznu na singularitet politika vise ne smije
+        # ispruziti ruku, pa mora prici blize bazom. Pri 0.10 se ta dva
+        # zahtjeva sudaraju - base_hit je skocio s 0 na 0.11 i oscilira.
+        # 0.05 je i dalje pravi razmak od RUBA baze do krila, dakle 5 cm
+        # stvarnog zracnog prostora, ne mjereno od sredista.
+        params={"min_clearance": 0.05, "robot_cfg": SceneEntityCfg("robot")},
+    )
+    wall_intrusion = RewTerm(
+        func=mdp.base_wall_intrusion_penalty,
+        weight=-20.0,
+        params={
+            "min_clearance": 0.15,
+            "obstacles": SLIDING_OBSTACLES,
+            "robot_cfg": SceneEntityCfg("robot"),
+        },
     )
     action_rate = RewTerm(func=base_mdp.action_rate_l2, weight=-0.002)
     # Bonus PO KORAKU za drzanje vrata otvorenima - zato tezina 2, ne 50.
@@ -283,7 +342,15 @@ class TerminationsCfg:
     )
     base_hit = DoneTerm(
         func=mdp.base_hit_leaf,
-        params={"min_distance": 0.3, "robot_cfg": SceneEntityCfg("robot")},
+        params={"min_clearance": 0.02, "robot_cfg": SceneEntityCfg("robot")},
+    )
+    wall_hit = DoneTerm(
+        func=mdp.base_hit_wall,
+        params={
+            "min_clearance": 0.02,
+            "obstacles": SLIDING_OBSTACLES,
+            "robot_cfg": SceneEntityCfg("robot"),
+        },
     )
 
 
@@ -378,6 +445,13 @@ class DoorRevoluteEnvCfg(DoorEnvCfg):
         # Klizna rade unutar udobnog raspona i ondje ista kazna zaustavlja
         # napredak na ~0.485 m.
         self.rewards.joint_saturation.weight = -2.0
+        # NAPOMENA (izmjereno, ne pretpostavka): uz nultu akciju w kod
+        # zakretnih pada 0.10 -> 0.067 kroz ~6 s, a iiwa_joint_3 zavrsi na
+        # tvrdom zglobnom limitu. nullspace_stiffness 10/30/300 → ista ravnoteza 0.066, mijenja se samo brzina
+        # (samo brze konvergira u istu ravnotezu), pa uzrok nije nullspace.
+        # Klizna vrata isti problem nemaju (w stabilan ~0.09), a razlika je
+        # samo u konfiguraciji hvata - kandidat za uzrok je izabrana grana
+        # inverzne kinematike, ne upravljanje.
 
 
 @configclass
@@ -449,7 +523,28 @@ class DoorRevoluteLearnedBaseFixedEnvCfg(DoorRevoluteLearnedBaseEnvCfg):
 
 
 @configclass
-class DoorSlidingFixedEnvCfg(DoorEnvCfg):
+class DoorSlidingEnvCfg(DoorEnvCfg):
+    """Klizna vrata. DoorEnvCfg vec nosi klizne postavke kao default, pa ovdje
+    ide samo ono sto je specificno za klizna a razlikuje se od zajednicke baze.
+
+    Postoji da bi klizna imala svoje mjesto, isto kao DoorRevoluteEnvCfg -
+    inace bi se klizni override-i morali pisati ili u zajednicku bazu (gdje bi
+    ih naslijedila i zakretna) ili u svaku od cetiri klizne varijante zasebno.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Kod kliznih baza mora pratiti krilo 0.8 m ustranu, sto trazi zakret.
+        # Pri -1.0 je base_alignment bio NAJVECI clan nagrade (-0.0138) dok je
+        # progress bio sesti (0.0066): politika je naucila stajati mirno,
+        # time_out 1.0 kroz 800 iteracija, jerk i akceleracija asimptotski na
+        # nulu. Zakretna vrata to ne pokazuju jer se ondje baza jedva zakrece
+        # (0.4% od progressa).
+        self.rewards.base_alignment.weight = -0.1
+
+
+@configclass
+class DoorSlidingFixedEnvCfg(DoorSlidingEnvCfg):
     """Kontrolna skupina za klizna vrata. Ista logika kao zakretna varijanta:
     politika uci samo kamo pomicati referencu, ne i koliko biti kruta."""
 
@@ -460,7 +555,7 @@ class DoorSlidingFixedEnvCfg(DoorEnvCfg):
 
 
 @configclass
-class DoorSlidingLearnedBaseEnvCfg(DoorEnvCfg):
+class DoorSlidingLearnedBaseEnvCfg(DoorSlidingEnvCfg):
     """Klizna vrata s bazom u prostoru akcije.
 
     Zrcalna klasa DoorRevoluteLearnedBaseEnvCfg, samo nasljeduje bazicnu
@@ -481,6 +576,14 @@ class DoorSlidingLearnedBaseEnvCfg(DoorEnvCfg):
             },
             use_default_offset=False,
         )
+        # Kod kliznih baza mora pratiti krilo 0.8 m ustranu, sto trazi zakret.
+        # Pri -1.0 je base_alignment bio NAJVECI clan nagrade (-0.0138) dok je
+        # progress bio sesti (0.0066): politika je naucila stajati mirno,
+        # time_out 1.0 kroz 800 iteracija, jerk i akceleracija asimptotski na
+        # nulu. Zakretna to ne pokazuju jer se ondje baza jedva zakrece.
+        self.rewards.base_alignment.weight = -0.1
+
+        self.curriculum = CurriculumCfg()
 
 
 @configclass
@@ -491,3 +594,17 @@ class DoorSlidingLearnedBaseFixedEnvCfg(DoorSlidingLearnedBaseEnvCfg):
         super().__post_init__()
         self.actions.arm.controller_cfg.impedance_mode = "fixed"
         self.actions.arm.controller_cfg.motion_stiffness_task = FIXED_STIFFNESS_ABLATION
+
+
+@configclass
+class CurriculumCfg:
+    door_resistance = CurrTerm(
+        func=mdp.resistance_curriculum,
+        params={
+            "steps_per_iteration": 24,  # = num_steps_per_env iz rsl_rl_ppo_cfg
+            "start_iterations": 300,
+            "full_iterations": 1500,
+            "max_friction": 60.0,
+            "max_damping": 50.0,
+        },
+    )

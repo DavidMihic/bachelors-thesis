@@ -130,6 +130,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 import iiwa_rl.tasks.door  # noqa: E402, F401  - registrira Isaac-Door-* zadatke
 from iiwa_rl.tasks.door import door_mdp as mdp  # noqa: E402
+from iiwa_rl.tasks.door.robot_cfg import BASE_JOINTS  # noqa: E402
 from iiwa_rl.tasks.door.door_cfg import (  # noqa: E402
     HANDLE_LOCAL_REVOLUTE,
     HANDLE_LOCAL_SLIDING,
@@ -138,7 +139,7 @@ from iiwa_rl.tasks.door.door_cfg import (  # noqa: E402
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 
-def print_diagnostics(env, handle_local, label=""):
+def print_diagnostics(env, handle_local, label="", i=0):
     """Gdje je TCP, gdje MISLIMO da je kvaka, i gdje su vrata.
 
     Kljucna usporedba je |TCP - kvaka|: ako je velika a hvat vizualno drzi,
@@ -146,14 +147,22 @@ def print_diagnostics(env, handle_local, label=""):
     stvarnom klizanju. Poza korijena vrata otkriva je li reset uopce uspio
     pomaknuti vrata - kod fix_root_link=True PhysX drzi korijen na pozi iz
     spawna i write_root_pose_to_sim moze ostati bez ucinka.
+
+    Parametar i je indeks env-a. Dok hvat drzi kvaku, sustav je ZATVOREN
+    kinematicki lanac: baza -> ruka -> hvataljka -> kvaka -> krilo -> sarka
+    -> okvir, a okvir je usidren (fix_root_link=True). Dok ruka ima rezerve
+    u zglobovima, lanac je popustljiv i baza se moze gibati; cim ruka sjedne
+    na TVRDE limite, postaje kruta poluga i lanac se geometrijski zakljuca.
+    Zato se env-ovi moraju usporedjivati pojedinacno - redak "zglobovi
+    (udio)" je ono sto razlikuje env koji radi od onog koji stoji.
     """
     unwrapped = env.unwrapped
     robot = unwrapped.scene["robot"]
     door = unwrapped.scene["door"]
 
     tcp_ids, _ = robot.find_bodies("gripper_tcp")
-    tcp = robot.data.body_pos_w[0, tcp_ids[0]]
-    handle = mdp.handle_pos_w(unwrapped, handle_local, SceneEntityCfg("door"))[0]
+    tcp = robot.data.body_pos_w[i, tcp_ids[0]]
+    handle = mdp.handle_pos_w(unwrapped, handle_local, SceneEntityCfg("door"))[i]
     leaf_ids, _ = door.find_bodies("door_leaf")
 
     print(f"  handle_local   : {handle_local}")
@@ -166,27 +175,57 @@ def print_diagnostics(env, handle_local, label=""):
     print(f"  TCP            : {tcp.tolist()}")
     print(f"  kvaka(racunata): {handle.tolist()}")
     print(f"  |TCP - kvaka|  : {(tcp - handle).norm().item():.4f}")
-    print(f"  door root      : {door.data.root_pos_w[0].tolist()}")
-    print(f"  door leaf      : {door.data.body_pos_w[0, leaf_ids[0]].tolist()}")
-    print(f"  env origin     : {unwrapped.scene.env_origins[0].tolist()}")
-    print(f"  door dof       : {door.data.joint_pos[0].tolist()}")
+    print(f"  door root      : {door.data.root_pos_w[i].tolist()}")
+    print(f"  door leaf      : {door.data.body_pos_w[i, leaf_ids[0]].tolist()}")
+    print(f"  env origin     : {unwrapped.scene.env_origins[i].tolist()}")
+    print(f"  door dof       : {door.data.joint_pos[i].tolist()}")
 
     arm_ids, _ = robot.find_joints("iiwa_joint_[1-7]")
-    q = robot.data.joint_pos[0, arm_ids]
-    lower = robot.data.soft_joint_pos_limits[0, arm_ids, 0]
-    upper = robot.data.soft_joint_pos_limits[0, arm_ids, 1]
-    print(f"  zglobovi (udio): {((q - lower) / (upper - lower)).tolist()}")
+    q = robot.data.joint_pos[i, arm_ids]
+    lower = robot.data.soft_joint_pos_limits[i, arm_ids, 0]
+    upper = robot.data.soft_joint_pos_limits[i, arm_ids, 1]
+    fraction = (q - lower) / (upper - lower)
+    print(f"  zglobovi (udio): {[round(v, 4) for v in fraction.tolist()]}")
+
+    # Zaglavljeni zglob je onaj koji je sjeo na rub raspona. Ispisuje se
+    # eksplicitno jer je u sedam decimalnih brojeva lako previdjeti 1.0000,
+    # a upravo to je razlika izmedju env-a koji radi i onog koji stoji.
+    pinned = [
+        f"iiwa_joint_{j + 1}={fraction[j].item():.4f}"
+        for j in range(len(arm_ids))
+        if fraction[j] > 0.98 or fraction[j] < 0.02
+    ]
+    print(f"  NA LIMITU      : {pinned if pinned else 'nijedan'}")
+
+    # Manipulabilnost pada na nulu tocno na singularitetu. Uz zglob na limitu
+    # ovo razdvaja dva razloga zaglavljivanja: tvrdi limit naspram losa
+    # kondicioniranost jakobijana.
+    w = mdp.manipulability_index(unwrapped, SceneEntityCfg("robot"))[i]
+    print(f"  manipulabilnost: {w.item():.5f}")
+
     # base_link, NE root: korijen artikulacije je link 'world' i fiksan je u
     # ishodistu env-a otkad robot ima fiktivne zglobove za pokretnu bazu.
     base_idx = robot.find_bodies("base_link")[0][0]
-    base_pos = robot.data.body_pos_w[0, base_idx]
+    base_pos = robot.data.body_pos_w[i, base_idx]
     print(f"  baza (svijet)  : {base_pos.tolist()}")
     print(f"  |TCP - baza|   : {(tcp - base_pos).norm().item():.4f}")
 
-    force = mdp.tcp_wrench(unwrapped, SceneEntityCfg("robot"))[0, :3]
+    # Zglobovi baze: ako naredba stize a ovi stoje, baza je blokirana
+    # zatvorenim lancem, a ne neispravnim pogonom.
+    base_joint_ids = [robot.find_joints(nm)[0][0] for nm in BASE_JOINTS]
+    print(
+        f"  zglobovi baze  : "
+        f"{[round(v, 4) for v in robot.data.joint_pos[i, base_joint_ids].tolist()]}"
+    )
+    print(
+        f"  brzine baze    : "
+        f"{[round(v, 4) for v in robot.data.joint_vel[i, base_joint_ids].tolist()]}"
+    )
+
+    force = mdp.tcp_wrench(unwrapped, SceneEntityCfg("robot"))[i, :3]
     print(f"  sila lokalno   : {force.tolist()}")
 
-    obs = unwrapped.observation_manager.compute_group("policy")[0]
+    obs = unwrapped.observation_manager.compute_group("policy")[i]
     print("  obs :", obs.tolist())
 
 
@@ -331,7 +370,8 @@ def main(
 
     # Epizode se trenutno prekidaju u prvom koraku, pa je stanje ODMAH
     # nakon reseta jedino koje se stigne vidjeti - zato prije prvog stepa.
-    print_diagnostics(env, handle_local, "prije prvog koraka")
+    for i in range(min(2, env.unwrapped.num_envs)):
+        print_diagnostics(env, handle_local, f"prije prvog koraka / env {i}", i)
 
     # simulate environment
     count = 0
@@ -352,7 +392,8 @@ def main(
         # Prvih nekoliko koraka svaki, dalje rjedje: ako epizoda traje
         # jedan korak, ispis na svakih 60 koraka nikad ne uhvati trenutak.
         if count < 5 or count % 60 == 0:
-            print_diagnostics(env, handle_local, f"korak {count}")
+            for i in range(min(2, env.unwrapped.num_envs)):
+                print_diagnostics(env, handle_local, f"korak {count} / env {i}", i)
             print("  krutost:", actions[0, 6:].tolist())
 
         if args_cli.video:

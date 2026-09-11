@@ -67,12 +67,33 @@ class DoorResistanceRanges:
 
 # Klizna vrata nemaju povratnu oprugu - stiffness je fiksno 0. Otpor je
 # kotrljanje kolica: lagana unutarnja vrata ~10 N, teska ~60 N.
+#
+# GORNJA GRANICA SPUSTENA S 60 NA 30 N. Nije zbog fizike nego zbog ucenja:
+# pri (5, 60) politika NIJE naucila nista - progress padne na 0.011, sve
+# kazne asimptotski na nulu, time_out 1.0, dakle naucila je mirovati. Uzrok
+# je sto u ranoj fazi nagrada za napredak dugo ostaje ispod kazni kad je
+# vecina uzoraka pretezaka, pa je nulta akcija optimalna. Kontrolni run na
+# (5, 10) to potvrdjuje: progress 0 -> 4.41 kroz 100 iteracija i dalje raste.
+#
+# 30 N je kompromis: srednji uzorak je 17.5 N umjesto 32.5, dakle vecina je
+# savladiva, a teska vrata i dalje postoje u raspodjeli. Zakretna vrata ovaj
+# problem nemaju jer im je otpor red velicine manji (0.5-5 Nm na sarki).
+#
+# Damping je skaliran u istom omjeru (50 -> 25) da odnos statickog i
+# brzinski ovisnog otpora ostane isti; inace bi pri brzom vucenju prigusenje
+# postalo dominantni otpor i mijenjalo bi karakter zadatka.
+#
+# AKO politika i pri (5, 30) stane, sljedeci korak NIJE dalje spustati nego
+# uvesti kurikulum (CurriculumTermCfg): poceti na (5, 15) i siriti raspon
+# kako progress raste. Trajno lagana vrata znace da politika nikad ne vidi
+# teska, sto je losije za rad nego postupno otezavanje.
 SLIDING_RESISTANCE = DoorResistanceRanges(
     stiffness=(0.0, 0.0),
-    damping=(5.0, 50.0),
-    friction=(5.0, 60.0),
+    damping=(5.0, 10.0),
+    friction=(5.0, 10.0),
     effort_limit=(200.0, 200.0),
 )
+
 
 # Zakretna vrata bez zatvaraca: samo trenje sarke.
 REVOLUTE_FREE_RESISTANCE = DoorResistanceRanges(
@@ -155,3 +176,31 @@ def door_articulation_cfg(
 
 SLIDING_DOOR_CFG = door_articulation_cfg("sliding_door_rl.usd")
 REVOLUTE_DOOR_CFG = door_articulation_cfg("revolute_door_rl.usd")
+
+# --- Prepreke oko otvora, u LOKALNOM okviru vrata -------------------------
+# Zidovi su fixed-jointom zavareni na door_frame, a door_frame je KORIJEN
+# artikulacije vrata uz fix_root_link=True. Poza zida zato slijedi izravno iz
+# root poze vrata i nista se ne mora pratiti zasebno. (Pazi: za ROBOTA vrijedi
+# obrnuto - ondje je korijen 'world' i mora se citati body poza base_linka.
+# Vrata takav fiktivni lanac nemaju.)
+#
+# Svaka prepreka je (x, y_od, y_do): duzina u vodoravnoj ravnini po kojoj se
+# mjeri udaljenost baze. Debljina zida (0.06 m) se zanemaruje - red velicine
+# manja od praga izbjegavanja.
+#
+# ZAKRETNA: lijevi zid (y -2.56..-0.06) i stup dovratnika sa strane sarke
+# (y -0.06..0) su koplanarni i dodiruju se, pa idu kao JEDNA duzina -2.56..0.
+# Dovratnik je time pokriven bez zasebnog clana. Desni zid pocinje na y=0.87 i
+# ujedno JE dovratnik sa strane kvake. Slobodan otvor: y 0..0.87.
+REVOLUTE_OBSTACLES = (
+    (0.0, -2.56, 0.0),
+    (0.0, 0.87, 3.37),
+)
+
+# KLIZNA: pri tlu nema stupa dovratnika - okvir je vodilica na z=2.05, iznad
+# baze i izvan njenog puta. Ostaju dva zida, oba na x=-0.07 da krilo klizi
+# ispred njih. Slobodan otvor: y 0..0.85.
+SLIDING_OBSTACLES = (
+    (-0.07, -2.50, 0.0),
+    (-0.07, 0.85, 3.35),
+)

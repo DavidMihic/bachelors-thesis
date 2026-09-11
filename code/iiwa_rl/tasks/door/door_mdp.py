@@ -24,11 +24,13 @@ OKVIRI, dvije zamke:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers.manager_base import ManagerTermBase
 from isaaclab.utils.math import quat_apply, quat_mul
 
 from .door_cfg import DOOR_DOF_JOINT, DOOR_LEAF_BODY
@@ -36,6 +38,7 @@ from .robot_cfg import BASE_BODY, GRIPPER_OPEN, GRIPPER_CLOSED, BASE_JOINTS
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    from isaaclab.managers import RewardTermCfg
 
 # Link koji je dijete gripper_wrist_jointa - tu se cita transmitirana sila.
 # Robot se NE konvertira s merge-joints upravo zato da ovaj link prezivi.
@@ -52,6 +55,10 @@ Z_AXIS = torch.tensor([0.0, 0.0, 1.0])
 # Sirina krila iz URDF-a. Krilo se pruza od sarke duz lokalne +Y osi.
 LEAF_WIDTH_M = 0.85
 
+# Tlocrt baze iz kmr_base.xacro (kmr_length x kmr_width). base_link je u
+# geometrijskom sredistu tlocrta, pri tlu.
+BASE_HALF_LENGTH_M = 0.54
+BASE_HALF_WIDTH_M = 0.315
 
 # --------------------------------------------------------------------------
 # Pomocne
@@ -109,6 +116,25 @@ def _base_frame(robot: Articulation) -> tuple[torch.Tensor, torch.Tensor]:
     """Poza tijela base_link u svijetu. Vidi zamku 2 u docstringu modula."""
     idx = _bodies(robot, "base", BASE_BODY)[0]
     return robot.data.body_pos_w[:, idx], robot.data.body_quat_w[:, idx]
+
+
+def _tcp_jacobian(env: "ManagerBasedRLEnv", robot_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Geometrijski jakobijan TCP-a naspram zglobova ruke, (num_envs, 6, 7).
+
+    Korijen artikulacije je fiksan (world), pa PhysX jakobijan NE sadrzi
+    redak za bazu: indeks tijela ide s pomakom -1, a indeksi zglobova BEZ
+    pomaka od 6 (taj pomak vrijedi samo za plutajuci korijen). Grana za
+    is_fixed_base=False postoji samo radi ispravnosti - trenutno je uvijek
+    fix_root_link=True (robot_cfg.py, tocka 3).
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    tcp_idx = _bodies(robot, "tcp", TCP_BODY)[0]
+    arm_ids = _joints(robot, "arm", "iiwa_joint_[1-7]")
+    jacobi_body_idx = tcp_idx - 1 if robot.is_fixed_base else tcp_idx
+    jacobi_joint_ids = arm_ids if robot.is_fixed_base else [i + 6 for i in arm_ids]
+    return robot.root_physx_view.get_jacobians()[
+        :, jacobi_body_idx, :, jacobi_joint_ids
+    ]
 
 
 def _door_dof(env: "ManagerBasedRLEnv", asset_cfg: SceneEntityCfg) -> torch.Tensor:
@@ -336,6 +362,77 @@ def joint_saturation_penalty(
     return ((fraction - 0.5).abs() - comfort_band).clamp(min=0.0).sum(dim=-1)
 
 
+def manipulability_index(
+    env: "ManagerBasedRLEnv", robot_cfg: SceneEntityCfg
+) -> torch.Tensor:
+    """Yoshikawin indeks manipulabilnosti w = sqrt(det(J J^T)), (num_envs,).
+
+    Nula TOCNO na kinematickom singularitetu i nigdje drugdje - izravna mjera
+    kondicioniranosti jakobijana, za razliku od joint_saturation_penalty koji
+    je proxy (blizina zglobnih limita; robot moze biti singularan i duboko
+    unutar udobnog raspona, npr. kad se lakat poklopi sa zapescem).
+
+    Nije privilegirana velicina: ovisi samo o vlastitim ocitanjima zglobova
+    (forward kinematika), pa je legitimna i za opazanje ako ikad zatreba.
+    """
+    jacobian = _tcp_jacobian(env, robot_cfg)
+    gram = jacobian @ jacobian.transpose(-1, -2)
+    return torch.sqrt(torch.clamp(torch.linalg.det(gram), min=0.0))
+
+
+def singularity_penalty(
+    env: "ManagerBasedRLEnv",
+    min_manipulability: float,
+    robot_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Kazna kad manipulabilnost padne ispod praga - blizina singulariteta.
+
+    Isti hinge oblik kao base_intrusion_penalty. PRAG NIJE IZMJEREN (za
+    razliku od ostalih pragova u ovom fajlu) - w(q) treba ocitati kroz
+    nominalnu putanju hvata (zero_agent.py sad ispisuje w svaki 60. korak)
+    prije nego se broj ovdje smatra konacnim.
+    """
+    w = manipulability_index(env, robot_cfg)
+    return ((min_manipulability - w) / min_manipulability).clamp(min=0.0, max=1.0)
+
+
+class arm_jerk_penalty(ManagerTermBase):
+    """Kazna na trzaj (jerk) zglobova ruke - drugi derivat brzine.
+
+    joint_acc dolazi gotov iz sim-a; jerk ne postoji kao gotovo polje, pa se
+    racuna kao razlika uzastopnih ocitanja akceleracije kroz env.step_dt.
+
+    RewardManager zove reset(env_ids) pri svakom resetu, sto sprjecava lazan
+    skok jerka iz stanja prije reseta - joint_vel se resetira na nulu
+    (reset_grasp_and_door), pa je akceleracija na pocetku epizode stvarno 0,
+    ne artefakt.
+    """
+
+    def __init__(self, cfg: "RewardTermCfg", env: "ManagerBasedRLEnv"):
+        super().__init__(cfg, env)
+        robot_cfg: SceneEntityCfg = cfg.params["robot_cfg"]
+        robot: Articulation = env.scene[robot_cfg.name]
+        self._joint_ids = _joints(robot, "arm", "iiwa_joint_[1-7]")
+        self._prev_acc = torch.zeros(
+            env.num_envs, len(self._joint_ids), device=env.device
+        )
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            self._prev_acc.zero_()
+        else:
+            self._prev_acc[env_ids] = 0.0
+
+    def __call__(
+        self, env: "ManagerBasedRLEnv", robot_cfg: SceneEntityCfg
+    ) -> torch.Tensor:
+        robot: Articulation = env.scene[robot_cfg.name]
+        acc = robot.data.joint_acc[:, self._joint_ids]
+        jerk = (acc - self._prev_acc) / env.step_dt
+        self._prev_acc = acc.clone()
+        return torch.sum(torch.square(jerk), dim=-1)
+
+
 def base_leaf_proximity(
     env: "ManagerBasedRLEnv",
     robot_cfg: SceneEntityCfg,
@@ -370,31 +467,229 @@ def base_leaf_proximity(
     edge = p1 - p0
     t = ((base - p0) * edge).sum(dim=-1) / (edge * edge).sum(dim=-1).clamp(min=1e-6)
     closest = p0 + t.clamp(0.0, 1.0).unsqueeze(-1) * edge
-    return (base - closest).norm(dim=-1)
+    delta = (closest - base).unsqueeze(1)  # (n_env, 1, 2)
+    return _footprint_clearance(robot, delta).squeeze(-1)
 
 
 def base_intrusion_penalty(
     env: "ManagerBasedRLEnv",
-    min_distance: float,
+    min_clearance: float,
     robot_cfg: SceneEntityCfg,
     door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
 ) -> torch.Tensor:
-    """Kazna kad baza pride krilu blize od min_distance."""
-    distance = base_leaf_proximity(env, robot_cfg, door_cfg)
-    return (min_distance - distance).clamp(min=0.0)
+    """Kazna kad rub baze pride krilu blize od min_clearance. 0 = dodir."""
+    clearance = base_leaf_proximity(env, robot_cfg, door_cfg)
+    return (min_clearance - clearance).clamp(min=0.0)
 
 
 def base_hit_leaf(
     env: "ManagerBasedRLEnv",
-    min_distance: float,
+    min_clearance: float,
     robot_cfg: SceneEntityCfg,
     door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
     grace_steps: int = 10,
 ) -> torch.Tensor:
-    """Terminacija: baza je usla u krilo. Kazna sama guranje samo poskupljuje,
+    """Terminacija: baza je u krilu. Kazna sama guranje samo poskupljuje,
     a ono se politici i dalje isplati jer otvara vrata do punog limita."""
-    distance = base_leaf_proximity(env, robot_cfg, door_cfg)
-    return (distance < min_distance) & _past_grace(env, grace_steps)
+    clearance = base_leaf_proximity(env, robot_cfg, door_cfg)
+    return (clearance < min_clearance) & _past_grace(env, grace_steps)
+
+
+def base_hit_wall(
+    env: "ManagerBasedRLEnv",
+    min_clearance: float,
+    obstacles: tuple[tuple[float, float, float], ...],
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+    grace_steps: int = 10,
+) -> torch.Tensor:
+    """Terminacija: baza je u zidu. Zid postoji i fizicki (URDF), pa bi bez
+    ovoga epizoda tekla do timeouta dok politika gura u nepomicnu prepreku."""
+    clearance = base_wall_clearance(env, obstacles, robot_cfg, door_cfg)
+    return (clearance < min_clearance) & _past_grace(env, grace_steps)
+
+
+def base_wall_intrusion_penalty(
+    env: "ManagerBasedRLEnv",
+    min_clearance: float,
+    obstacles: tuple[tuple[float, float, float], ...],
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Kazna kad rub baze pride zidu ili dovratniku blize od min_clearance."""
+    clearance = base_wall_clearance(env, obstacles, robot_cfg, door_cfg)
+    return (min_clearance - clearance).clamp(min=0.0)
+
+
+def gripper_alignment_penalty(
+    env: "ManagerBasedRLEnv",
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Kazna kad prilazna os hvataljke nije okomita na plohu krila.
+
+    TCP +Z je prilazna os, +Y lezi duz sipke kvake (gripper.xacro). Normala
+    krila je njegova lokalna os X (kutija 0.04 x 0.85 x 2.0, X je debljina).
+
+    Uzima se APSOLUTNI kosinus, pa je clan neosjetljiv na predznak - okret za
+    180 stupnjeva je fizicki nemoguc dok hvat drzi, a ovako se ne mora
+    pogadjati orijentacija okvira.
+
+    Zasto uopce: hvat drzi samo trenjem cetiri prsta na sipci promjera 28 mm.
+    Rotacija oko osi sipke je kotrljanje po kontaktu, sto trenje ne sprjecava -
+    kazna na silu i jerk to ne vide jer se TCP pritom jedva pomakne.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    door: Articulation = env.scene[door_cfg.name]
+
+    tcp_quat = robot.data.body_quat_w[:, _bodies(robot, "tcp", TCP_BODY)[0]]
+    leaf_quat = door.data.body_quat_w[:, _bodies(door, "leaf", DOOR_LEAF_BODY)[0]]
+
+    axis_z = torch.tensor([0.0, 0.0, 1.0], device=env.device).expand(env.num_envs, 3)
+    axis_x = torch.tensor([1.0, 0.0, 0.0], device=env.device).expand(env.num_envs, 3)
+    approach = quat_apply(tcp_quat, axis_z)
+    normal = quat_apply(leaf_quat, axis_x)
+
+    return 1.0 - (approach * normal).sum(dim=-1).abs()
+
+
+def base_alignment_penalty(
+    env: "ManagerBasedRLEnv",
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Kazna kad baza nije okomita na ravninu vrata.
+
+    Referenca je door_frame (nepomican), NE krilo - baza se treba poravnati s
+    otvorom, a ne pratiti krilo dok se ono zakrece.
+
+    Zasto: otvor je 0.87 m, baza je 1.08 x 0.63 m. Okomito prolazi, dijagonalno
+    NE prolazi ni na koji nacin. Ruka je montirana na (0.363, -0.184) od
+    sredista baze, pa zakret baze stvarno prosiruje doseg - zato je ovo mekana
+    kazna, a ne tvrdo ogranicenje: politika smije zakrenuti bazu kad joj treba,
+    ali to mora nesto kostati.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    door: Articulation = env.scene[door_cfg.name]
+
+    _, base_quat = _base_frame(robot)
+    axis_x = torch.tensor([1.0, 0.0, 0.0], device=env.device).expand(env.num_envs, 3)
+    forward = quat_apply(base_quat, axis_x)
+    normal = quat_apply(door.data.root_quat_w, axis_x)
+
+    return 1.0 - (forward * normal).sum(dim=-1).abs()
+
+
+def _obstacle_deltas(
+    env: "ManagerBasedRLEnv",
+    obstacles: tuple[tuple[float, float, float], ...],
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Vektori od baze do najblize tocke svake prepreke, (num_envs, n_seg, 2).
+
+    Vodoravna ravnina, u svijetu. Za razliku od krila, koje se giba i cita se
+    preko body poze, zidovi su zavareni na korijen artikulacije vrata - pa je
+    root poza dovoljna i tocna.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    door: Articulation = env.scene[door_cfg.name]
+    n_env, n_seg = env.num_envs, len(obstacles)
+    n_pt = n_seg * 2
+
+    local = torch.tensor(
+        [[[x, y0, 0.0], [x, y1, 0.0]] for x, y0, y1 in obstacles],
+        device=env.device,
+    )  # (n_seg, 2, 3)
+    local = local.unsqueeze(0).expand(n_env, n_seg, 2, 3).reshape(n_env * n_pt, 3)
+    # quat_apply ne broadcasta - oba argumenta se flataju na (-1, 4) i (-1, 3),
+    # pa se kvaternion mora eksplicitno replicirati po tockama.
+    quat = door.data.root_quat_w.unsqueeze(1).expand(n_env, n_pt, 4).reshape(-1, 4)
+    pts = quat_apply(quat, local).reshape(n_env, n_seg, 2, 3)
+    pts = pts + door.data.root_pos_w[:, None, None, :]
+
+    a, b = pts[:, :, 0, :2], pts[:, :, 1, :2]
+    base = robot.data.body_pos_w[:, _bodies(robot, "base", BASE_BODY)[0], :2]
+    p = base.unsqueeze(1)
+
+    ab = b - a
+    t = ((p - a) * ab).sum(dim=-1) / (ab * ab).sum(dim=-1).clamp(min=1e-6)
+    closest = a + t.clamp(0.0, 1.0).unsqueeze(-1) * ab
+    return closest - p
+
+
+def _footprint_clearance(robot: Articulation, deltas: torch.Tensor) -> torch.Tensor:
+    """Razmak od RUBA baze do prepreke, (num_envs, n_prepreka).
+
+    deltas su vektori od SREDISTA baze do najblize tocke prepreke. Baza je
+    pravokutnik 1.08 x 0.63 m, pa mjerenje od sredista podcjenjuje dodir za
+    0.54 m (celno) do 0.625 m (ugao pri zakretu od 45 stupnjeva). Prag ispod
+    te vrijednosti je zato besmislen: baza dodiruje zid dok je kazna jos nula,
+    sto je politika i iskoristila.
+
+    Oduzima se potporna funkcija pravokutnika u smjeru prepreke,
+    h_x |d_x| + h_y |d_y| u okviru baze. Za ravan zid je to egzaktno; inace
+    podcjenjuje razmak, dakle grijesi na sigurnu stranu.
+
+    Nula znaci dodir. Negativno znaci prodor.
+    """
+    distance = deltas.norm(dim=-1)
+    direction = deltas / distance.unsqueeze(-1).clamp(min=1e-6)
+    n_env, n_obs, _ = deltas.shape
+
+    flat = torch.cat(
+        [direction, torch.zeros(n_env, n_obs, 1, device=deltas.device)], dim=-1
+    ).reshape(-1, 3)
+    _, base_quat = _base_frame(robot)
+    q_inv = quat_inv(base_quat).unsqueeze(1).expand(n_env, n_obs, 4).reshape(-1, 4)
+    local = quat_apply(q_inv, flat).reshape(n_env, n_obs, 3)
+
+    support = (
+        BASE_HALF_LENGTH_M * local[..., 0].abs()
+        + BASE_HALF_WIDTH_M * local[..., 1].abs()
+    )
+    return distance - support
+
+
+def base_wall_clearance(
+    env: "ManagerBasedRLEnv",
+    obstacles: tuple[tuple[float, float, float], ...],
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Razmak ruba baze do najblize prepreke (zid ili dovratnik). 0 = dodir."""
+    robot: Articulation = env.scene[robot_cfg.name]
+    deltas = _obstacle_deltas(env, obstacles, robot_cfg, door_cfg)
+    return _footprint_clearance(robot, deltas).min(dim=-1).values
+
+
+def wall_offsets_b(
+    env: "ManagerBasedRLEnv",
+    obstacles: tuple[tuple[float, float, float], ...],
+    robot_cfg: SceneEntityCfg,
+    door_cfg: SceneEntityCfg = SceneEntityCfg("door"),
+) -> torch.Tensor:
+    """Vektori baza -> najbliza tocka svake prepreke, u okviru baze.
+
+    (num_envs, 2*n_seg). Daje i SMJER, ne samo udaljenost - bez smjera politika
+    zna da je blizu necega ali ne na koju stranu da se makne.
+
+    NIJE privilegirana velicina: pri deploymentu isto daje lidar. Klasicni
+    pristup ondje nalazi otvor sirine 0.85 m sa sredistem stabilnim unutar
+    ~1 cm, pa su zidovi stvarno mjerljivi - za razliku od kuta vrata, koji
+    ostaje iskljucivo u nagradi.
+    """
+    robot: Articulation = env.scene[robot_cfg.name]
+    deltas = _obstacle_deltas(env, obstacles, robot_cfg, door_cfg)
+    n_env, n_seg, _ = deltas.shape
+
+    flat = torch.cat(
+        [deltas, torch.zeros(n_env, n_seg, 1, device=env.device)], dim=-1
+    ).reshape(-1, 3)
+    _, base_quat = _base_frame(robot)
+    q_inv = quat_inv(base_quat).unsqueeze(1).expand(n_env, n_seg, 4).reshape(-1, 4)
+    local = quat_apply(q_inv, flat).reshape(n_env, n_seg, 3)
+    return local[..., :2].reshape(n_env, 2 * n_seg)
 
 
 def is_open(
@@ -534,3 +829,40 @@ def reset_grasp_and_door(
     door.write_root_pose_to_sim(
         torch.cat([door_pos, door_quat], dim=-1), env_ids=env_ids
     )
+
+
+def resistance_curriculum(
+    env: "ManagerBasedRLEnv",
+    env_ids: Sequence[int],
+    steps_per_iteration: int,
+    start_iterations: int,
+    full_iterations: int,
+    max_friction: float,
+    max_damping: float,
+) -> float:
+    """Postupno siri raspon otpora kliznih vrata kako trening napreduje.
+
+    ZASTO: pri fiksnom rasponu (5, 30) i (5, 60) politika NIJE naucila nista -
+    progress padne ispod 0.02, sve kazne asimptotski na nulu, time_out 1.0.
+    Pri (5, 10) uci normalno (progress 5.33 na 300 iteracija). Prijelaz je
+    ostar, ne postupan: ili politika u prvih ~50 iteracija nadje nesto sto
+    pomice vrata, ili nauci mirovati i tu ostane. Kurikulum je zato jedini
+    nacin da politika vidi i teska vrata a da ih vidi TEK kad ih moze nositi.
+
+    Vraca trenutnu gornju granicu trenja - RewardManager to logira, pa se u
+    tensorboardu vidi je li kurikulum stvarno napredovao.
+    """
+    # PPO iteracija je num_steps_per_env koraka okoline (24), NE duljina
+    # epizode. Dijeljenje s max_episode_length daje 25x premali broj, pa
+    # kurikulum nikad ne krene.
+    iteration = env.common_step_counter / steps_per_iteration
+    ratio = (iteration - start_iterations) / (full_iterations - start_iterations)
+    ratio = min(max(ratio, 0.0), 1.0)
+
+    friction_high = 10.0 + ratio * (max_friction - 10.0)
+    damping_high = 10.0 + ratio * (max_damping - 10.0)
+
+    ranges = env.cfg.events.door_resistance.params["ranges"]
+    ranges.friction = (5.0, friction_high)
+    ranges.damping = (5.0, damping_high)
+    return friction_high
