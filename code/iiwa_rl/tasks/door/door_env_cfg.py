@@ -483,6 +483,14 @@ class DoorRevoluteLearnedBaseEnvCfg(DoorRevoluteEnvCfg):
             use_default_offset=False,
         )
 
+        # -1.0 je bilo premalo: izmjereno 0.9% od progressa, politika je kaznu
+        # platila i svejedno vozila dijagonalno. Clan je 1-|cos|, sto je blago
+        # za umjerene kutove (0.134 pri 30 stupnjeva), pa trazi vecu tezinu da
+        # se uopce osjeti. Uz gate po napretku kazna grize tek kad su vrata
+        # otvorena, pa ne smeta dosegu u ranoj fazi - ruka je montirana izvan
+        # osi, na (0.363, -0.184), gdje zakret baze stvarno prosiruje doseg.
+        self.rewards.base_alignment.weight = -6.0
+
 
 # --- Ablacija: fiksna impedancija ---------------------------------------
 # Uz pose_rel je maksimalna sila ~ K * position_scale, pa jedna fiksna

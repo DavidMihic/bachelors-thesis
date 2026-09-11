@@ -577,7 +577,15 @@ def base_alignment_penalty(
     forward = quat_apply(base_quat, axis_x)
     normal = quat_apply(door.data.root_quat_w, axis_x)
 
-    return 1.0 - (forward * normal).sum(dim=-1).abs()
+    misalignment = 1.0 - (forward * normal).sum(dim=-1).abs()
+    # Okomitost baze je bitna tek pri PROLASKU, ne dok robot vuce krilo.
+    # Skaliranjem s napretkom kazna je nula na pocetku (gdje bi se borila
+    # protiv dosega - ruka je montirana izvan osi, na (0.363, -0.184), pa
+    # zakret baze stvarno prosiruje radni prostor) i puna tek kad su vrata
+    # otvorena, kad zakrenuta baza od 1.08 m vise ne prolazi kroz otvor
+    # od 0.87 m.
+    gate = (_door_dof(env, door_cfg).abs() / 0.5).clamp(0.0, 1.0)
+    return misalignment * gate
 
 
 def _obstacle_deltas(
