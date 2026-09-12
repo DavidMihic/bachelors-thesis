@@ -23,7 +23,7 @@ konvolucijskom neuronskom mrežom \cite{stuede2019door} --- ali traže skup poda
 učenja koji nisu bili u opsegu ovog rada. Posljedice su navedene u potpoglavlju
 \ref{sec:perception-limits}.
 
-Od dviju uobičajenih porodica oznaka odabran je AprilTag \cite{olson2011apriltag}, i to zbog
+Od dviju uobičajenih familija oznaka odabran je AprilTag \cite{olson2011apriltag}, i to zbog
 zrelijih detekcijskih biblioteka u sustavu ROS 2 te točnije procjene orijentacije pri malim
 oznakama nego što je daju usporedive alternative.
 
@@ -152,7 +152,7 @@ zamijeniti bez izmjena u kodu koji izvodi zadatak.
 
 Dvije skupine oznaka imaju bitno različit radni doseg. Središnja oznaka pouzdano se detektira s
 udaljenosti od dva do tri metra, pa pokriva cijelu fazu prilaza. Male oznake na kvaki traže
-udaljenost manju od otprilike 1,35 m, i to ne zbog razlučivosti nego zbog vidnog polja: bliže
+udaljenost manju od otprilike 1.2 m, i to ne zbog razlučivosti nego zbog vidnog polja: bliže
 od te udaljenosti gornja oznaka izlazi iz kadra, a procjena smjera duž kvake gubi jednu od dviju
 mjernih točaka i orijentacija hvatišta se raspada.
 
@@ -198,7 +198,7 @@ Postupak je ponovljen 15 puta za obje vrste vrata.
 
 Može se primijetiti da je odstupanje položaja i smjera kvake veće pri većim udaljenostima,
 a pri manjim udaljenostima je pogreška svega desetak milimetara, odnosno par stupnjeva.
-Kako se poza hvatišta traži tek kad je robot dovoljno blizu vratima (oko 1.35 m), pogreška
+Kako se poza hvatišta traži tek kad je robot dovoljno blizu vratima (oko 1.2 m), pogreška
 percepcije je dovoljno mala da ne igra veliku ulogu. Pogreška se kasnije kompenzira
 prilikom faze hvata, kako je opisano u \ref{sec:gripper} i \ref{sec:prilaz}.
 

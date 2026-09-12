@@ -52,7 +52,7 @@ gdje je legitiman jer se računa izvan regulacijske petlje. Opažanje sadrži:
     \item linearnu i kutnu brzinu vrha alata, u istom koordinatnom sustavu;
     \item brzinu platforme, (linearna brzina po $x$ i $y$, kutna brzina oko $z$);
     \item procijenjenu silu i moment na vrhu alata, uz Gaussov šum standardne devijacije
-          0,5 N, koji odgovara šumu stvarnog procjenitelja iz poglavlja \ref{ch:procjena};
+          0.5 N, koji odgovara šumu stvarnog procjenitelja iz poglavlja \ref{ch:procjena};
     \item vektore od platforme do najbližih točaka susjednih prepreka (zid, dovratnik), uz
           Gaussov šum standardne devijacije 1 cm, koji odgovara izmjerenoj stabilnosti sredine
           otvora iz skena lidara u klasičnom pristupu (potpoglavlje \ref{sec:prolazak});
@@ -123,15 +123,15 @@ težinu razmjerno odstupanju od tog cilja.
 \end{table}
 
 Napredak se ne normira na puni hod zgloba vrata, već na puno manju referentnu vrijednost
-0,6 m kod kliznih i 0,5 rad (28,6 \textdegree) kod zakretnih vrata. Uz normiranje na puni hod,
+0.6 m kod kliznih i 0.5 rad (28.6 \textdegree) kod zakretnih vrata. Uz normiranje na puni hod,
 manji pomak nosio bi premalu nagradu da nadjača kazne, pa bi politika naučila dovesti vrata na
 određeni pomak i ne pomicati ih dalje. Time napredak nije ograničen odozgo, već smije prijeći jedinicu,
 što znači da nagrada za napredak raste što su vrata više otvorena.
 
 Prag uspjeha, koji određuje kada se dodjeljuje bonus iz zadnjeg retka tablice \ref{tab:nagrada},
 zasebna je veličina. Kod kliznih vrata poklapa se s referentnom vrijednošću normalizacije i iznosi
-0,6 m. Kod zakretnih vrata je namjerno odvojen i postavljen na 1,57 rad (90 \textdegree).
-Razlog je taj što je 0,5 rad dovoljno da se vrata mjerljivo pomaknu, ali nije dovoljno da
+0.6 m. Kod zakretnih vrata je namjerno odvojen i postavljen na 1.57 rad (90 \textdegree).
+Razlog je taj što je 0.5 rad dovoljno da se vrata mjerljivo pomaknu, ali nije dovoljno da
 robot kroz njih prođe. Normalizacija je pritom ostala nepromijenjena kako bi kalibracija
 svih ostalih veličina ostala valjana. Bonus za uspjeh dodjeljuje se po koraku dok je pomak
 iznad praga, a ne kao jednokratna nagrada uz prekid epizode.
@@ -189,7 +189,8 @@ jer ostvarena nagrada sama po sebi ne govori je li akcija bila dobra: visoka nag
 posljedica povoljnog stanja, a ne odabrane akcije. Razlika između stvarno ostvarenog povrata i
 kritikove procjene, tzv. prednost, ono je što ulazi u ažuriranje aktora. Pozitivna
 prednost pojačava vjerojatnost odabrane akcije, negativna je smanjuje. Diskontni faktor $\gamma$
-i faktor $\lambda$ iz tablice \ref{tab:ppo} upravljaju upravo izračunom te prednosti.
+i faktor generalizirane procjene prednosti $\lambda$ iz tablice \ref{tab:ppo} upravljaju upravo
+izračunom te prednosti.
 
 Obje su mreže potpuno povezane i međusobno neovisne, bez zajedničkih slojeva, s trima skrivenim
 slojevima širine 256, 128 i 64. Aktor preslikava 41 ulaznu veličinu, koliko ih ima opažanje iz
@@ -232,11 +233,11 @@ negativne vrijednosti postavlja na nulu odbacila polovicu njihova raspona.
         Broj epoha učenja po ažuriranju                    & 5                                            \\
         Broj mini-grupa                                    & 4                                            \\
         Stopa učenja                                       & $10^{-3}$, prilagodljiva prema odstupanju KL \\
-        Diskontni faktor $\gamma$                          & 0,99                                         \\
-        Faktor generalizirane procjene prednosti $\lambda$ & 0,95                                         \\
-        Koeficijent obrezivanja                            & 0,2                                          \\
-        Koeficijent entropije                              & 0,001                                        \\
-        Početna standardna devijacija politike             & 0,5                                          \\
+        Diskontni faktor $\gamma$                          & 0.99                                         \\
+        Faktor generalizirane procjene prednosti $\lambda$ & 0.95                                         \\
+        Koeficijent obrezivanja                            & 0.2                                          \\
+        Koeficijent entropije                              & 0.001                                        \\
+        Početna standardna devijacija politike             & 0.5                                          \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -268,17 +269,17 @@ terminacija u nastavku tablice jesu udjeli epizoda i zbrajaju se na jedinicu.
         \toprule
         Veličina                           & Zakretna vrata & Klizna vrata \\
         \midrule
-        Član napretka                      & 18,93          & 9,87         \\
-        \quad prosječni otvor kroz epizodu & 0,947 rad      & 0,592 m      \\
-        Član uspjeha                       & 0,743          & 0,831        \\
-        \quad udio epizode iznad praga     & 0,371          & 0,416        \\
+        Član napretka                      & 18.93          & 9.87         \\
+        \quad prosječni otvor kroz epizodu & 0.947 rad      & 0.592 m      \\
+        Član uspjeha                       & 0.743          & 0.831        \\
+        \quad udio epizode iznad praga     & 0.371          & 0.416        \\
         \midrule
-        Udio: izgubljen hvat               & 0,072          & 0,000        \\
-        Udio: dodir krila                  & 0,061          & 0,003        \\
-        Udio: dodir zida                   & 0,002          & 0,000        \\
-        Udio: prekomjerna sila             & 0,006          & 0,028        \\
-        Udio: istek vremena                & 0,860          & 0,969        \\
-        Duljina epizode, koraci            & 561,8          & 587,4        \\
+        Udio: izgubljen hvat               & 0.072          & 0.000        \\
+        Udio: dodir krila                  & 0.061          & 0.003        \\
+        Udio: dodir zida                   & 0.002          & 0.000        \\
+        Udio: prekomjerna sila             & 0.006          & 0.028        \\
+        Udio: istek vremena                & 0.860          & 0.969        \\
+        Duljina epizode, koraci            & 561.8          & 587.4        \\
         \bottomrule
     \end{tabular}
 \end{table}

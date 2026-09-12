@@ -1,0 +1,31 @@
+\frontmatterchapter{SUMMARY}
+
+This thesis addresses the problem of autonomous interaction between a mobile manipulator and its
+environment, using the opening of two types of door, revolute and sliding, as the test case. A
+complete system integrating perception, force and torque estimation, and contact control was
+developed in simulation for the KUKA KMR iiwa mobile manipulator. The perception module
+determines the position and orientation of the door handle from camera images using visual
+markers, while the force and torque at the tool tip are estimated from joint torques, without a
+dedicated force sensor. The door type is not supplied to the robot as a parameter, but inferred
+from the geometry of the handle.
+
+The control problem is solved by two approaches. The classical, model-based approach performs the
+entire task chain, from approach and grasp through opening to passing through the doorway,
+relying on the constraint geometry computed from perception. The learning-based approach
+formulates the task as a Markov decision process with variable impedance as the action space, so
+that the policy selects the controller stiffness along each axis at every step, and must infer
+the constraint geometry from its own force and displacement observations.
+
+Both approaches were evaluated on the same robot, the same scene and the same success criteria.
+For sliding doors, both reach the full target in every trial. For revolute doors, the classical
+approach reliably opens the door to 50\textdegree{} but cannot exceed approximately
+57\textdegree{}, as the handle slips out of the gripper, whereas the learned policy opens the
+door beyond 90\textdegree{} in 96 \% of episodes, with substantially lower contact forces. The
+conclusion is that explicit knowledge of the constraint geometry is sufficient when that geometry
+is simple and well estimated, but loses its advantage as soon as the task requires the stiffness
+to be adapted during the interaction itself.
+
+\vspace{8mm}
+\noindent\textbf{Key words:} mobile manipulator, physical interaction, environment property
+estimation, impedance control, reinforcement learning, simulation.
+\clearpage

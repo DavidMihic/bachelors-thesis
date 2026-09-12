@@ -1,8 +1,6 @@
 \chapter{UVOD}
 \label{ch:uvod}
 
-TODO: piše se PRETPOSLJEDNJE (prije zaključka), kad su rezultati poznati.
-
 \section{Motivacija}
 \label{sec:motivacija}
 
@@ -12,10 +10,11 @@ se svodi na ponavljanje prethodno naučene i isprogramirane radnje. U takvim uvj
 upravljanje visoke krutosti daje izvrsne rezultate, robot vrlo ponovljivo i bez većih odstupanja
 slijedi zadanu putanju bez obzira na smetnje.
 
-Ta se pretpostavka ruši čim robot izađe iz kaveza. Industrijska okruženja puna su ljudi koji istovremeno
-obavljaju svoje poslove, servise, logističke zadatke i okolnosti koje se mijenjaju između dva izvođenja istog zadatka.
-Odgovor na takve probleme su mobilni manipulatori - sustavi koji integriraju svestranost mobilne platforme
-s artikuliranošću robotske ruke i time uklanjaju ograničenje dosega koje veže nepokretni manipulator za jedno radno mjesto.
+Ta se pretpostavka ruši čim robot izađe iz kaveza. Industrijska okruženja puna su ljudi koji
+istovremeno obavljaju svoje poslove, servise, logističke zadatke i okolnosti koje se mijenjaju
+između dva izvođenja istog zadatka. Odgovor na takve probleme su mobilni manipulatori ---
+sustavi koji integriraju svestranost mobilne platforme s artikuliranošću robotske ruke i time
+uklanjaju ograničenje dosega koje veže nepokretni manipulator za jedno radno mjesto.
 
 Najčešća primjena industrijskih robota je za tzv. \textit{pick-and-place} radnje, ali postoji
 i veliki broj operacija za koje je potrebna uspostava i održavanje fizičkog kontakta, primjerice
@@ -27,11 +26,11 @@ i može oštetiti predmet, okolinu ili samog robota. Zbog toga upravljanje u kon
 čisto pozicijsko, već mora regulirati odnos između položaja i sile \cite{raibert1981hybrid}.
 
 Otvaranje vrata reprezentativan je predstavnik te klase zadataka i zbog toga se u literaturi
-često koristi kao referentni problem \cite{ott2005door}. Vrata su artikulirani objekt čije je gibanje ograničeno
-na jedan stupanj slobode, ali robot taj stupanj slobode ne poznaje unaprijed.
-Drugim riječima, robot ne zna gdje je os šarke, u kojem smjeru se krilo otvara ili koliki je otpor u zglobu.
-Sve to mora zaključiti iz vlastitih mjerenja tijekom interakcije \cite{sturm2011probabilistic}.
-Uz to, hod krila redovito premašuje doseg ruke pri nepomičnoj
+često koristi kao referentni problem \cite{ott2005door}. Vrata su artikulirani objekt čije je
+gibanje ograničeno na jedan stupanj slobode, ali robot taj stupanj slobode ne poznaje unaprijed.
+Drugim riječima, robot ne zna gdje je os šarke, u kojem smjeru se krilo otvara ili koliki je
+otpor u zglobu. Sve to mora zaključiti iz vlastitih mjerenja tijekom interakcije
+\cite{sturm2011probabilistic}. Uz to, hod krila redovito premašuje doseg ruke pri nepomičnoj
 bazi, pa zadatak traži i koordinaciju platforme i manipulatora. Zadatak time istovremeno
 obuhvaća percepciju, procjenu svojstava okoline i upravljanje u kontaktu, što ga čini prikladnim
 ispitnim slučajem za cjelovit sustav.
@@ -48,9 +47,41 @@ prostorom politike čine samu krutost regulatora, pa politika uči ne samo kamo 
 koliko biti popustljiva u pojedinom trenutku \cite{martinmartin2019variable}. Cijena je gubitak
 uvida u razloge odluke i ovisnost o vjernosti simulacije.
 
-Usporedba tih dvaju pristupa ima smisla samo ako se provodi na istom zadatku, istom robotu i istoj fizici okoline.
-Ovaj rad zato oba pristupa razvija za isti sustav (mobilni manipulator KUKA KMR iiwa u simulacijskom okruženju),
-i uspoređuje ih na istim mjerilima uspješnosti.
+Usporedba tih dvaju pristupa ima smisla samo ako se provodi na istom zadatku, istom robotu i
+istoj fizici okoline. Ovaj rad zato oba pristupa razvija za isti sustav (mobilni manipulator
+KUKA KMR iiwa u simulacijskom okruženju), i uspoređuje ih na istim mjerilima uspješnosti.
+
+\section{Cilj i doprinos rada}
+\label{sec:cilj}
+
+Cilj rada je razviti i eksperimentalno vrednovati sustav koji mobilnom manipulatoru omogućuje
+autonomnu interakciju s okolinom, te na tom sustavu usporediti dva pristupa upravljanju. Zadatak
+je konkretiziran otvaranjem vrata dvaju tipova, zakretnih i kliznih, pri čemu robot tip vrata ne
+dobiva kao zadan podatak nego ga prepoznaje sam.
+
+U sklopu rada razvijen je modul percepcije koji iz slike određuje položaj i orijentaciju kvake,
+postupak procjene sile i momenta na vrhu alata iz momenata u zglobovima, bez zasebnog senzora
+sile, te dva međusobno neovisna rješenja zadatka upravljanja. Klasično rješenje izvodi cijeli
+lanac, od prilaska i hvata preko otvaranja do prolaska kroz vrata, oslanjajući se na geometriju
+ograničenja izračunatu iz percepcije. Rješenje temeljeno na učenju zadatak formulira kao
+Markovljev proces odlučivanja s varijabilnom impedancijom u prostoru akcije, pa politika u svakom
+koraku bira koliko će regulator biti krut po svakoj osi, a geometriju ograničenja mora otkriti iz
+vlastitih opažanja sile i pomaka.
+
+Usporedba je pokazala da se prednost jednog pristupa nad drugim ne može izreći općenito, nego
+ovisi o tipu vrata. Kod kliznih vrata, gdje je ograničenje pravac, a smjer sile poklapa se sa
+smjerom gibanja, oba pristupa dosežu puni cilj u svakom pokušaju. Kod zakretnih vrata klasični
+pristup pouzdano otvara vrata do 50\textdegree{}, ali preko otprilike 57\textdegree{} ne može,
+jer kvaka klizne iz prihvatnice, dok naučena politika vrata otvara preko 90\textdegree{} u 96 \%
+epizoda, uz niže kontaktne sile. Eksplicitno poznavanje geometrije time je dovoljno kad je
+geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
+krutosti tijekom same interakcije.
+
+Doprinos rada nije novi postupak upravljanja, nego izravna usporedba dvaju pristupa izvedenih za
+istog robota, istu scenu i ista mjerila uspješnosti, uz dva tipa vrata koja isti zadatak čine
+različito teškim. Cjelokupan je rad proveden u simulaciji, pa se zaključci odnose na model, a
+ograničenja koja iz toga slijede navedena su uz pojedine dijelove sustava i sažeta u poglavlju
+\ref{ch:zakljucak}.
 
 \section{Struktura rada}
 \label{sec:struktura}
@@ -69,10 +100,9 @@ okoline.
 Poglavlja \ref{ch:klasicni} i \ref{ch:rl} predstavljaju dva uspoređivana pristupa upravljanju.
 Prvo opisuje rješenje temeljeno na modelu, organizirano kao slijed faza s eksplicitnom procjenom
 geometrije ograničenja. Drugo opisuje formulaciju zadatka kao Markovljevog procesa odlučivanja,
-prostor stanja i akcija s promjenjivom impedancijom, oblikovanje funkcije nagrade i postupak
+prostor stanja i akcija s promjenjivom impedancijom, oblikovanje funkcije nagrade, te postupak
 učenja.
 
-Poglavlje \ref{ch:rezultati} donosi eksperimentalne rezultate, ablacijske studije i usporedbu
-dvaju pristupa na istoj fizici okoline, uz raspravu o ograničenjima provedene usporedbe.
-
-Poglavlje \ref{ch:zakljucak} sažima postignuto i navodi smjernice za daljnji rad.
+Poglavlje \ref{ch:rezultati} donosi usporedbu dvaju pristupa na istoj sceni i istim mjerilima,
+uz raspravu o tome što razlike znače i o ograničenjima provedene usporedbe. Poglavlje
+\ref{ch:zakljucak} sažima postignuto i navodi smjernice za daljnji rad.

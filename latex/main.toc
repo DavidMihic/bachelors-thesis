@@ -8,78 +8,80 @@
 \contentsline {chapter}{SUMMARY}{x}{chapter*.7}%
 \contentsline {chapter}{\numberline {1.}UVOD}{1}{chapter.1}%
 \contentsline {section}{\numberline {1.1.}Motivacija}{1}{section.1.1}%
-\contentsline {section}{\numberline {1.2.}Struktura rada}{2}{section.1.2}%
-\contentsline {chapter}{\numberline {2.}PREGLED DOSADAŠNJIH ISTRAŽIVANJA}{3}{chapter.2}%
-\contentsline {section}{\numberline {2.1.}Klasični pristupi upravljanju u kontaktu}{3}{section.2.1}%
-\contentsline {section}{\numberline {2.2.}Mobilna manipulacija}{3}{section.2.2}%
-\contentsline {section}{\numberline {2.3.}Interakcija s artikuliranim objektima}{3}{section.2.3}%
-\contentsline {section}{\numberline {2.4.}Pristupi temeljeni na učenju}{3}{section.2.4}%
-\contentsline {chapter}{\numberline {3.}ROBOTSKI SUSTAV I SIMULACIJSKO OKRUŽENJE}{4}{chapter.3}%
-\contentsline {section}{\numberline {3.1.}KMR iiwa — mobilna platforma i manipulator}{4}{section.3.1}%
-\contentsline {subsection}{\numberline {3.1.1.}Mobilna platforma}{4}{subsection.3.1.1}%
-\contentsline {subsection}{\numberline {3.1.2.}Manipulator LBR iiwa 7 R800}{5}{subsection.3.1.2}%
-\contentsline {section}{\numberline {3.2.}Prihvatnica}{6}{section.3.2}%
-\contentsline {section}{\numberline {3.3.}Kamera i njezin nosač}{8}{section.3.3}%
-\contentsline {section}{\numberline {3.4.}Lidar}{9}{section.3.4}%
-\contentsline {section}{\numberline {3.5.}Modeli vrata}{9}{section.3.5}%
-\contentsline {subsection}{\numberline {3.5.1.}Otpor gibanja i njegova randomizacija}{11}{subsection.3.5.1}%
-\contentsline {section}{\numberline {3.6.}Model robota i pretvorba u simulacijski format}{12}{section.3.6}%
-\contentsline {subsection}{\numberline {3.6.1.}Gibanje mobilne platforme}{14}{subsection.3.6.1}%
-\contentsline {section}{\numberline {3.7.}Simulacijsko okruženje}{14}{section.3.7}%
-\contentsline {section}{\numberline {3.8.}Programska arhitektura}{15}{section.3.8}%
-\contentsline {chapter}{\numberline {4.}MODUL PERCEPCIJE}{18}{chapter.4}%
-\contentsline {section}{\numberline {4.1.}Odabir pristupa}{18}{section.4.1}%
-\contentsline {section}{\numberline {4.2.}Raspored oznaka}{18}{section.4.2}%
-\contentsline {section}{\numberline {4.3.}Detekcija oznaka}{20}{section.4.3}%
-\contentsline {section}{\numberline {4.4.}Fuzija dviju oznaka na kvaki}{20}{section.4.4}%
-\contentsline {section}{\numberline {4.5.}Sučelje modula i radni doseg}{21}{section.4.5}%
-\contentsline {section}{\numberline {4.6.}Preciznost percepcijskog modula}{21}{section.4.6}%
-\contentsline {section}{\numberline {4.7.}Ograničenja}{22}{section.4.7}%
-\contentsline {chapter}{\numberline {5.}PROCJENA SVOJSTAVA OKOLINE}{24}{chapter.5}%
-\contentsline {section}{\numberline {5.1.}Procjena sile i momenta na vrhu alata}{24}{section.5.1}%
-\contentsline {subsection}{\numberline {5.1.1.}Svojstva i ograničenja procjene}{24}{subsection.5.1.1}%
-\contentsline {section}{\numberline {5.2.}Procjena svojstava okoline iz odnosa sile i gibanja}{25}{section.5.2}%
-\contentsline {section}{\numberline {5.3.}Uloga procjene u ovom radu}{26}{section.5.3}%
-\contentsline {chapter}{\numberline {6.}KLASIČNI PRISTUP UPRAVLJANJU}{27}{chapter.6}%
-\contentsline {section}{\numberline {6.1.}Struktura zadatka}{27}{section.6.1}%
-\contentsline {section}{\numberline {6.2.}Faza prilaza i hvata}{27}{section.6.2}%
-\contentsline {subsection}{\numberline {6.2.1.}Poravnanje platforme}{27}{subsection.6.2.1}%
-\contentsline {subsection}{\numberline {6.2.2.}Prepoznavanje tipa kvake}{28}{subsection.6.2.2}%
-\contentsline {subsection}{\numberline {6.2.3.}Hvat}{28}{subsection.6.2.3}%
-\contentsline {subsection}{\numberline {6.2.4.}Sidrenje cilja na oznaku}{28}{subsection.6.2.4}%
-\contentsline {section}{\numberline {6.3.}Faza otvaranja}{29}{section.6.3}%
-\contentsline {subsection}{\numberline {6.3.1.}Klizna vrata}{29}{subsection.6.3.1}%
-\contentsline {subsection}{\numberline {6.3.2.}Zakretna vrata}{30}{subsection.6.3.2}%
-\contentsline {section}{\numberline {6.4.}Prolazak kroz vrata}{31}{section.6.4}%
-\contentsline {section}{\numberline {6.5.}Rezultati}{32}{section.6.5}%
-\contentsline {subsection}{\numberline {6.5.1.}Prilazak i hvat}{32}{subsection.6.5.1}%
-\contentsline {subsection}{\numberline {6.5.2.}Zakretna vrata}{32}{subsection.6.5.2}%
-\contentsline {subsection}{\numberline {6.5.3.}Klizna vrata}{32}{subsection.6.5.3}%
-\contentsline {section}{\numberline {6.6.}Ograničenja}{33}{section.6.6}%
-\contentsline {chapter}{\numberline {7.}PRISTUP TEMELJEN NA UČENJU}{35}{chapter.7}%
-\contentsline {section}{\numberline {7.1.}Opseg}{35}{section.7.1}%
-\contentsline {section}{\numberline {7.2.}Formulacija Markovljevog procesa odlučivanja}{36}{section.7.2}%
-\contentsline {subsection}{\numberline {7.2.1.}Prostor opažanja}{36}{subsection.7.2.1}%
-\contentsline {subsection}{\numberline {7.2.2.}Prostor akcija}{36}{subsection.7.2.2}%
-\contentsline {subsection}{\numberline {7.2.3.}Koordinacija platforme i manipulatora}{36}{subsection.7.2.3}%
-\contentsline {subsection}{\numberline {7.2.4.}Funkcija nagrade}{37}{subsection.7.2.4}%
-\contentsline {subsection}{\numberline {7.2.5.}Terminacije}{38}{subsection.7.2.5}%
-\contentsline {subsection}{\numberline {7.2.6.}Nasumičnost pri resetu i kurikulum otpora}{38}{subsection.7.2.6}%
-\contentsline {section}{\numberline {7.3.}Postupak učenja}{39}{section.7.3}%
-\contentsline {section}{\numberline {7.4.}Rezultati}{40}{section.7.4}%
-\contentsline {section}{\numberline {7.5.}Ograničenja}{41}{section.7.5}%
-\contentsline {chapter}{\numberline {8.}EKSPERIMENTALNI REZULTATI I RASPRAVA}{42}{chapter.8}%
-\contentsline {section}{\numberline {8.1.}Protokol usporedbe}{42}{section.8.1}%
-\contentsline {section}{\numberline {8.2.}Uspješnost otvaranja}{42}{section.8.2}%
-\contentsline {section}{\numberline {8.3.}Kontaktne sile}{43}{section.8.3}%
-\contentsline {section}{\numberline {8.4.}Načini otkazivanja}{44}{section.8.4}%
-\contentsline {section}{\numberline {8.5.}Rasprava}{44}{section.8.5}%
-\contentsline {subsection}{\numberline {8.5.1.}Različiti ulazi u isti problem}{44}{subsection.8.5.1}%
-\contentsline {subsection}{\numberline {8.5.2.}Zašto se razlika pojavljuje samo na zakretnim vratima}{44}{subsection.8.5.2}%
-\contentsline {section}{\numberline {8.6.}Ograničenja usporedbe}{45}{section.8.6}%
-\contentsline {chapter}{\numberline {9.}ZAKLJUČAK}{46}{chapter.9}%
-\contentsline {section}{\numberline {9.1.}Glavni nalazi}{46}{section.9.1}%
-\contentsline {section}{\numberline {9.2.}Ograničenja}{47}{section.9.2}%
-\contentsline {section}{\numberline {9.3.}Smjernice za daljnji rad}{47}{section.9.3}%
-\contentsline {chapter}{LITERATURA}{49}{section*.38}%
-\contentsline {chapter}{PRILOZI}{51}{chapter*.40}%
+\contentsline {section}{\numberline {1.2.}Cilj i doprinos rada}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.3.}Struktura rada}{3}{section.1.3}%
+\contentsline {chapter}{\numberline {2.}PREGLED DOSADAŠNJIH ISTRAŽIVANJA}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1.}Klasični pristupi upravljanju u kontaktu}{4}{section.2.1}%
+\contentsline {section}{\numberline {2.2.}Mobilna manipulacija}{5}{section.2.2}%
+\contentsline {section}{\numberline {2.3.}Interakcija s artikuliranim objektima}{5}{section.2.3}%
+\contentsline {section}{\numberline {2.4.}Pristupi temeljeni na učenju}{6}{section.2.4}%
+\contentsline {section}{\numberline {2.5.}Položaj ovog rada}{6}{section.2.5}%
+\contentsline {chapter}{\numberline {3.}ROBOTSKI SUSTAV I SIMULACIJSKO OKRUŽENJE}{7}{chapter.3}%
+\contentsline {section}{\numberline {3.1.}KMR iiwa — mobilna platforma i manipulator}{7}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1.}Mobilna platforma}{7}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.1.2.}Manipulator LBR iiwa 7 R800}{8}{subsection.3.1.2}%
+\contentsline {section}{\numberline {3.2.}Prihvatnica}{9}{section.3.2}%
+\contentsline {section}{\numberline {3.3.}Kamera i njezin nosač}{11}{section.3.3}%
+\contentsline {section}{\numberline {3.4.}Lidar}{12}{section.3.4}%
+\contentsline {section}{\numberline {3.5.}Modeli vrata}{12}{section.3.5}%
+\contentsline {subsection}{\numberline {3.5.1.}Otpor gibanja i njegova randomizacija}{14}{subsection.3.5.1}%
+\contentsline {section}{\numberline {3.6.}Model robota i pretvorba u simulacijski format}{15}{section.3.6}%
+\contentsline {subsection}{\numberline {3.6.1.}Gibanje mobilne platforme}{17}{subsection.3.6.1}%
+\contentsline {section}{\numberline {3.7.}Simulacijsko okruženje}{17}{section.3.7}%
+\contentsline {section}{\numberline {3.8.}Programska arhitektura}{18}{section.3.8}%
+\contentsline {chapter}{\numberline {4.}MODUL PERCEPCIJE}{21}{chapter.4}%
+\contentsline {section}{\numberline {4.1.}Odabir pristupa}{21}{section.4.1}%
+\contentsline {section}{\numberline {4.2.}Raspored oznaka}{21}{section.4.2}%
+\contentsline {section}{\numberline {4.3.}Detekcija oznaka}{23}{section.4.3}%
+\contentsline {section}{\numberline {4.4.}Fuzija dviju oznaka na kvaki}{23}{section.4.4}%
+\contentsline {section}{\numberline {4.5.}Sučelje modula i radni doseg}{24}{section.4.5}%
+\contentsline {section}{\numberline {4.6.}Preciznost percepcijskog modula}{24}{section.4.6}%
+\contentsline {section}{\numberline {4.7.}Ograničenja}{25}{section.4.7}%
+\contentsline {chapter}{\numberline {5.}PROCJENA SVOJSTAVA OKOLINE}{27}{chapter.5}%
+\contentsline {section}{\numberline {5.1.}Procjena sile i momenta na vrhu alata}{27}{section.5.1}%
+\contentsline {subsection}{\numberline {5.1.1.}Svojstva i ograničenja procjene}{27}{subsection.5.1.1}%
+\contentsline {section}{\numberline {5.2.}Procjena svojstava okoline iz odnosa sile i gibanja}{28}{section.5.2}%
+\contentsline {section}{\numberline {5.3.}Uloga procjene u ovom radu}{29}{section.5.3}%
+\contentsline {chapter}{\numberline {6.}KLASIČNI PRISTUP UPRAVLJANJU}{30}{chapter.6}%
+\contentsline {section}{\numberline {6.1.}Struktura zadatka}{30}{section.6.1}%
+\contentsline {section}{\numberline {6.2.}Faza prilaza i hvata}{30}{section.6.2}%
+\contentsline {subsection}{\numberline {6.2.1.}Poravnanje platforme}{30}{subsection.6.2.1}%
+\contentsline {subsection}{\numberline {6.2.2.}Prepoznavanje tipa kvake}{30}{subsection.6.2.2}%
+\contentsline {subsection}{\numberline {6.2.3.}Hvat}{31}{subsection.6.2.3}%
+\contentsline {subsection}{\numberline {6.2.4.}Sidrenje cilja na oznaku}{31}{subsection.6.2.4}%
+\contentsline {section}{\numberline {6.3.}Faza otvaranja}{32}{section.6.3}%
+\contentsline {subsection}{\numberline {6.3.1.}Klizna vrata}{32}{subsection.6.3.1}%
+\contentsline {subsection}{\numberline {6.3.2.}Zakretna vrata}{32}{subsection.6.3.2}%
+\contentsline {section}{\numberline {6.4.}Prolazak kroz vrata}{34}{section.6.4}%
+\contentsline {section}{\numberline {6.5.}Rezultati}{35}{section.6.5}%
+\contentsline {subsection}{\numberline {6.5.1.}Prilazak i hvat}{35}{subsection.6.5.1}%
+\contentsline {subsection}{\numberline {6.5.2.}Zakretna vrata}{35}{subsection.6.5.2}%
+\contentsline {subsection}{\numberline {6.5.3.}Klizna vrata}{35}{subsection.6.5.3}%
+\contentsline {section}{\numberline {6.6.}Ograničenja}{35}{section.6.6}%
+\contentsline {chapter}{\numberline {7.}PRISTUP TEMELJEN NA UČENJU}{37}{chapter.7}%
+\contentsline {section}{\numberline {7.1.}Opseg}{37}{section.7.1}%
+\contentsline {section}{\numberline {7.2.}Formulacija Markovljevog procesa odlučivanja}{38}{section.7.2}%
+\contentsline {subsection}{\numberline {7.2.1.}Prostor opažanja}{38}{subsection.7.2.1}%
+\contentsline {subsection}{\numberline {7.2.2.}Prostor akcija}{38}{subsection.7.2.2}%
+\contentsline {subsection}{\numberline {7.2.3.}Koordinacija platforme i manipulatora}{38}{subsection.7.2.3}%
+\contentsline {subsection}{\numberline {7.2.4.}Funkcija nagrade}{39}{subsection.7.2.4}%
+\contentsline {subsection}{\numberline {7.2.5.}Terminacije}{40}{subsection.7.2.5}%
+\contentsline {subsection}{\numberline {7.2.6.}Nasumičnost pri resetu i kurikulum otpora}{40}{subsection.7.2.6}%
+\contentsline {section}{\numberline {7.3.}Postupak učenja}{41}{section.7.3}%
+\contentsline {section}{\numberline {7.4.}Rezultati}{42}{section.7.4}%
+\contentsline {section}{\numberline {7.5.}Ograničenja}{43}{section.7.5}%
+\contentsline {chapter}{\numberline {8.}EKSPERIMENTALNI REZULTATI I RASPRAVA}{44}{chapter.8}%
+\contentsline {section}{\numberline {8.1.}Protokol usporedbe}{44}{section.8.1}%
+\contentsline {section}{\numberline {8.2.}Uspješnost otvaranja}{44}{section.8.2}%
+\contentsline {section}{\numberline {8.3.}Kontaktne sile}{45}{section.8.3}%
+\contentsline {section}{\numberline {8.4.}Načini otkazivanja}{46}{section.8.4}%
+\contentsline {section}{\numberline {8.5.}Rasprava}{46}{section.8.5}%
+\contentsline {subsection}{\numberline {8.5.1.}Različiti ulazi u isti problem}{46}{subsection.8.5.1}%
+\contentsline {subsection}{\numberline {8.5.2.}Zašto se razlika pojavljuje samo na zakretnim vratima}{46}{subsection.8.5.2}%
+\contentsline {section}{\numberline {8.6.}Ograničenja usporedbe}{47}{section.8.6}%
+\contentsline {chapter}{\numberline {9.}ZAKLJUČAK}{48}{chapter.9}%
+\contentsline {section}{\numberline {9.1.}Glavni nalazi}{48}{section.9.1}%
+\contentsline {section}{\numberline {9.2.}Ograničenja}{49}{section.9.2}%
+\contentsline {section}{\numberline {9.3.}Smjernice za daljnji rad}{49}{section.9.3}%
+\contentsline {chapter}{LITERATURA}{51}{section*.38}%
+\contentsline {chapter}{PRILOZI}{53}{chapter*.40}%

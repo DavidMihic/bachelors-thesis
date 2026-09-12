@@ -55,17 +55,14 @@ prikazan na slici \ref{fig:faze}.
 
 Platforma se dovodi na određenu udaljenost od vrata (potpoglavlje \ref{sec:perception-iface})
 regulacijom položaja prema velikoj oznaci na sredini vrata. Cilj regulacije nije samo
-udaljenost, nego potpuna poza u ravnini: bočni i uzdužni položaj te zakret, sve do zadanih
-tolerancija, nakon čega se platforma zaključava i više se ne pomiče do kraja faze otvaranja.
+udaljenost, nego potpuna poza u ravnini, tj. bočni i uzdužni položaj te zakret, sve do zadanih
+tolerancija.
 
-Ciljna točka i ciljni zakret određeni su duž \emph{normale vrata}, izvedene iz orijentacije
-oznake, a ne samo iz smjera pogleda prema njoj. Razlika je bitna: regulacija koja bazu vodi
-isključivo tako da oznaka ostane ispred nje (regulacija smjera pogleda) ne jamči da će platforma
-stati okomito na vrata, jer holonomna baza takav uvjet može zadovoljiti s beskonačno mnogo
-smjerova prilaska --- uvjet je zadovoljen na cijeloj kružnici oko oznake, ne samo na njezinoj
-okomici. Regulacija prema normali tu dvoznačnost uklanja. Ako orijentacija oznake iz nekog
-razloga nije dostupna, sustav se vraća na regulaciju smjera pogleda, čime se izbjegava da
-robot potpuno stane, po cijenu manje pouzdanog poravnanja.
+Ciljna točka i ciljni zakret određeni su duž normale vrata, izvedene iz orijentacije
+oznake, a ne samo iz smjera pogleda prema njoj. Regulacija koja nastoji držati oznaku na
+sredini pogleda kamere ne jamči da će platforma stati okomito na vrata. Ako orijentacija
+oznake iz nekog razloga nije dostupna, sustav se vraća na regulaciju smjera pogleda, čime
+se izbjegava da robot potpuno stane, po cijenu manje pouzdanog poravnanja.
 
 \subsection{Prepoznavanje tipa kvake}
 \label{sec:tip-kvake}
@@ -81,8 +78,6 @@ pokreće (potpoglavlje \ref{sec:otvaranje}).
 
 \subsection{Hvat}
 \label{sec:hvat-postupak}
-
-Slijede koraci hvata:
 
 \begin{enumerate}
       \item \textbf{Ponovno čitanje poze.} Na početnoj udaljenosti kvaka je izvan dosega
@@ -278,9 +273,9 @@ Postupak ima četiri koraka:
 
 \subsection{Prilazak i hvat}
 
-Pogreška poravnanja platforme iznosi 1,2 do 1,4\textdegree{}. Odstupanje postignute pred-hvatne poze od cilja
-iznosi 8 do 11 mm u položaju te 0,1 do 0,2\textdegree{} u orijentaciji, a odstupanje same poze hvata 6 do
-8 mm i oko 0,5\textdegree{}. Prepoznavanje tipa kvake iz geometrije (potpoglavlje \ref{sec:tip-kvake})
+Pogreška poravnanja platforme iznosi 1.2 do 1.4\textdegree{}. Odstupanje postignute pred-hvatne poze od cilja
+iznosi 8 do 11 mm u položaju te 0.1 do 0.2\textdegree{} u orijentaciji, a odstupanje same poze hvata 6 do
+8 mm i oko 0.5\textdegree{}. Prepoznavanje tipa kvake iz geometrije (potpoglavlje \ref{sec:tip-kvake})
 pokazalo se pouzdanim na objema scenama vrata.
 
 \subsection{Zakretna vrata}
@@ -308,7 +303,7 @@ Izmjerene vrijednosti pri otvaranju do tog kuta navedene su u tablici
             Klizanje hvata                & 3--5 mm               \\
             Pogreška praćenja položaja    & ispod 2 mm            \\
             Pogreška procjene osi šarke   & 5--8 mm               \\
-            Pogreška kuta vrata iz oznake & 1,3--2,0\textdegree{} \\
+            Pogreška kuta vrata iz oznake & 1.3--2.0\textdegree{} \\
             \bottomrule
       \end{tabular}
 \end{table}
@@ -326,7 +321,7 @@ hvata, dok kod zakretnih vrata hvat prati zakrivljenu putanju.
 \begin{itemize}
       \item Mjerenja bez kontakta pokazuju da platforma ostvaruje tek oko 45\,\% naređene brzine
             u uzdužnom smjeru i oko 11\,\% u poprečnom, dosljedno kroz čitav ispitani raspon
-            brzina od 0,05 do 0,22 m/s; brzina očitana u samom simulatoru pritom odgovara
+            brzina od 0.05 do 0.22 m/s; brzina očitana u samom simulatoru pritom odgovara
             naređenoj, pa je uzrok negdje u prijenosu naredbe do fizike platforme. Manji poprečni
             omjer u skladu je s odnosom nazivnih brzina platforme u katalogu (potpoglavlje
             \ref{sec:platforma}), ali sam taj odnos ne objašnjava ni približno toliko nizak

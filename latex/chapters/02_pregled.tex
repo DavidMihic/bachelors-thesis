@@ -1,25 +1,127 @@
 \chapter{PREGLED DOSADAŠNJIH ISTRAŽIVANJA}
 \label{ch:pregled}
 
+Zadatak iz ovog rada dodiruje tri područja koja se u literaturi razvijaju odvojeno: upravljanje
+u kontaktu, koje se bavi time kako robot smije djelovati na okolinu; mobilnu manipulaciju, koja
+se bavi koordinacijom platforme i manipulatora; te interakciju s artikuliranim objektima, koja
+se bavi time kako robot doznaje kako se objekt uopće giba. Pregled slijedi tu podjelu, a
+završava pristupima temeljenima na učenju, koji zadnjih godina povezuju sva tri.
+
 \section{Klasični pristupi upravljanju u kontaktu}
 \label{sec:pregled-klasicni}
 
-TODO: impedancijsko upravljanje, hibridno silno-pozicijsko
-upravljanje \cite{raibert1981hybrid}, upravljanje u operacijskom prostoru
-\cite{khatib1987operational}.
+Upravljanje robotom u kontaktu s okolinom ne može biti čisto pozicijsko. Čim je vrh alata krut,
+a okolina također kruta, mala pogreška položaja proizvodi veliku silu, pa se regulator mora
+odnositi i prema odnosu položaja i sile.
+
+Dva su rana odgovora na taj problem oblikovala područje. Hibridno silno-pozicijsko upravljanje
+prostor zadatka dijeli na smjerove u kojima se regulira položaj i smjerove u kojima se regulira
+sila, prema unaprijed poznatoj matrici izbora izvedenoj iz geometrije zadatka
+\cite{raibert1981hybrid}. Impedancijsko upravljanje ne razdvaja te smjerove, nego propisuje
+željeni dinamički odnos između pomaka i sile, pa se robot prema okolini ponaša kao opruga
+zadane krutosti i prigušenja.
+
+Formalni okvir koji povezuje oba pristupa dao je Khatib upravljanjem u operacijskom prostoru
+\cite{khatib1987operational}. Jednadžbe gibanja manipulatora ondje se izražavaju izravno u
+prostoru zadatka, pa se sila na vrhu alata preslikava u momente zglobova preko transponiranog
+Jakobijana. Isti taj odnos se u ovom radu koristi za procjenu sile iz mjerenja momenata
+(poglavlje \ref{ch:procjena}). Kod redundantnih manipulatora taj okvir omogućuje i upravljanje
+u nul-prostoru, dakle promjenu konfiguracije zglobova bez pomicanja vrha alata.
+
+Primjenu kartezijskog impedancijskog upravljanja upravo na otvaranje vrata mobilnim
+manipulatorom prikazali su Ott i suradnici \cite{ott2005door}. Njihov je rad blizak zadatku iz
+ovog rada, s tom razlikom što se oslanja na unaprijed poznat model vrata.
+
+Zajednička slabost svih tih pristupa jest osjetljivost na kvalitetu modela. Ako procijenjena
+geometrija ograničenja odstupa od stvarne, regulator tu razliku pretvara u kontaktnu silu, i to
+tim izraženije što je krutost veća. Upravo se ta osjetljivost u ovom radu pokazala kao granica
+klasičnog pristupa na zakretnim vratima (poglavlje \ref{ch:klasicni}).
 
 \section{Mobilna manipulacija}
 \label{sec:pregled-mobilna}
 
-TODO: perceptivni MPC \cite{pankert2020perceptive}, ograničenja whole-body pristupa.
+Spajanjem manipulatora s mobilnom platformom uklanja se ograničenje dosega, ali se uvodi
+problem koordinacije: platforma i manipulator dijele isti zadatak, a imaju vrlo različitu
+dinamiku i točnost. Sustavan pregled pristupa planiranju gibanja za mobilne manipulatore daju
+Sandakalum i Ang \cite{sandakalum2022review}.
+
+Postoje dvije osnovne strategije. Hijerarhijski pristup platformu i manipulator rješava
+odvojeno, najčešće tako da se platforma najprije dovede na povoljan položaj, a zatim manipulator
+izvede zadatak iz mirovanja. Prednost je jednostavnost, a slabost to što se gibanja ne preklapaju
+i što loš izbor položaja platforme zadatak može učiniti neizvedivim. Cjelovito upravljanje
+platformu i manipulator promatra kao jedan sustav s velikim brojem stupnjeva slobode, čime dobiva
+na svestranosti, ali uz znatno složenije upravljanje.
+
+Predstavnik cjelovitog pristupa je perceptivno prediktivno upravljanje temeljeno na modelu, u
+kojem se gibanje platforme i manipulatora optimira zajedno, uz model okoline izgrađen iz
+senzorskih podataka \cite{pankert2020perceptive}. Takvi pristupi daju glatko i usklađeno gibanje,
+ali zahtijevaju model zadatka i računalno su zahtjevni.
+
+Klasični pristup u ovom radu je dijelom cjeloviti, dijelom hijerarhijski,
+dok pristup temeljen na učenju koordinaciju rješava jednom naučenom strategijom.
 
 \section{Interakcija s artikuliranim objektima}
 \label{sec:pregled-artikulirani}
 
-TODO: procjena kinematičkih modela \cite{sturm2011probabilistic}.
+Vrata, ladice i slični objekti dijele svojstvo da im je gibanje ograničeno na jedan ili nekoliko
+stupnjeva slobode, koje robot unaprijed ne poznaje. Prije nego takav objekt pomakne, robot mora
+utvrditi kako se on uopće smije gibati.
+
+Sturm i suradnici formulirali su taj problem kao učenje kinematičkih modela artikuliranih
+objekata iz opažanja gibanja \cite{sturm2011probabilistic}. Njihov okvir iz zabilježene putanje
+odabire model koji ju najbolje objašnjava (rotacijski, prizmatični ili krut) i time
+istovremeno prepoznaje tip zgloba i procjenjuje njegove parametre. Isto načelo, prilagodba više
+modela istoj putanji, stoji iza postupka procjene ograničenja opisanog u poglavlju
+\ref{ch:procjena}.
+
+Noviji radovi taj problem rješavaju tijekom samog izvođenja, bez prethodne faze promatranja.
+Rizzi i suradnici predstavili su upravljanje mobilnim manipulatorom temeljeno na uzorkovanju,
+otporno na nepoznate parametre artikuliranog objekta \cite{rizzi2023articulated}.
+
+Za ovaj je rad posebno blizak rad Stuedea i suradnika \cite{stuede2019door}, u kojem mobilni
+manipulator istog tipa kao u ovom radu otvara vrata i prolazi kroz njih uz kartezijsko
+impedancijsko upravljanje, bez poznatog modela vrata, pri čemu se kvaka detektira konvolucijskom
+neuronskom mrežom. Taj rad pokazuje i put kojim bi se moglo ukloniti najizraženije
+pojednostavljenje ovog rada, a to je oslanjanje na vizualne oznake (potpoglavlje
+\ref{sec:perception-limits}).
 
 \section{Pristupi temeljeni na učenju}
 \label{sec:pregled-rl}
 
-TODO: varijabilna impedancija kao akcijski prostor \cite{martinmartin2019variable},
-navigacija za mobilnu manipulaciju \cite{honerkamp2023n2m2}.
+Podržano učenje na zadatke mobilne manipulacije primjenjuje se jer ne zahtijeva eksplicitan model
+zadatka: politika strategiju stječe kroz interakciju s okolinom. Cijena je gubitak uvida u
+razloge pojedine odluke i ovisnost o vjernosti simulacije u kojoj se uči.
+
+Za zadatke s kontaktom presudan je odabir prostora akcije. Martín-Martín i suradnici pokazali su
+da politika koja izravno zadaje momente ili položaje slabo uči zadatke bogate kontaktom, dok
+politika kojoj je akcijski prostor varijabilna impedancija (referentni pomak
+zajedno s krutošću regulatora) uči znatno uspješnije \cite{martinmartin2019variable}. Politika
+tada ne uči samo kamo se gibati, nego i koliko biti popustljiva u pojedinom trenutku. Taj je
+akcijski prostor izravna osnova formulacije u poglavlju \ref{ch:rl}.
+
+Drugi smjer istraživanja bavi se time kako naučiti gibanje platforme koje manipulatoru održava
+kinematičku izvedivost. Honerkamp i suradnici najprije su pokazali da se politika platforme može
+naučiti tako da prati zadanu putanju vrha alata i drži je unutar dosega
+\cite{honerkamp2021feasibility}, a zatim taj pristup proširili na proizvoljna gibanja u
+nepoznatoj i promjenjivoj okolini \cite{honerkamp2023n2m2}.
+
+Osim samog upravljanja, učenje se koristi i za oblikovanje sustava. Schneider i suradnici
+optimiraju parametre montaže manipulatora na platformu, koristeći naučenu politiku u unutarnjoj
+petlji, i pokazuju da izbor montaže sam po sebi bitno mijenja uspješnost otvaranja vrata
+\cite{schneider2024codesign}. Nalaz je vrijedan i za ovaj rad, jer je manipulator i ovdje
+montiran izvan osi platforme, što zakretom platforme proširuje radni prostor (potpoglavlje
+\ref{sec:baza-uci}).
+
+Algoritam korišten u ovom radu je proksimalna optimizacija politike (PPO) \cite{schulman2017ppo},
+odabrana zbog stabilnosti pri velikom broju paralelnih okruženja.
+
+\section{Položaj ovog rada}
+\label{sec:pregled-pozicija}
+
+Navedeni radovi pojedine dijelove zadatka rješavaju bolje nego ovaj rad, ali ga uglavnom
+promatraju odvojeno: ili razvijaju upravljanje uz poznat model objekta, ili uče politiku bez
+usporedbe s klasičnom alternativom. Doprinos ovog rada nije novi postupak upravljanja, nego
+\emph{izravna usporedba} dvaju pristupa izvedenih za istog robota, istu scenu i ista mjerila
+uspješnosti, uključujući dva tipa vrata koja isti zadatak čine različito teškim. Time se
+pokušava odgovoriti na pitanje pod kojim uvjetima eksplicitno poznavanje geometrije donosi
+prednost, a pod kojima je gubi.

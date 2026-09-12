@@ -25,44 +25,44 @@ Reallocating 'name_of_file' (item size: 1) to 11 items.
 Reallocating 'name_of_file' (item size: 1) to 20 items.
 A level-1 auxiliary file: chapters/prilog.aux
 Database file #1: references.bib
-You've used 15 entries,
+You've used 19 entries,
             1791 wiz_defined-function locations,
-            537 strings with 6662 characters,
-and the built_in function-call counts, 3257 in all, are:
-= -- 285
-> -- 138
+            556 strings with 7325 characters,
+and the built_in function-call counts, 4065 in all, are:
+= -- 349
+> -- 191
 < -- 2
-+ -- 53
-- -- 38
-* -- 176
-:= -- 507
-add.period$ -- 48
-call.type$ -- 15
-change.case$ -- 15
++ -- 72
+- -- 53
+* -- 237
+:= -- 650
+add.period$ -- 60
+call.type$ -- 19
+change.case$ -- 19
 chr.to.int$ -- 0
-cite$ -- 15
-duplicate$ -- 150
-empty$ -- 343
-format.name$ -- 38
-if$ -- 740
+cite$ -- 19
+duplicate$ -- 183
+empty$ -- 413
+format.name$ -- 53
+if$ -- 910
 int.to.chr$ -- 0
-int.to.str$ -- 15
-missing$ -- 11
-newline$ -- 81
-num.names$ -- 15
-pop$ -- 63
+int.to.str$ -- 19
+missing$ -- 15
+newline$ -- 101
+num.names$ -- 19
+pop$ -- 69
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 0
-skip$ -- 76
+skip$ -- 91
 stack$ -- 0
-substring$ -- 180
-swap$ -- 41
+substring$ -- 211
+swap$ -- 45
 text.length$ -- 2
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 0
 warning$ -- 0
-while$ -- 29
-width$ -- 17
-write$ -- 163
+while$ -- 35
+width$ -- 21
+write$ -- 206

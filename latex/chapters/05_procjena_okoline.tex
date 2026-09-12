@@ -57,7 +57,7 @@ odstupanje raste kako manipulator odmiče od te poze u sljedećim koracima giban
 Ni nakon umjeravanja procjena nije bez pogreške. U slobodnom gibanju, bez kontakta, procjena
 sile pokazuje šum reda pola njutna, što je razina ispod koje se kontakt ne može pouzdano
 razlučiti od mjerne nesigurnosti. Procjena momenta uz to zadržava sustavni rezidual reda
-desetak njutnmetara, koji potječe od preostale, nepotpuno uklonjene dinamike manipulatora ---
+desetak njutnmetara, koji potječe od preostale, nepotpuno uklonjene dinamike manipulatora,
 ponajviše iz odstupanja stvarne poze od one u kojoj je umjeravanje provedeno. Na tipičnom kraku
 hvata taj rezidual odgovara sili reda dvadesetak njutna.
 
@@ -65,7 +65,7 @@ Posljedica je da procjena dobro razlučuje smjer i prisutnost kontaktne sile, al
 apsolutni iznos treba uzimati s obzirom na navedeni rezidual, a umjeravanje treba ponoviti
 kad god se manipulator znatnije udalji od poze u kojoj je posljednje umjeravanje provedeno.
 Ponovno umjeravanje tijekom zadatka provodi se uvjetno, samo kad je trenutno očitana sila već
-niska --- u suprotnom bi se u nulu upisala stvarna kontaktna sila, umjesto samo preostalog
+niska. U suprotnom bi se u nulu upisala stvarna kontaktna sila, umjesto samo preostalog
 gravitacijskog doprinosa. Za upravljanje u ovom radu to je dovoljno, jer se sila koristi za
 otkrivanje kontakta i za ograničavanje njezina iznosa, a ne kao precizno mjerilo.
 
@@ -95,7 +95,7 @@ Geometrija ograničenja razlikuje dva tipa vrata prema obliku putanje vrha alata
 otvaranju. Kod zakretnih vrata vrh alata opisuje kružni luk oko osi šarke, pa se iz niza
 zabilježenih položaja može prilagoditi kružnica čije je središte procjena položaja osi, a
 polumjer udaljenost hvatišta od nje. Kod kliznih vrata putanja je pravac, pa prilagodba kružnice
-ne konvergira --- polumjer raste bez granice --- što je samo po sebi znak da je gibanje
+ne konvergira, već polumjer raste bez granice, što je samo po sebi znak da je gibanje
 translacijsko. Načelo je time jedinstveno za oba tipa: isti se postupak prilagodbe primjenjuje
 na oba, a tip vrata proizlazi iz toga koji model bolje pristaje izmjerenoj putanji, a ne iz
 unaprijed zadanog grananja po tipu vrata. Za određivanje vrste vrata analizom gibanja napravljena

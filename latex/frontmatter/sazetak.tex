@@ -1,8 +1,27 @@
 \frontmatterchapter{SAŽETAK}
 
-TODO: piše se ZADNJE, kad su rezultati poznati. Struktura (4--6 rečenica):
-problem $\rightarrow$ pristup $\rightarrow$ što je implementirano $\rightarrow$ što je
-izmjereno $\rightarrow$ glavni nalaz.
+U radu se razmatra problem autonomne interakcije mobilnog manipulatora s okolinom, na primjeru
+otvaranja dvije vrste vrata, zakretnih i kliznih. Za mobilni manipulator KUKA KMR iiwa razvijen
+je u simulacijskom okruženju cjelovit sustav koji objedinjuje percepciju, procjenu sile i
+momenta te upravljanje u kontaktu. Modul percepcije iz slike određuje položaj i orijentaciju
+kvake pomoću vizualnih oznaka, a sila i moment na vrhu alata procjenjuju se iz momenata u
+zglobovima, bez zasebnog senzora sile. Tip vrata robot ne dobiva kao zadan podatak, nego ga
+prepoznaje iz geometrije kvake.
+
+Zadatak upravljanja riješen je dvama pristupima. Klasični pristup temeljen na modelu izvodi
+cijeli lanac, od prilaska i hvata preko otvaranja do prolaska kroz vrata, oslanjajući se na
+geometriju ograničenja izračunatu iz percepcije. Pristup temeljen na podržanom učenju zadatak
+formulira kao Markovljev proces odlučivanja s varijabilnom impedancijom u prostoru akcije, pri
+čemu politika u svakom koraku bira krutost regulatora po svakoj osi, a geometriju ograničenja
+mora otkriti iz vlastitih opažanja sile i pomaka.
+
+Oba su pristupa izmjerena na istom robotu, istoj sceni i istim mjerilima uspješnosti. Kod
+kliznih vrata oba dosežu puni cilj u svakom pokušaju. Kod zakretnih vrata klasični pristup
+pouzdano otvara vrata do 50\textdegree{}, ali preko otprilike 57\textdegree{} ne može jer kvaka
+klizne iz prihvatnice, dok naučena politika vrata otvara preko 90\textdegree{} u 96 \% epizoda,
+uz bitno niže kontaktne sile. Zaključak je da je eksplicitno poznavanje geometrije dovoljno kad
+je geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
+krutosti tijekom same interakcije.
 
 \vspace{8mm}
 \noindent\textbf{KLJUČNE RIJEČI:} mobilni manipulator, fizička interakcija, procjena

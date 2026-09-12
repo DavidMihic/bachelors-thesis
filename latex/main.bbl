@@ -33,17 +33,52 @@ Roberto Mart{\'i}n-Mart{\'i}n, Michelle~A. Lee, Rachel Gardner, Silvio
 \newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
   Systems (IROS)}, pages 1010--1017, 2019.
 
+\bibitem{sandakalum2022review}
+Thushara Sandakalum and Marcelo~H. Ang.
+\newblock Motion planning for mobile manipulators --- a systematic review.
+\newblock {\em Machines}, 10(2), 2022.
+
 \bibitem{pankert2020perceptive}
 Johannes Pankert and Marco Hutter.
 \newblock Perceptive model predictive control for continuous mobile
   manipulation.
 \newblock {\em IEEE Robotics and Automation Letters}, 5(4):6177--6184, 2020.
 
+\bibitem{rizzi2023articulated}
+Giuseppe Rizzi, Jen~Jen Chung, Abel Gawel, Lionel Ott, Marco Tognon, and Roland
+  Siegwart.
+\newblock Robust sampling-based control of mobile manipulators for interaction
+  with articulated objects.
+\newblock {\em IEEE Transactions on Robotics}, 39(3), 2023.
+
+\bibitem{stuede2019door}
+Marvin Stuede, Kathrin Nuelle, Svenja Tappe, and Tobias Ortmaier.
+\newblock Door opening and traversal with an industrial cartesian impedance
+  controlled mobile robot.
+\newblock In {\em IEEE International Conference on Robotics and Automation
+  (ICRA)}, 2019.
+
+\bibitem{honerkamp2021feasibility}
+Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
+\newblock Learning kinematic feasibility for mobile manipulation through deep
+  reinforcement learning.
+\newblock {\em IEEE Robotics and Automation Letters}, 6(4):6289--6296, 2021.
+
 \bibitem{honerkamp2023n2m2}
 Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
 \newblock {N$^2$M$^2$}: Learning navigation for arbitrary mobile manipulation
   motions in unseen and dynamic environments.
 \newblock {\em IEEE Transactions on Robotics}, 2023.
+
+\bibitem{schneider2024codesign}
+Raphael Schneider, Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
+\newblock Task-driven co-design of mobile manipulators.
+\newblock {\em arXiv preprint arXiv:2412.16635}, 2024.
+
+\bibitem{schulman2017ppo}
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
 
 \bibitem{kuka2024kmriiwa}
 {KUKA Deutschland GmbH}.
@@ -69,13 +104,6 @@ Christoph Hennersperger, Salvatore Virga, et~al.
 \newblock {Isaac Lab}: A unified framework for robot learning.
 \newblock \url{https://isaac-sim.github.io/IsaacLab/}, 2024.
 
-\bibitem{stuede2019door}
-Marvin Stuede, Kathrin Nuelle, Svenja Tappe, and Tobias Ortmaier.
-\newblock Door opening and traversal with an industrial cartesian impedance
-  controlled mobile robot.
-\newblock In {\em IEEE International Conference on Robotics and Automation
-  (ICRA)}, 2019.
-
 \bibitem{olson2011apriltag}
 Edwin Olson.
 \newblock {AprilTag}: A robust and flexible visual fiducial system.
@@ -86,10 +114,5 @@ Edwin Olson.
 Yoshikawa.
 \newblock Manipulability of robotic mechanisms.
 \newblock {\em The International Journal of Robotics Research}, 4(2), 1985.
-
-\bibitem{schulman2017ppo}
-John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
-\newblock Proximal policy optimization algorithms.
-\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
 
 \end{thebibliography}
