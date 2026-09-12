@@ -34,6 +34,9 @@ regulacijskoj petlji. Razlog je paralelizacija: trening istovremeno pokreće vi�
 okruženja, a posredovanje kroz ROS 2 bilo bi usko grlo. Epizoda traje 10 sekundi, uz korak
 upravljanja od 60 Hz (fizika 120 Hz, decimacija 2), što daje 600 koraka po epizodi.
 
+Uspješnost politike pri determinističkom izvođenju, koje se razlikuje od učenja, mjerena je
+zasebno i uspoređena s klasičnim pristupom u poglavlju \ref{ch:rezultati}.
+
 \section{Formulacija Markovljevog procesa odlučivanja}
 \label{sec:mdp}
 
@@ -251,25 +254,37 @@ vrijednostima zgloba vrata usklađenima s klasičnim pristupom. Radi usporedivos
 politike trenirane s istim brojem okruženja i istim brojem iteracija, a sve su vrijednosti
 prosjek zadnjih 100 iteracija.
 
+Prva dva retka tablice vrijednosti su pripadnih članova nagrade, a ne veličine koje izravno
+opisuju ishod. Okruženje ih prije zapisivanja dijeli duljinom epizode, pa su ispod svakog člana
+navedene veličine izvedene iz njega: član napretka razmjeran je prosječnom otvoru vrata kroz
+epizodu, a član uspjeha udjelu epizode tijekom kojeg su vrata iznad praga uspjeha. Udjeli
+terminacija u nastavku tablice jesu udjeli epizoda i zbrajaju se na jedinicu.
+
 \begin{table}[H]
     \centering
     \caption{Rezultati pristupa temeljenog na učenju, 1024 okruženja, 2400 iteracija}
     \label{tab:rl-rezultati}
     \begin{tabular}{@{}lcc@{}}
         \toprule
-        Veličina                & Zakretna vrata & Klizna vrata \\
+        Veličina                           & Zakretna vrata & Klizna vrata \\
         \midrule
-        Napredak                & 18,93          & 9,87         \\
-        Stopa uspjeha           & 0,743          & 0,831        \\
-        Udio: izgubljen hvat    & 0,072          & 0,000        \\
-        Udio: dodir krila       & 0,061          & 0,003        \\
-        Udio: dodir zida        & 0,002          & 0,000        \\
-        Udio: prekomjerna sila  & 0,006          & 0,028        \\
-        Udio: istek vremena     & 0,860          & 0,969        \\
-        Duljina epizode, koraci & 561,8          & 587,4        \\
+        Član napretka                      & 18,93          & 9,87         \\
+        \quad prosječni otvor kroz epizodu & 0,947 rad      & 0,592 m      \\
+        Član uspjeha                       & 0,743          & 0,831        \\
+        \quad udio epizode iznad praga     & 0,371          & 0,416        \\
+        \midrule
+        Udio: izgubljen hvat               & 0,072          & 0,000        \\
+        Udio: dodir krila                  & 0,061          & 0,003        \\
+        Udio: dodir zida                   & 0,002          & 0,000        \\
+        Udio: prekomjerna sila             & 0,006          & 0,028        \\
+        Udio: istek vremena                & 0,860          & 0,969        \\
+        Duljina epizode, koraci            & 561,8          & 587,4        \\
         \bottomrule
     \end{tabular}
 \end{table}
+
+Te vrijednosti opisuju ponašanje politike tijekom učenja, uz šum istraživanja. Stopa uspjeha pri
+determinističkom izvođenju mjerena je zasebno i navedena je u poglavlju \ref{ch:rezultati}.
 
 \section{Ograničenja}
 \label{sec:rl-limits}
