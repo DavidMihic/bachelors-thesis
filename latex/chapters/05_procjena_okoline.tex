@@ -7,7 +7,7 @@ dostupnih na robotu dolazi do sile i momenta na vrhu alata, te kako se iz njihov
 gibanju u načelu procjenjuju svojstva okoline poput krutosti i ograničenja gibanja.
 
 Naglasak je na tome da su sve procjene izvedene isključivo iz veličina koje bi imao i stvarni
-robot --- poze vrha alata i procijenjene sile --- a nikada iz stanja zglobova vrata, koje
+robot (poze vrha alata i procijenjene sile) a nikada iz stanja zglobova vrata, koje
 simulator doduše zna, ali stvarni robot ne bi. Stanje zgloba vrata koristi se samo kao
 referentna vrijednost pri provjeri procjenitelja, nikada u upravljačkoj petlji.
 
@@ -64,8 +64,10 @@ hvata taj rezidual odgovara sili reda dvadesetak njutna.
 Posljedica je da procjena dobro razlučuje smjer i prisutnost kontaktne sile, ali njezin
 apsolutni iznos treba uzimati s obzirom na navedeni rezidual, a umjeravanje treba ponoviti
 kad god se manipulator znatnije udalji od poze u kojoj je posljednje umjeravanje provedeno.
-Za upravljanje u ovom radu to je dovoljno, jer se sila koristi za otkrivanje kontakta i za
-ograničavanje njezina iznosa, a ne kao precizno mjerilo.
+Ponovno umjeravanje tijekom zadatka provodi se uvjetno, samo kad je trenutno očitana sila već
+niska --- u suprotnom bi se u nulu upisala stvarna kontaktna sila, umjesto samo preostalog
+gravitacijskog doprinosa. Za upravljanje u ovom radu to je dovoljno, jer se sila koristi za
+otkrivanje kontakta i za ograničavanje njezina iznosa, a ne kao precizno mjerilo.
 
 \section{Procjena svojstava okoline iz odnosa sile i gibanja}
 \label{sec:constraint}

@@ -26,7 +26,7 @@ kojoj se robot kreće između radnih mjesta \cite{kuka2024kmriiwa}.
 \label{sec:platforma}
 
 Platforma se giba pomoću četiriju Mecanum kotača (slika \ref{fig:mecanum-wheel}). Svaki se kotač sastoji od niza valjaka
-postavljenih pod kutom od 45\textdegree{} u odnosu na os kotača, čime se postiže
+postavljenih pod kutom od 45\textdegree{}{} u odnosu na os kotača, čime se postiže
 omnidirekcijsko gibanje --- platforma se može gibati u proizvoljnom smjeru u ravnini i
 istovremeno se zakretati, bez potrebe za promjenom orijentacije prije translacije. Ta je
 osobina bitna za zadatak otvaranja vrata, jer omogućuje da baza slijedi luk krila bez
@@ -214,6 +214,21 @@ Kamera podržava i dubinsku sliku, no ona u ovom radu nije korištena. Detekcija
 odvija se isključivo iz slike u boji, pomoću oznaka AprilTag, a postignuta točnost pokazala se
 dovoljnom i bez dubinske informacije.
 
+\section{Lidar}
+\label{sec:lidar}
+
+Uz kameru, robot je opremljen i dvodimenzijskim laserskim skenerom (lidarom), postavljenim na
+prednjoj strani mobilne platforme. Za razliku od kamere, koja služi isključivo detekciji kvake
+(poglavlje \ref{ch:percepcija}), lidar se koristi za dvije zadaće vezane uz neposrednu okolinu robota:
+otkrivanje prepreka ispred platforme tijekom otvaranja vrata i pronalaženje otvora u zidu radi
+prolaska kroz vrata. Obje su zadaće opisane u poglavlju \ref{ch:klasicni}, u opsegu klasičnog
+pristupa; pristup temeljen na učenju ne koristi lidar direktno, već očitava pozicije zidova
+izravno iz simulatora.
+
+Senzor ima i minimalni domet ispod kojeg mjerenja nisu pouzdana. Budući da je kvaka nakon hvata
+na udaljenosti od tek oko 0,65 m od senzora, unutar tog dometa krilo vrata ostaje nevidljivo, pa
+je vrijednost minimalnog dometa u konfiguraciji senzora spuštena na 0,05 m.
+
 \section{Modeli vrata}
 \label{sec:vrata}
 
@@ -242,7 +257,7 @@ Geometrijska i inercijska svojstva vrata mogu se vidjeti u tablici \ref{tab:vrat
         Krilo, masa          & 15 kg                                    & 15 kg                                        \\
         Nepomični dio        & stup 60\,$\times$\,60\,$\times$\,2000 mm & vodilica 60\,$\times$\,2000\,$\times$\,60 mm \\
         Stupanj slobode      & rotacija oko osi $z$                     & translacija duž osi $y$                      \\
-        Raspon gibanja       & 0--1,57 rad                              & 0--0,8 m                                     \\
+        Raspon gibanja       & 0--135 \textdegree{}                     & 0--1,0 m                                     \\
         Kvaka, oblik         & poluga, duljina 160 mm                   & šipka, duljina 250 mm                        \\
         Kvaka, promjer šipke & 28 mm                                    & 28 mm                                        \\
         Kvaka, masa          & 0,35 kg                                  & 0,35 kg                                      \\
@@ -260,6 +275,14 @@ moment šarke prenosi trenjem prstiju na šipki kvake.
 
 Kod kliznih vrata kvaka je okomita šipka pričvršćena dvama odstojnicima, pa je hvatište
 dostupno s prednje strane krila po cijeloj visini šipke.
+
+Vrata su s obje strane omeđena zidom, izvedenim kao dva zasebna, nepomična elementa,
+svaki dimenzija 0,06\,$\times$\,2,5\,$\times$\,2,0 m i mase 100 kg.
+Zidovi su postavljeni tako da između njih ostaje slobodan prolaz od 0,85 m,
+jednak širini krila vrata, čime nastaje realistična okolina vrata umjesto izoliranog objekta u
+praznom prostoru. Ta je okolina preduvjet za dvije zadaće opisane u poglavlju
+\ref{ch:klasicni}. Lidar treba stvarnu prepreku da bi u njoj prepoznao otvor, a MoveIt treba
+stvarnu geometriju zida da bi je uzeo u obzir pri planiranju gibanja manipulatora.
 
 \subsection{Otpor gibanja i njegova randomizacija}
 \label{sec:otpor}
@@ -573,6 +596,10 @@ Na slici \ref{fig:arch-klasicni} može se vidjeti dijagram arhitekture za klasi�
         \draw[ar] (sim.south -| wr.north)  -- (wr.north);
         \node[tl] at (-2.6,-1.35) {/camera/color/image\_raw};
         \node[tl] at ( 2.8,-1.35) {/joint\_states};
+
+        % --- simulator -> zadatak (lidar, izravno, bez zasebnog obradnog čvora) ---
+        \draw[ar] (sim.south -| 5.2,0) -- (5.2,-4.6) -- (1.2,-4.6) -- (1.2,-5.8) -- (task.east);
+        \node[tl] at (3.2,-4.6) {/scan};
 
         % --- percepcija -> zadatak ---
         \draw[ar] (tag.south) -- (tag.south |- gtask.north);

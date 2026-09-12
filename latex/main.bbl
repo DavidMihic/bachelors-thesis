@@ -82,4 +82,14 @@ Edwin Olson.
 \newblock In {\em IEEE International Conference on Robotics and Automation
   (ICRA)}, pages 3400--3407, 2011.
 
+\bibitem{yoshikawa1985manipulability}
+Yoshikawa.
+\newblock Manipulability of robotic mechanisms.
+\newblock {\em The International Journal of Robotics Research}, 4(2), 1985.
+
+\bibitem{schulman2017ppo}
+John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
+\newblock Proximal policy optimization algorithms.
+\newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
+
 \end{thebibliography}

@@ -18,19 +18,29 @@
     $\dot{q}$                          & rad/s, m/s                       & Brzina stupnja slobode vrata                                   \\
     $\tau_{\mathrm{tr}}$               & \si{\newton\metre}, \si{\newton} & Coulombovo trenje u zglobu vrata                               \\
     $d$                                & Nms/rad, Ns/m                    & Koeficijent viskoznog prigušenja zgloba vrata                  \\
+    $\tau_{\mathrm{otpor}}$            & \si{\newton\metre}, \si{\newton} & Ukupni otpor gibanja vrata (moment ili sila, ovisno o tipu)    \\
     $\bm{p}$                           & m                                & Položaj hvatišta kvake                                         \\
     $\bm{p}_A$                         & m                                & Položaj oznake $A$ na kvaki                                    \\
     $\bm{p}_B$                         & m                                & Položaj oznake $B$ na kvaki                                    \\
     $\bm{z}_A$, $\bm{z}_B$             &                                  & Normale oznaka $A$ i $B$                                       \\
     $\bar{\bm{z}}$                     &                                  & Srednja vrijednost normala dviju oznaka                        \\
     $\bm{e}_x$, $\bm{e}_y$, $\bm{e}_z$ &                                  & Vektori baze koordinatnog sustava hvatišta                     \\
-    $\bm{R}$                           &                                  & Matrica rotacije hvatišta                                      \\
+    $\bm{R}$                           &                                  & Matrica rotacije (hvatišta ili oznake, prema indeksu)          \\
     $\bm{J}$                           &                                  & Jakobijan manipulatora                                         \\
     $\bm{F}$                           & \si{\newton}                     & Vektor sile na vrhu alata                                      \\
     $\bm{M}$                           & \si{\newton\metre}               & Vektor momenta na vrhu alata                                   \\
     $\bm{w}$                           &                                  & Vektor sila i momenata (engl. \textit{wrench})                 \\
     $\Delta F$                         & \si{\newton}                     & Prirast sile na vrhu alata                                     \\
     $\Delta x$                         & m                                & Prirast pomaka na vrhu alata                                   \\
+    $K$                                & \si{\newton\per\metre}, Nm/rad   & Procijenjena krutost okoline ($K \approx \Delta F/\Delta x$)   \\
+    $\bm{c}$                           & m                                & Procijenjeni položaj osi šarke zakretnih vrata                 \\
+    $\bm{p}_{\mathrm{tag}}$            & m                                & Položaj velike oznake na sredini vrata                         \\
+    $\bm{q}_{\mathrm{tag}}$            &                                  & Orijentacija (kvaternion) velike oznake                        \\
+    $\bm{v}_{\mathrm{hinge}}$          & m                                & Vektor od oznake do osi šarke, u lokalnom okviru oznake        \\
+    $L$                                & m                                & Širina krila vrata                                             \\
+    $\delta$                           & m                                & Odmak oznake od središnje ravnine debljine krila               \\
+    $\theta$                           & rad                              & Kut otvorenosti zakretnih vrata                                \\
+    $w(\theta)$                        & m                                & Širina prolaza kao funkcija kuta otvorenosti                   \\
     $\bm{K}_p$                         & \si{\newton\per\metre}           & Matrica krutosti regulatora                                    \\
     $\bm{K}_d$                         & \si{\newton\second\per\metre}    & Matrica prigušenja regulatora                                  \\
     $\bm{x}$                           &                                  & Vektor stanja                                                  \\

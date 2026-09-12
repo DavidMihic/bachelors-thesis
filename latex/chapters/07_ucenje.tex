@@ -1,25 +1,290 @@
 \chapter{PRISTUP TEMELJEN NA UČENJU}
 \label{ch:rl}
 
+Pristup temeljen na učenju rješava isti zadatak kao poglavlje \ref{ch:klasicni}, ali bitno
+drugačijim sredstvima. Klasični pristup vrh alata vodi krutim pozicijskim
+upravljanjem po unaprijed izračunatoj putanji, uz geometriju ograničenja poznatu iz percepcije.
+Ovdje se, umjesto toga, uvodi varijabilna impedancija: politika u svakom koraku sama bira koliko
+će regulator biti krut po svakoj osi, a geometriju ograničenja ne dobiva ni iz percepcije ni iz
+eksplicitnog procjenitelja, nego je mora otkriti iz vlastitih opažanja sile i gibanja. To je
+izravan odgovor na nalaz iz poglavlja \ref{ch:klasicni}: kruto pozicijsko praćenje luka davalo je
+velike kontaktne sile na svako odstupanje procjene, pa varijabilna impedancija postoji upravo
+zato da politika tu krutost regulira sama.
+
+\section{Opseg}
+\label{sec:rl-opseg}
+
+Politika ne uči prilaz ni hvat kvake. Epizoda počinje od stanja u kojem prihvatnica već drži
+kvaku, a klasični postupak prilaza i hvata (potpoglavlje \ref{sec:prilaz}) smatra se zajedničkim
+za oba pristupa. Razlog je dvostruk: prilaz i hvat rješavaju problem navigacije i planiranja
+gibanja, a ne problem interakcije koji je predmet ovog rada, i njihovo bi dupliciranje otežalo
+poštenu usporedbu, jer bi mjerena razlika između pristupa uključivala i razliku u tome tko je
+bolji u navigaciji, ne samo u interakciji. Iz istog je razloga izostavljen i prolazak kroz vrata:
+i on je navigacija kroz poznatu geometriju, ista kategorija kao prilaz. Ta odluka o opsegu izravno
+oblikuje ono što se u poglavlju \ref{ch:rezultati} smije uspoređivati. Usporedba se odnosi
+isključivo na fazu otvaranja, ne na cijeli zadatak, dok klasični pristup taj cijeli zadatak
+stvarno izvodi od početka do kraja.
+
+Sam postupak prolaska kroz vrata je implementiran i radi, uključivo za slučaj naučene politike,
+ali je namjerno isključen iz rezultata radi dosljednosti opsega. Vrijedan je kao potvrda da se
+naučena politika može ugraditi u isti izvršni sloj kao klasični pristup.
+
+Trening se u cijelosti odvija unutar simulacijskog okruženja Isaac Lab, bez sustava ROS 2 u
+regulacijskoj petlji. Razlog je paralelizacija: trening istovremeno pokreće više stotina
+okruženja, a posredovanje kroz ROS 2 bilo bi usko grlo. Epizoda traje 10 sekundi, uz korak
+upravljanja od 60 Hz (fizika 120 Hz, decimacija 2), što daje 600 koraka po epizodi.
+
 \section{Formulacija Markovljevog procesa odlučivanja}
 \label{sec:mdp}
 
-\subsection{Prostor stanja}
-TODO.
+\subsection{Prostor opažanja}
+\label{sec:opazanje}
+
+Vrijedi isto načelo kao u klasičnom pristupu: kut ili pomak zgloba vrata, dakle stvarno stanje
+zadatka, nikada nije dio opažanja politike, nego se koristi isključivo u nagradi i terminaciji,
+gdje je legitiman jer se računa izvan regulacijske petlje. Opažanje sadrži:
+
+\begin{itemize}
+    \item pozu vrha alata u koordinatnom sustavu platforme (položaj i orijentacija);
+    \item linearnu i kutnu brzinu vrha alata, u istom koordinatnom sustavu;
+    \item brzinu platforme, (linearna brzina po $x$ i $y$, kutna brzina oko $z$);
+    \item procijenjenu silu i moment na vrhu alata, uz Gaussov šum standardne devijacije
+          0,5 N, koji odgovara šumu stvarnog procjenitelja iz poglavlja \ref{ch:procjena};
+    \item vektore od platforme do najbližih točaka susjednih prepreka (zid, dovratnik), uz
+          Gaussov šum standardne devijacije 1 cm, koji odgovara izmjerenoj stabilnosti sredine
+          otvora iz skena lidara u klasičnom pristupu (potpoglavlje \ref{sec:prolazak});
+    \item posljednju akciju.
+\end{itemize}
 
 \subsection{Prostor akcija}
-TODO: varijabilna impedancija u operacijskom prostoru
-\cite{martinmartin2019variable}.
+\label{sec:akcije}
+
+Ruka se upravlja regulatorom u operacijskom prostoru s varijabilnom impedancijom. Akcija zadaje
+pomak reference vrha alata u odnosu na trenutnu pozu, za svih šest stupnjeva slobode, i šest
+pripadnih krutosti, po jedna za svaku os. Time politika izravno bira, u svakom koraku i za
+svaku os zasebno, koliko će regulator biti krut, točno ono što je poglavlje
+\ref{ch:klasicni} pokazalo da kruto pozicijsko upravljanje ne može samo po sebi ostvariti.
+
+Sam pomak reference po koraku ograničen je na 15 mm. Pri većoj vrijednosti, istraživačko ponašanje
+na početku učenja trgalo je hvat sa šipke prije nego što bi politika uopće stigla nešto naučiti.
+
+Uz šest stupnjeva slobode ruke, akcija sadrži i tri komponente brzine platforme (uzdužnu,
+poprečnu i kutnu) pa politika sama koordinira ruku i platformu.
+
+\subsection{Koordinacija platforme i manipulatora}
+\label{sec:baza-uci}
+
+Uvedena je dodatna kazna na odstupanja platforme od okomice na
+ravninu vrata, s težinom razmjernom tome koliko takvo odstupanje kod danog tipa vrata stvarno
+šteti: znatno većom kod zakretnih, gdje dijagonalan položaj platforme kasnije ne prolazi kroz
+suženi otvor, nego kod kliznih, gdje platforma svejedno mora pratiti krilo poprečno pa okomitost
+manje košta. Kazna je uz to zatvorena ovisno o ostvarenom napretku, tako da ne djeluje u ranoj
+fazi zadatka, kada bi se sukobila s potrebom da politika zakrene platformu radi dosega. Ruka
+je montirana izvan osi platforme, pa zakret platforme proširuje radni prostor ruke na legitiman način.
 
 \subsection{Funkcija nagrade}
-TODO: komponente nagrade, težine.
+\label{sec:nagrada}
+
+Tablica \ref{tab:nagrada} navodi sve članove nagrade. Sve su težine kalibrirane mjerenjem, ne
+pogođene: cilj je bio da svaki član, u konvergiranom pokretanju, iznosi između 3 i 10 \% udjela
+glavnog člana napretka, a postupak je bio pustiti probno pokretanje, očitati udjele i skalirati
+težinu razmjerno odstupanju od tog cilja.
+
+\begin{table}[H]
+    \centering
+    \caption{Članovi funkcije nagrade}
+    \label{tab:nagrada}
+    \begin{tabular}{@{}llp{0.5\textwidth}@{}}
+        \toprule
+        Član                 & Težina                                 & Svrha                                                   \\
+        \midrule
+        napredak             & $+10{,}0$                              & glavni član, normiran na prag uspjeha                   \\
+        okomita sila         & $-0{,}02$                              & kazni silu okomitu na stvarni smjer gibanja vrata       \\
+        zasićenje zglobova   & $-2{,}0$ (klizna), $-6{,}0$ (zakretna) & kazni rad blizu granice
+        raspona zglobova ruke                                                                                                   \\
+        singularitet         & $-20{,}0$                              & kazni pad manipulabilnosti ispod praga                  \\
+        ubrzanje ruke        & $-5\times 10^{-4}$                     & kazni ubrzanje zglobova ruke                            \\
+        trzaj ruke           & $-1\times 10^{-7}$                     & kazni trzaj (drugu derivaciju brzine) zglobova ruke     \\
+        prekomjerna sila     & $-0{,}05$                              & kazni ukupnu silu iznad referentne granice              \\
+        poravnanje hvata     & $-3{,}0$                               & kazni odstupanje prilazne osi hvata od okomice na krilo \\
+        poravnanje platforme & $-6{,}0$ (zakretna), $-0{,}1$ (klizna) & kazni odstupanje
+        platforme od okomice na ravninu vrata                                                                                   \\
+        prodor u krilo       & $-20{,}0$                              & kazni približavanje ruba platforme krilu ispod
+        sigurnog razmaka                                                                                                        \\
+        prodor u zid         & $-20{,}0$                              & kazni približavanje ruba platforme zidu ili dovratniku
+        ispod sigurnog razmaka                                                                                                  \\
+        promjena akcije      & $-0{,}002$                             & kazni razliku uzastopnih akcija                         \\
+        uspjeh               & $+2{,}0$                               & bonus po koraku dok je pomak vrata iznad praga uspjeha  \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Napredak se ne normira na puni hod zgloba vrata, već na puno manju referentnu vrijednost
+0,6 m kod kliznih i 0,5 rad (28,6 \textdegree) kod zakretnih vrata. Uz normiranje na puni hod,
+manji pomak nosio bi premalu nagradu da nadjača kazne, pa bi politika naučila dovesti vrata na
+određeni pomak i ne pomicati ih dalje. Time napredak nije ograničen odozgo, već smije prijeći jedinicu,
+što znači da nagrada za napredak raste što su vrata više otvorena.
+
+Prag uspjeha, koji određuje kada se dodjeljuje bonus iz zadnjeg retka tablice \ref{tab:nagrada},
+zasebna je veličina. Kod kliznih vrata poklapa se s referentnom vrijednošću normalizacije i iznosi
+0,6 m. Kod zakretnih vrata je namjerno odvojen i postavljen na 1,57 rad (90 \textdegree).
+Razlog je taj što je 0,5 rad dovoljno da se vrata mjerljivo pomaknu, ali nije dovoljno da
+robot kroz njih prođe. Normalizacija je pritom ostala nepromijenjena kako bi kalibracija
+svih ostalih veličina ostala valjana. Bonus za uspjeh dodjeljuje se po koraku dok je pomak
+iznad praga, a ne kao jednokratna nagrada uz prekid epizode.
+
+Kazna na singularitet koristi Yoshikawin indeks manipulabilnosti \cite{yoshikawa1985manipulability}:
+
+\begin{equation}
+    w(\bm{q}) = \sqrt{\det\left( \bm{J}(\bm{q}) \bm{J}(\bm{q})\transp \right)} ,
+    \label{eq:manip}
+\end{equation}
+
+koji je jednak nuli točno na kinematičkom singularitetu i nigdje drugdje. Kazna je normirana na
+raspon od nule do jedan.
+
+\subsection{Terminacije}
+\label{sec:terminacije}
+
+Epizoda prekida prije isteka vremena u četiri slučaja
+
+\begin{itemize}
+    \item sila je prešla sigurnosnu granicu,
+    \item hvat je izgubljen jer se vrh alata previše udaljio od šipke kvake,
+    \item rub platforme je dotaknuo krilo vrata,
+    \item rub platforme dotaknuo zid ili dovratnik.
+\end{itemize}
+
+\subsection{Nasumičnost pri resetu i kurikulum otpora}
+\label{sec:randomizacija}
+
+Pri svakom resetu, kut prilaska platforme vrtnji se nasumično zakreće unutar $\pm$ 20\textdegree{}
+oko nazivne vrijednosti. Otpor vrata randomizira se u rasponima navedenima u poglavlju
+\ref{ch:sustav} (tablica \ref{tab:randomizacija}).
+
+Kod kliznih vrata otpor se uz to uvodi postupno, kurikulumom koji tijekom prvih 1500 iteracija
+učenja linearno širi gornju granicu trenja i prigušenja s vrijednosti koja odgovara laganim
+vratima do pune vrijednosti iz tablice \ref{tab:randomizacija}, nakon čega ostaje na punoj
+vrijednosti do kraja treninga. Kurikulum politici omogućuje da najprije nauči na lakšim vratima, gdje
+se povratna informacija o napretku redovito javlja, prije nego što se suoči s punim rasponom.
+Zakretna vrata kurikulum nemaju, jer je njihov otpor za red veličine manji i politika na njemu
+uči bez poteškoća; različit režim treninga po tipu vrata posljedica je te razlike u težini
+zadatka, ne proizvoljne odluke.
 
 \section{Postupak učenja}
 \label{sec:trening}
 
-TODO: algoritam, hiperparametri, broj okruženja, trajanje.
+Učenje se provodi algoritmom proksimalne optimizacije politike (PPO) \cite{schulman2017ppo}, s
+hiperparametrima u tablici \ref{tab:ppo}.
 
-\section{Ablacijske studije}
-\label{sec:ablacije}
+PPO pripada familiji postupaka s aktorom i kritikom, koji uče dvije odvojene neuronske mreže.
+Aktor je sama politika, ona iz opažanja daje srednje vrijednosti normalne razdiobe iz koje se potom
+uzorkuje akcija, po jednu za svaku dimenziju akcijskog prostora. Kritik ničim ne upravlja, nego
+iz opažanja procjenjuje očekivani ukupni diskontirani povrat iz
+zatečenog stanja, dakle mjeru toga koliko je stanje samo po sebi povoljno. Kritik je potreban
+jer ostvarena nagrada sama po sebi ne govori je li akcija bila dobra: visoka nagrada može biti
+posljedica povoljnog stanja, a ne odabrane akcije. Razlika između stvarno ostvarenog povrata i
+kritikove procjene, tzv. prednost, ono je što ulazi u ažuriranje aktora. Pozitivna
+prednost pojačava vjerojatnost odabrane akcije, negativna je smanjuje. Diskontni faktor $\gamma$
+i faktor $\lambda$ iz tablice \ref{tab:ppo} upravljaju upravo izračunom te prednosti.
 
-TODO: koje su varijante uspoređene i zašto.
+Obje su mreže potpuno povezane i međusobno neovisne, bez zajedničkih slojeva, s trima skrivenim
+slojevima širine 256, 128 i 64. Aktor preslikava 41 ulaznu veličinu, koliko ih ima opažanje iz
+potpoglavlja \ref{sec:opazanje}, u 15 izlaznih, koliko ih ima akcija iz potpoglavlja
+\ref{sec:akcije}. Kritik ima isti ulaz, ali jedan jedini izlaz. Postupno suženje slojeva
+uobičajen je obrazac: široki prvi sloj izdvaja značajke iz sirovog opažanja, a svaki ih sljedeći
+sažima prema odluci. Ukupno je riječ o svega stotinjak tisuća parametara po obje mreže, što je
+za mjerila neuronskih mreža malo, ali uobičajeno kada je opažanje vektor izmjerenih veličina, a
+ne primjerice slika.
+
+Kao aktivacijska funkcija skrivenih slojeva koristi se ELU (engl. \textit{exponential linear
+    unit}),
+
+\begin{equation}
+    \mathrm{ELU}(x) =
+    \begin{cases}
+        x,         & x > 0    \\
+        e^{x} - 1, & x \leq 0
+    \end{cases}
+    \label{eq:elu}
+\end{equation}
+
+koja unosi nelinearnost, bez koje bi tri uzastopna linearna sloja bila jednakovrijedna jednomu.
+Pozitivne ulaze ne mijenja, dok za negativne daje glatku negativnu
+vrijednost umjesto nule. Time se, prvo, izbjegava da neuron s negativnim izlazom ostane trajno
+neaktivan, jer mu gradijent ne pada na nulu, i drugo, srednja vrijednost aktivacija ostaje bliža
+nuli, što ubrzava konvergenciju. Potonje je ovdje osobito prikladno, jer su ulazne veličine
+(sile, brzine i pomaci) predznačene i prirodno raspoređene oko nule, pa bi funkcija koja
+negativne vrijednosti postavlja na nulu odbacila polovicu njihova raspona.
+
+\begin{table}[H]
+    \centering
+    \caption{Hiperparametri učenja}
+    \label{tab:ppo}
+    \begin{tabular}{@{}ll@{}}
+        \toprule
+        Hiperparametar                                     & Vrijednost                                   \\
+        \midrule
+        Broj koraka po okruženju prije ažuriranja          & 24                                           \\
+        Broj epoha učenja po ažuriranju                    & 5                                            \\
+        Broj mini-grupa                                    & 4                                            \\
+        Stopa učenja                                       & $10^{-3}$, prilagodljiva prema odstupanju KL \\
+        Diskontni faktor $\gamma$                          & 0,99                                         \\
+        Faktor generalizirane procjene prednosti $\lambda$ & 0,95                                         \\
+        Koeficijent obrezivanja                            & 0,2                                          \\
+        Koeficijent entropije                              & 0,001                                        \\
+        Početna standardna devijacija politike             & 0,5                                          \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Broj paralelnih okruženja postavljen je na 1024, kao kompromis između propusnosti i broja
+dostupnih pokretanja. Svako je pokretanje trajalo 2400 iteracija, a sve brojke u nastavku očitane su kao
+prosjek zadnjih 100 iteracija, zato što pojedinačna iteracija nosi previše šuma da bi sama
+predstavljala izvedbu politike.
+
+\section{Rezultati}
+\label{sec:rl-rezultati}
+
+Tablica \ref{tab:rl-rezultati} navodi rezultate na sceni sa zidovima i s graničnim
+vrijednostima zgloba vrata usklađenima s klasičnim pristupom. Radi usporedivosti, obje su
+politike trenirane s istim brojem okruženja i istim brojem iteracija, a sve su vrijednosti
+prosjek zadnjih 100 iteracija.
+
+\begin{table}[H]
+    \centering
+    \caption{Rezultati pristupa temeljenog na učenju, 1024 okruženja, 2400 iteracija}
+    \label{tab:rl-rezultati}
+    \begin{tabular}{@{}lcc@{}}
+        \toprule
+        Veličina                & Zakretna vrata & Klizna vrata \\
+        \midrule
+        Napredak                & 18,93          & 9,87         \\
+        Stopa uspjeha           & 0,743          & 0,831        \\
+        Udio: izgubljen hvat    & 0,072          & 0,000        \\
+        Udio: dodir krila       & 0,061          & 0,003        \\
+        Udio: dodir zida        & 0,002          & 0,000        \\
+        Udio: prekomjerna sila  & 0,006          & 0,028        \\
+        Udio: istek vremena     & 0,860          & 0,969        \\
+        Duljina epizode, koraci & 561,8          & 587,4        \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Ograničenja}
+\label{sec:rl-limits}
+
+\begin{itemize}
+    \item Naučena politika koristi srednju vrijednost razdiobe akcije, bez šuma istraživanja, pa
+          se izvedba pri izvođenju ne mora poklapati s brojkama iz treninga, koje su mjerene uz
+          šum.
+
+    \item Kazna za odstupanje platforme od okomice na vrata pogoršava se u zadnjoj četvrtini
+          treninga, jer okomit položaj platforme stvarno smanjuje doseg ruke montirane izvan
+          njezine osi, pa politika pred kraj treninga taj kompromis rješava nešto drugačije nego
+          ranije.
+
+    \item Politika, za razliku od klasičnog pristupa, ne raspolaže nikakvim posredovanim
+          signalom o tipu ili smjeru ograničenja: geometriju mora otkriti iz iste sile i pomaka
+          kojima i djeluje.
+\end{itemize}
