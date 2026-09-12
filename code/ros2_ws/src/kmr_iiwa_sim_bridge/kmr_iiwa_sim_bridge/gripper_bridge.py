@@ -54,6 +54,7 @@ class GripperBridgeNode(Node):
         self.declare_parameter("isaac_commands_topic", "/isaac_joint_commands")
         self.declare_parameter("isaac_states_topic", "/isaac_joint_states")
         self.declare_parameter("check_period_sec", 0.1)
+        self.declare_parameter("stall_confirm_count", 5)
         self.declare_parameter("stall_velocity_threshold", 0.0003)
         self.declare_parameter("stall_position_threshold", 0.0002)
 
@@ -93,6 +94,9 @@ class GripperBridgeNode(Node):
 
         period = self.get_parameter("check_period_sec").value
         self.timer = self.create_timer(period, self._tick)
+
+        self.stall_confirm = self.get_parameter("stall_confirm_count").value
+        self._stall_streak = 0
 
         self.get_logger().info(
             "kmr_gripper_bridge pokrenut - koristi dijeljenu simulaciju preko "
@@ -139,14 +143,22 @@ class GripperBridgeNode(Node):
 
         mean_pos = float(np.mean(current_positions))
 
-        stalled = False
+        raw_stalled = False
         if self._prev_mean_pos is not None:
             velocity = abs(mean_pos - self._prev_mean_pos)
             pos_error = abs(target_pos - mean_pos)
-            stalled = (
+            raw_stalled = (
                 velocity < self.stall_vel_thresh and pos_error > self.stall_pos_thresh
             )
         self._prev_mean_pos = mean_pos
+
+        # Zaustavljanje se potvrdjuje kroz vise ciklusa. Na pocetku zatvaranja
+        # prsti prodju kroz trenutak niske brzine uz veliku gresku - oba uvjeta
+        # su ispunjena iako se nista nije zaglavilo. Bez potvrde to se objavi
+        # kao stalled, a hill-climbing u handle_approachu tada mjeri sum umjesto
+        # dubine hvata: ista poza daje frakciju 0.000 pa 0.818.
+        self._stall_streak = self._stall_streak + 1 if raw_stalled else 0
+        stalled = self._stall_streak >= self.stall_confirm
 
         self._state_pub.publish(Float32(data=mean_pos / STROKE))
         self._stalled_pub.publish(Bool(data=stalled))

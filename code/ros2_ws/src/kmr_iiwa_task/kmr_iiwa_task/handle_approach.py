@@ -327,13 +327,25 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
     ready_pose = READY_POSE_VERTICAL_BAR if vertical_bar else READY_POSE_HORIZONTAL_BAR
     force_horizontal = vertical_bar
 
+    # MoveIt2 loggira "Joint states are not available yet!" pri svakom pozivu.
+    # Vlastiti node znaci da se taj logger moze utisati bez diranja nasih
+    # poruka, koje idu preko pozivateljevog nodea.
+    moveit_node = Node("handle_approach_moveit")
+    rclpy.logging.set_logger_level(
+        "handle_approach_moveit", rclpy.logging.LoggingSeverity.ERROR
+    )
+    moveit_executor = MultiThreadedExecutor(2)
+    moveit_executor.add_node(moveit_node)
+    moveit_thread = threading.Thread(target=moveit_executor.spin, daemon=True)
+    moveit_thread.start()
+
     moveit2 = MoveIt2(
-        node=node,
+        node=moveit_node,
         joint_names=JOINT_NAMES,
         base_link_name="base_link",
         end_effector_name="gripper_tcp",
         group_name="iiwa_arm",
-        callback_group=callback_group,
+        callback_group=ReentrantCallbackGroup(),
     )
 
     # Gripper na zasebnom nodu i izvrsavacu - MoveIt2-ova pozadinska aktivnost
@@ -599,6 +611,8 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
         )
         gripper_executor.shutdown()
         gripper_node.destroy_node()
+        moveit_executor.shutdown()
+        moveit_node.destroy_node()
         gripper_thread.join(timeout=2.0)
         return False
 
@@ -686,6 +700,8 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
         )
         gripper_executor.shutdown()
         gripper_node.destroy_node()
+        moveit_executor.shutdown()
+        moveit_node.destroy_node()
         gripper_thread.join(timeout=2.0)
         return False
 
@@ -868,6 +884,8 @@ def run_grasp_sequence(node, tf_buffer, callback_group, vertical_bar=True):
 
     gripper_executor.shutdown()
     gripper_node.destroy_node()
+    moveit_executor.shutdown()
+    moveit_node.destroy_node()
     gripper_thread.join(timeout=2.0)
     return good_grasp
 
