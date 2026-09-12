@@ -58,14 +58,14 @@
 \contentsline {section}{\numberline {6.6.}Ograničenja}{33}{section.6.6}%
 \contentsline {chapter}{\numberline {7.}PRISTUP TEMELJEN NA UČENJU}{35}{chapter.7}%
 \contentsline {section}{\numberline {7.1.}Opseg}{35}{section.7.1}%
-\contentsline {section}{\numberline {7.2.}Formulacija Markovljevog procesa odlučivanja}{35}{section.7.2}%
-\contentsline {subsection}{\numberline {7.2.1.}Prostor opažanja}{35}{subsection.7.2.1}%
+\contentsline {section}{\numberline {7.2.}Formulacija Markovljevog procesa odlučivanja}{36}{section.7.2}%
+\contentsline {subsection}{\numberline {7.2.1.}Prostor opažanja}{36}{subsection.7.2.1}%
 \contentsline {subsection}{\numberline {7.2.2.}Prostor akcija}{36}{subsection.7.2.2}%
 \contentsline {subsection}{\numberline {7.2.3.}Koordinacija platforme i manipulatora}{36}{subsection.7.2.3}%
 \contentsline {subsection}{\numberline {7.2.4.}Funkcija nagrade}{37}{subsection.7.2.4}%
 \contentsline {subsection}{\numberline {7.2.5.}Terminacije}{38}{subsection.7.2.5}%
 \contentsline {subsection}{\numberline {7.2.6.}Nasumičnost pri resetu i kurikulum otpora}{38}{subsection.7.2.6}%
-\contentsline {section}{\numberline {7.3.}Postupak učenja}{38}{section.7.3}%
+\contentsline {section}{\numberline {7.3.}Postupak učenja}{39}{section.7.3}%
 \contentsline {section}{\numberline {7.4.}Rezultati}{40}{section.7.4}%
 \contentsline {section}{\numberline {7.5.}Ograničenja}{41}{section.7.5}%
 \contentsline {chapter}{\numberline {8.}EKSPERIMENTALNI REZULTATI I RASPRAVA}{42}{chapter.8}%
@@ -78,5 +78,8 @@
 \contentsline {subsection}{\numberline {8.5.2.}Zašto se razlika pojavljuje samo na zakretnim vratima}{44}{subsection.8.5.2}%
 \contentsline {section}{\numberline {8.6.}Ograničenja usporedbe}{45}{section.8.6}%
 \contentsline {chapter}{\numberline {9.}ZAKLJUČAK}{46}{chapter.9}%
-\contentsline {chapter}{LITERATURA}{47}{section*.38}%
-\contentsline {chapter}{PRILOZI}{49}{chapter*.40}%
+\contentsline {section}{\numberline {9.1.}Glavni nalazi}{46}{section.9.1}%
+\contentsline {section}{\numberline {9.2.}Ograničenja}{47}{section.9.2}%
+\contentsline {section}{\numberline {9.3.}Smjernice za daljnji rad}{47}{section.9.3}%
+\contentsline {chapter}{LITERATURA}{49}{section*.38}%
+\contentsline {chapter}{PRILOZI}{51}{chapter*.40}%

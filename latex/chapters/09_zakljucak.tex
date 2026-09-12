@@ -1,5 +1,98 @@
 \chapter{ZAKLJUČAK}
 \label{ch:zakljucak}
 
-TODO: piše se ZADNJE. Što je postignuto, koja su ograničenja, smjernice za daljnji rad
-(zid s kriterijem otvora, sinkronizirano gibanje baze i ruke, okretanje kvake).
+U radu je razvijen i eksperimentalno vrednovan sustav za autonomnu interakciju mobilnog
+manipulatora s okolinom, na primjeru otvaranja dvaju vrsti vrata. Sustav objedinjuje percepciju,
+procjenu sile i momenta te upravljanje u kontaktu, a zadatak upravljanja riješen je dvama
+pristupima: klasičnim, temeljenim na modelu, i pristupom temeljenim na podržanom učenju.
+Pristupi su potom uspoređeni na istom robotu, istoj sceni i istim mjerilima.
+
+Modul percepcije određuje položaj i orijentaciju kvake iz slike, pomoću vizualnih oznaka.
+Postupak procjene sile i momenta na vrhu alata izveden je iz momenata u zglobovima, bez zasebnog
+senzora sile, a iz odnosa procijenjene sile i ostvarenog pomaka pokazano je kako se procjenjuju
+krutost okoline i geometrija ograničenja gibanja.
+
+Klasični pristup rješava cijeli zadatak, od prilaska i hvata preko otvaranja do prolaska kroz
+vrata, pri čemu tip vrata prepoznaje sam, iz geometrije kvake. Pristup temeljen na učenju
+formuliran je kao Markovljev proces odlučivanja s varijabilnom impedancijom u prostoru akcije,
+čime politika u svakom koraku bira koliko će regulator biti krut po svakoj osi.
+
+\section{Glavni nalazi}
+
+Usporedba dvaju pristupa dala je rezultat koji se ne svodi na prednost jednoga nad drugim, nego
+ovisi o tipu vrata, i upravo je ta ovisnost najvrjedniji nalaz rada.
+
+Kod kliznih vrata oba pristupa dosežu puni cilj u svakom pokušaju. Ograničenje je ondje pravac,
+smjer sile poklapa se sa smjerom gibanja, i eksplicitno poznavanje geometrije daje sve što je
+potrebno, pa dodatna sloboda u odabiru krutosti ne donosi mjerljivu prednost.
+
+Kod zakretnih vrata razlika je velika. Klasični pristup pouzdano otvara vrata do 50\textdegree{},
+ali preko otprilike 57\textdegree{} ne može, jer kvaka klizne iz prihvatnice. Naučena politika
+vrata otvara preko 90\textdegree{} u 96 \% epizoda, s medijanom otvora na 122\textdegree{} i
+gornjim kvartilom praktički na mehaničkoj granici zgloba. Uz to, klasični pristup pri otvaranju
+zakretnih vrata redovito prelazi 400 N, s vršnom silom od 625 N, dok naučena politika tu granicu
+prekoračuje u manje od 1 \% epizoda.
+
+Zaključak je time uvjetovan, a ne općenit: eksplicitno poznavanje geometrije dovoljno je kad je
+geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
+krutosti tijekom same interakcije.
+
+Dva pristupa razlikuju se i po tome što o zadatku znaju. Klasični pristup položaj osi šarke
+izračunava iz poze oznake i poznate širine krila, uz pogrešku od 5 do 8 mm, dok naučena politika
+tu geometriju nema ni u kojem obliku i mora je otkriti iz vlastitih opažanja sile i pomaka. S
+druge strane, naučena politika koordinaciju platforme i manipulatora uči, dok je klasični pristup
+rješava unaprijed propisanim slijedom faza. Upravo ta propisana shema kod zakretnih vrata
+postaje ograničenje.
+
+\section{Ograničenja}
+
+Cjelokupan je rad proveden u simulaciji, pa se zaključci odnose na model, a ne izravno na stvarni
+robot. Uz to, sustav sadrži nekoliko svjesnih pojednostavljenja i nekoliko neriješenih pitanja.
+
+Zglob koji bi omogućio zakretanje kvake zavaren je u oba pristupa, čime je zadatak sveden na
+jedan stupanj slobode po tipu vrata. Percepcija se oslanja na vizualne oznake postavljene na
+vrata, pa sustav u nepripremljenoj okolini ne bi radio. Mecanum kotači nisu simulirani kao tijela
+u kontaktu s podlogom, nego je gibanje platforme zadano kinematički.
+
+Platforma ostvaruje tek dio naređene brzine, a uzrok tome nije utvrđen unatoč tome što je više
+mogućih objašnjenja provjereno i isključeno. Posljedica je da se prijeđeni put platforme ne smije
+uzimati kao pouzdana mjera gibanja, zbog čega provjera napretka pri otvaranju kliznih vrata čita
+stanje zgloba izravno iz simulatora. Ovo ograničenje vrlo je vjerojatno posljedica simulatora,
+i vjerojatno ne bi bila problem na stvarnom robotu.
+
+Naposljetku, sustav sadrži postupak procjene geometrije ograničenja iz odnosa sile i gibanja, ali
+on nije povezan s izvođenjem: u klasičnom se pristupu os šarke izračunava iz percepcije, a
+procjena iz gibanja postoji kao zaseban, samostalno provjeren postupak.
+
+\section{Smjernice za daljnji rad}
+
+\begin{itemize}
+    \item \textbf{Prepozicioniranje hvata.} Jedini put preko granice od 57\textdegree{} kod
+          zakretnih vrata koji ne traži bočni prostor kojega u sceni nema jest da manipulator
+          pusti kvaku, platforma se premjesti, a kvaka se ponovno uhvati iz povoljnije
+          konfiguracije.
+
+    \item \textbf{Povezivanje procjene ograničenja s izvođenjem.} Pokretanje procjene odmah
+          nakon hvata i odabir načina otvaranja na temelju njezina ishoda uklonilo bi oslanjanje
+          na tip kvake prepoznat iz percepcije i učinilo sustav neovisnim o poznatoj geometriji.
+
+    \item \textbf{Odometrija platforme iz percepcije.} Riješila bi oslanjanje na stanje zgloba
+          očitano iz simulatora i omogućila mjerenje prijeđenog puta veličinama dostupnima i na
+          stvarnom robotu.
+
+    \item \textbf{Prolazak kroz zakretna vrata.} Kod kliznih vrata platforma ostaje uz istu
+          stranu zida, pa je otvor dostupan bočnim gibanjem; kod zakretnih vrata robot samim otvaranjem
+          prolazi kroz vrata.
+
+    \item \textbf{Zakretanje kvake.} Vraćanje tog stupnja slobode proširilo bi zadatak na vrata
+          sa stvarnom bravom, ali bi tražilo upravljanje koje kut zakreta kvake ne prati kruto.
+
+    \item \textbf{Detekcija bez oznaka.} Zamjena vizualnih oznaka postupkom koji kvaku
+          prepoznaje izravno iz slike uklonila bi najizraženije pojednostavljenje u radu, pri
+          čemu ostatak sustava ne bi trebalo mijenjati, jer je sučelje prema izvođenju zadatka
+          svedeno na pozu hvatišta.
+
+    \item \textbf{Prijenos na stvarni robot.} Konačna provjera svih zaključaka traži izvođenje
+          izvan simulacije, pri čemu su procjena sile bez zasebnog senzora i pojednostavljeni
+          model gibanja platforme najizgledniji izvori odstupanja.
+\end{itemize}
