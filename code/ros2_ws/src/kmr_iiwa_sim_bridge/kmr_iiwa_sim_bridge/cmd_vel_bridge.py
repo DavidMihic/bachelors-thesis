@@ -15,6 +15,21 @@ U drugom terminalu (obican ROS2 environment):
 
     ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
+Uz pretplatu na /cmd_vel, most objavljuje i ODOMETRIJU na /odom
+(nav_msgs/Odometry) te TF odom -> base_link.
+
+Odometrija se racuna iz poze tijela (get_world_poses), NE iz integracije
+zadane brzine. Izmjereno: baza ne postize naredjenu brzinu (oko 45% uzduzno),
+a prijedjeni put ne odgovara ni izmjerenoj brzini, pa svaki proracun puta iz
+naredbe i vremena visestruko promasuje. Zato se put mjeri, a ne racuna.
+
+U modelu baza nema kotace (jedna kolizijska kutija), pa nema enkodera iz kojih
+bi se odometrija inace izvela. Pravi KMR iiwa odometriju objavljuje kao dio
+isporucenog softvera, pa je rijec o senzoru koji robot stvarno posjeduje - za
+razliku od stanja zglobova vrata, koje se cita samo kao ground truth za
+validaciju. Ova odometrija je pritom savrsena: bez proklizavanja i bez
+akumulirajuceg drifta, sto pravi enkoderi imaju.
+
 Napomena o API pozivima: set_linear_velocities/set_angular_velocities i
 get_world_poses su nazivi iz isaacsim.core.prims.Articulation u trenutnim
 verzijama Isaac Sima. Ako tvoja verzija ima drugacije nazive metoda, pokreni
@@ -48,6 +63,15 @@ parser.add_argument(
 parser.add_argument(
     "--cmd_vel_topic", type=str, default="/cmd_vel", help="ROS2 topic za Twist poruke"
 )
+parser.add_argument(
+    "--odom-topic", type=str, default="/odom", help="ROS2 topic za odometriju"
+)
+parser.add_argument(
+    "--odom-every",
+    type=int,
+    default=2,
+    help="Objavi odometriju svaki n-ti fizicki korak (60 Hz / n).",
+)
 args = parser.parse_args()
 
 simulation_app = SimulationApp({"headless": args.headless})
@@ -66,8 +90,11 @@ simulation_app.update()
 
 # ROS2 se moze importati bilo kad, ali logicki grupiramo ovdje
 import rclpy  # noqa: E402
-from geometry_msgs.msg import Twist  # noqa: E402
+from geometry_msgs.msg import Twist, TransformStamped  # noqa: E402
+from nav_msgs.msg import Odometry  # noqa: E402
+from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
+from tf2_ros import TransformBroadcaster  # noqa: E402
 
 
 class CmdVelBuffer:
@@ -101,6 +128,69 @@ class CmdVelSubscriber(Node):
         self._buffer.update(msg)
 
 
+class OdomPublisher(Node):
+    """Objavljuje /odom i TF odom -> base_link iz poze baze u simulaciji."""
+
+    def __init__(self, topic: str, publish_every: int):
+        super().__init__("kmr_odom_publisher")
+        self._pub = self.create_publisher(Odometry, topic, 10)
+        self._tf = TransformBroadcaster(self)
+        self._every = max(1, publish_every)
+        self._i = 0
+        # Ishodiste odom okvira je poza baze pri pokretanju, pa odometrija
+        # krece od nule bez obzira gdje je robot spawnan u sceni.
+        self._origin_pos = None
+        self._origin_yaw = 0.0
+        self.get_logger().info(f"Objavljujem odometriju na {topic}.")
+
+    def publish(self, position, quat_wxyz, lin_vel, ang_vel) -> None:
+        self._i += 1
+        if self._i % self._every:
+            return
+
+        yaw = quat_to_yaw(quat_wxyz)
+        if self._origin_pos is None:
+            self._origin_pos = np.array(position, dtype=float).copy()
+            self._origin_yaw = yaw
+
+        d = np.array(position, dtype=float) - self._origin_pos
+        c, sn = np.cos(-self._origin_yaw), np.sin(-self._origin_yaw)
+        x = float(d[0] * c - d[1] * sn)
+        y = float(d[0] * sn + d[1] * c)
+        rel_yaw = float(
+            np.arctan2(np.sin(yaw - self._origin_yaw), np.cos(yaw - self._origin_yaw))
+        )
+        qz, qw = float(np.sin(rel_yaw / 2.0)), float(np.cos(rel_yaw / 2.0))
+
+        stamp = self.get_clock().now().to_msg()
+
+        msg = Odometry()
+        msg.header.stamp = stamp
+        msg.header.frame_id = "odom"
+        msg.child_frame_id = "base_link"
+        msg.pose.pose.position.x = x
+        msg.pose.pose.position.y = y
+        msg.pose.pose.orientation.z = qz
+        msg.pose.pose.orientation.w = qw
+        # Brzina se po ROS konvenciji izrazava u okviru djeteta (base_link).
+        vx, vy = float(lin_vel[0]), float(lin_vel[1])
+        cy, sy = np.cos(-yaw), np.sin(-yaw)
+        msg.twist.twist.linear.x = vx * cy - vy * sy
+        msg.twist.twist.linear.y = vx * sy + vy * cy
+        msg.twist.twist.angular.z = float(ang_vel[2])
+        self._pub.publish(msg)
+
+        tf = TransformStamped()
+        tf.header.stamp = stamp
+        tf.header.frame_id = "odom"
+        tf.child_frame_id = "base_link"
+        tf.transform.translation.x = x
+        tf.transform.translation.y = y
+        tf.transform.rotation.z = qz
+        tf.transform.rotation.w = qw
+        self._tf.sendTransform(tf)
+
+
 def quat_to_yaw(quat_wxyz: np.ndarray) -> float:
     """USD/Isaac Sim koristi (w, x, y, z) konvenciju za kvaternione."""
     w, x, y, z = quat_wxyz
@@ -125,7 +215,14 @@ def main():
     rclpy.init()
     buffer = CmdVelBuffer()
     ros_node = CmdVelSubscriber(buffer, args.cmd_vel_topic)
-    ros_thread = threading.Thread(target=rclpy.spin, args=(ros_node,), daemon=True)
+    odom_node = OdomPublisher(args.odom_topic, args.odom_every)
+
+    # Oba nodea u istom izvrsavacu: rclpy.spin bez izricitog izvrsavaca koristi
+    # globalni, pa bi ga dvije niti vrtjele istovremeno.
+    ros_executor = MultiThreadedExecutor(2)
+    ros_executor.add_node(ros_node)
+    ros_executor.add_node(odom_node)
+    ros_thread = threading.Thread(target=ros_executor.spin, daemon=True)
     ros_thread.start()
 
     # from handle_gt_publisher import HandleGroundTruth
@@ -170,10 +267,20 @@ def main():
 
             # gt.publish()
             gt_door.publish()
+            positions, orientations = robot.get_world_poses()
+            odom_node.publish(
+                positions[0],
+                orientations[0],
+                robot.get_linear_velocities()[0],
+                robot.get_angular_velocities()[0],
+            )
+
     except KeyboardInterrupt:
         pass
     finally:
+        ros_executor.shutdown()
         ros_node.destroy_node()
+        odom_node.destroy_node()
         rclpy.shutdown()
         simulation_app.close()
 
