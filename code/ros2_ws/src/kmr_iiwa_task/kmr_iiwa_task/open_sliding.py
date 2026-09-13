@@ -1,42 +1,45 @@
 """
-open_sliding.py - otvara klizna vrata gibanjem baze po trapeznom profilu
-brzine, uz ukocenu ruku i zatvoren gripper.
+open_sliding.py - otvara klizna vrata gibanjem baze, uz ukocenu ruku i
+zatvoren gripper.
 
-Hod vrata premasuje doseg ruke, pa gibanje nosi baza, a ruka samo prenosi
-silu. Ruku ne treba posebno ukociti - arm_controller drzi zadnju tocku
-trajektorije s krutoscu pogona 100000, pa je vec kruta dok joj se nista ne
-salje. Time je i gravitacijski moment konstantan, pa tare procjenitelja sile
-vrijedi kroz cijelu voznju.
+Hod vrata premasuje ono sto baza stigne prijeci u jednom trapeznom profilu, pa
+se voznja PONAVLJA u vise prolaza. Hvat se pritom NE otpusta - gripper drzi
+kvaku cijelo vrijeme, baza se samo zaustavi i ponovno krene s pocetka profila.
+
+Ruku ne treba posebno ukociti - arm_controller drzi zadnju tocku trajektorije
+s krutoscu pogona 100000, pa je vec kruta dok joj se nista ne salje.
 
 Naredbe salje zasebna nit u stalnom ritmu. cmd_vel_bridge primjenjuje zadnju
 primljenu poruku svaki fizicki korak i nema failsafe timeout, pa neujednacen
-ritam znaci trzajno gibanje, a trzaj kroz krutu vezu daje skokove sile od
-vise stotina njutna.
+ritam znaci trzajno gibanje, a trzaj kroz krutu vezu daje skokove sile.
 
-Brzina se ne regulira po sili. Sila uvijek naraste kad baza krece, sto je
-normalno pri vucenju, pa je svaki takav regulator uvodio zastajkivanje. Vrata
-k tome imaju gotovo konstantan otpor. Sila se prati samo kao sigurnosni
-prekid.
+Brzina se ne regulira po sili - sila uvijek naraste kad baza krece, pa je svaki
+takav regulator uvodio zastajkivanje. Sila se prati samo kao sigurnosni prekid.
 
-Smjer otvaranja se odredjuje geometrijski: kvaka je blize onom rubu krila
-prema kojem se vrata otvaraju, a door_tag_center je na sredini krila.
+Smjer klizanja se racuna SVAKI ciklus iz orijentacije gripera. Ako se baza
+usput zakrene, a smjer ostane zamrznut iz pocetka, naredba vise ne ide duz
+vrata nego dijelom U njih.
 
-KRITERIJ ZAVRSETKA CITA STANJE ZGLOBA IZ SIMULATORA
-Otvorenost se uzima s /ground_truth/door_joint, koji objavljuje
-door_gt_publisher iz Isaac Sima - dakle NIJE izvedena iz percepcije. To
-odstupa od ostatka sustava, gdje robot sve zakljucuje iz senzora.
+OTVORENOST VRATA SE MJERI IZ PERCEPCIJE
+Tag je na krilu, pa se giba s vratima. Njegova poza u base_link plus
+odometrija daje poziciju u svijetu; pomak od pocetne, projiciran na os
+klizanja, je koliko su se vrata otvorila. Bez odometrije se pomak baze i pomak
+krila ne mogu razdvojiti, jer se u base_link poklapaju - zato je raniji
+kriterij morao citati slide_joint iz simulatora.
 
-Razlog: prijedjeni put baze nije rijesen. Integracija zadane brzine
-precjenjuje visestruko - izmjereno protiv ground trutha, baza postize oko
-40% naredjenog pomaka, a uzrok je ostao neutvrdjen i nakon sto su iskljuceni
-pogon zgloba vrata (krutost i prigusenje na nuli), trenje s podom, viskozno
-prigusenje baze i usporena simulacija (mjereno 59 fizickih koraka/s, dakle
-realno vrijeme). Odometrija iz lidara preko ruba dovratnika pokusana je i
-odbacena: rub je nadjen u 44% ciklusa uz rasap od 600 mm, dok je stvarni
-pomak baze bio 120 mm.
+Prijedjeni put baze se isto MJERI odometrijom, ne integrira iz naredbe:
+izmjereno, baza postize samo 20-45% naredjene brzine, pa integracija
+visestruko precjenjuje.
 
-Preduvjet: door_task_node je uhvatio kvaku i miruje; tcp_wrench_estimator
-radi; cmd_vel_bridge vrti door_gt_publisher.
+Ground truth (/ground_truth/door_joint) se i dalje cita, ali SAMO za usporedbu
+u logu - ne ulazi u regulaciju.
+
+TARA: ovaj node NE tarira procjenitelj sile. Tara se postavlja u
+handle_approach dok je gripper jos OTVOREN - stiskanje prstiju unosi oko 1400 N
+u ocitanje bez ikakvog gibanja ruke.
+
+Preduvjet: door_task_node je uhvatio kvaku i miruje; tcp_wrench_estimator radi;
+cmd_vel_bridge vrti OdomPublisher.
 
 Pokrece se iz door_task_node (funkcija run) ili zasebno preko
 `ros2 run kmr_iiwa_task open_sliding`.
@@ -51,6 +54,7 @@ import rclpy
 from geometry_msgs.msg import Twist, WrenchStamped
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from tf2_ros import Buffer, TransformListener
@@ -119,7 +123,15 @@ def run():
             [msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z]
         )
 
-    # Stvarna otvorenost vrata iz simulatora - kriterij zavrsetka (vidi docstring).
+    # Odometrija - stvarni pomak baze. Prijedjeni put se MJERI, ne racuna iz
+    # naredbe: izmjereno, baza postize oko 20-45% naredjene brzine, pa
+    # integracija zadane brzine visestruko precjenjuje.
+    odom = {"xy": None}
+
+    def _on_odom(msg: Odometry):
+        odom["xy"] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+
+    # Ground truth otvorenosti - SAMO za validaciju procjene iz percepcije.
     gt = {"slide_m": None}
 
     def _on_gt_joint(msg: JointState):
@@ -128,6 +140,7 @@ def run():
 
     node.create_subscription(WrenchStamped, "/estimation/tcp_wrench", _on_wrench, 10)
     node.create_subscription(JointState, "/ground_truth/door_joint", _on_gt_joint, 10)
+    node.create_subscription(Odometry, "/odom", _on_odom, 10)
     cmd_vel_pub = node.create_publisher(Twist, "/cmd_vel", 10)
     gripper_pub = node.create_publisher(Float32, "/gripper_cmd", 10)
 
@@ -166,18 +179,18 @@ def run():
             publish_count["n"] += 1
             time.sleep(PUBLISH_PERIOD_SEC)
 
-    node.get_logger().info("Cekam TF, wrench i /ground_truth/door_joint...")
+    node.get_logger().info("Cekam TF, wrench i /odom...")
     p_tcp, q_tcp = None, None
     t_wait = time.monotonic()
     while (p_tcp is None or wrench["f"] is None) and rclpy.ok():
         p_tcp, q_tcp, _ = lookup("gripper_tcp")
         time.sleep(0.1)
-    while gt["slide_m"] is None and rclpy.ok():
+    while odom["xy"] is None and rclpy.ok():
         time.sleep(0.1)
         if time.monotonic() - t_wait > 15.0:
             node.get_logger().error(
-                "Nema /ground_truth/door_joint - je li door_gt_publisher aktivan u "
-                "cmd_vel_bridgeu? Bez njega nema kriterija zavrsetka."
+                "Nema /odom - je li OdomPublisher aktivan u cmd_vel_bridgeu? "
+                "Bez odometrije nema kriterija zavrsetka."
             )
             executor.shutdown()
             node.destroy_node()
@@ -220,6 +233,22 @@ def run():
         f"Smjer otvaranja iz geometrije: {sign:+.0f} "
         f"(kvaka je {offset*1000:+.0f} mm od sredine krila duz osi klizanja)"
     )
+
+    # Otvorenost vrata se racuna iz pomaka taga U SVIJETU: tag je na krilu pa
+    # se giba s vratima, a njegova poza u base_link plus odometrija daje
+    # poziciju u svijetu. Bez odometrije se pomak baze i pomak krila ne mogu
+    # razdvojiti, jer se u base_link poklapaju.
+    odom_start = odom["xy"].copy()
+    tag_world_start = odom_start + p_tag_start
+    slide_axis_xy = slide[:2] / np.linalg.norm(slide[:2])
+
+    def door_opening_m():
+        """Koliko su se vrata otvorila, mjereno iz percepcije i odometrije."""
+        p_t, _, _ = lookup("door_tag_center")
+        if p_t is None or odom["xy"] is None:
+            return None
+        moved = (odom["xy"] + p_t[:2]) - tag_world_start
+        return abs(float(np.dot(moved, slide_axis_xy)))
 
     # --- Voznja ---
     total_time = profile_duration()
@@ -271,8 +300,8 @@ def run():
                 else 0.0
             )
 
-            slide = gt["slide_m"]
-            if slide is not None and abs(slide) >= TARGET_SLIDE_M:
+            opened = door_opening_m()
+            if opened is not None and opened >= TARGET_SLIDE_M:
                 break
 
             now = time.monotonic()
@@ -285,12 +314,15 @@ def run():
 
             loop_period = now - t_last
             max_loop_period = max(max_loop_period, loop_period)
-            travelled += speed * loop_period
             t_last = now
+            # Mjereno, ne integrirano iz naredbe.
+            if odom["xy"] is not None:
+                travelled = float(np.linalg.norm(odom["xy"] - odom_start))
 
             log["run"].append(
                 {
                     "travelled_m": travelled,
+                    "opened_m": opened,
                     "speed_mps": speed,
                     "tag_lag_m": lag,
                     "force_N": fmag,
@@ -327,7 +359,7 @@ def run():
     # voznja ponavlja BEZ ponovnog hvata - gripper drzi kvaku cijelo vrijeme,
     # baza se samo zaustavi i ponovno krene s pocetka profila.
     for pass_idx in range(MAX_PASSES):
-        slide_before = abs(gt["slide_m"] or 0.0)
+        slide_before = door_opening_m() or 0.0
         if slide_before >= TARGET_SLIDE_M:
             break
         if pass_idx > 0:
@@ -341,7 +373,7 @@ def run():
         force_spike_count = 0
         _drive_one_pass()
 
-        slide_after = abs(gt["slide_m"] or 0.0)
+        slide_after = door_opening_m() or 0.0
         progress = slide_after - slide_before
         log["passes"].append(
             {
@@ -372,7 +404,7 @@ def run():
             break
 
     if aborted is None:
-        final_slide = abs(gt["slide_m"] or 0.0)
+        final_slide = door_opening_m() or 0.0
         if final_slide < TARGET_SLIDE_M:
             aborted = (
                 f"iscrpljeno {MAX_PASSES} prolaza na {final_slide*1000:.0f} mm "
@@ -395,7 +427,8 @@ def run():
         if (p_tag_end is not None and p_tag_start is not None)
         else None
     )
-    opened = abs(gt["slide_m"]) if gt["slide_m"] is not None else None
+    opened = door_opening_m()
+    gt_opened = abs(gt["slide_m"]) if gt["slide_m"] is not None else None
     publish_hz = publish_count["n"] / max(1e-6, time.monotonic() - t_start)
 
     node.get_logger().info("=== SAZETAK ===")
@@ -406,8 +439,13 @@ def run():
             f"  vrata otvorena: {opened*1000:.0f} mm  "
             f"({'CILJ DOSEGNUT' if uspjeh else 'ispod cilja'})"
         )
+    if gt_opened is not None and opened is not None:
+        node.get_logger().info(
+            f"  ground truth: {gt_opened*1000:.0f} mm  "
+            f"(procjena promasuje {abs(opened - gt_opened)*1000:.0f} mm)"
+        )
     node.get_logger().info(
-        f"  baza presla (integracija naredbe, NIJE mjereno): {travelled*1000:.0f} mm"
+        f"  baza presla (mjereno odometrijom): {travelled*1000:.0f} mm"
     )
     if final_lag is not None:
         node.get_logger().info(
@@ -427,6 +465,7 @@ def run():
         node.get_logger().warn(f"  prekinuto: {aborted}")
     log["summary"] = {
         "opened_m": opened,
+        "gt_opened_m": gt_opened,
         "target_slide_m": TARGET_SLIDE_M,
         "passes": len(log["passes"]),
         "travelled_m": travelled,

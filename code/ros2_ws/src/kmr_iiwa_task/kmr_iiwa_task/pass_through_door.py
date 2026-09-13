@@ -1,40 +1,23 @@
-"""pass_through_door.py - nakon otvaranja vrata: pusti kvaku, odmakni se,
-parkiraj ruku, poravnaj se s otvorom i prodji kroz njega.
+"""
+pass_through_door.py - nakon otvaranja vrata robot pusta kvaku, parkira ruku,
+poravnava se s otvorom i prolazi kroz njega.
 
-Pokrece se nakon open_sliding (ili open_revolute). U tom trenutku robot vise
-NIJE ispred otvora - kod kliznih vrata se pomaknuo skoro metar u stranu dok je
-vukao krilo, pa mu je otvor bocno, ne ispred.
+Kod kliznih vrata robot se dok je vukao krilo pomaknuo skoro metar u stranu,
+pa mu otvor na kraju nije ispred nego bocno. Do njega dolazi bocnim gibanjem,
+bez rotacije, cime ostaje okomit na vrata.
 
-DETEKCIJA OTVORA
-Tocke iz /scan ostaju u redoslijedu skena, pa je praznina u tom nizu praznina
-u prostoru gledano sa senzora. Trazi se praznina sirine bliske
-DOORWAY_WIDTH_M izmedju dva niza tocaka. Izmjereno na mirujucem robotu:
-srediste stabilno unutar ~1 cm kroz minutu, sirina 0.85-0.86 m naspram
-stvarnih 0.85. Pred zatvorenim vratima ispravno ne nalazi nista.
+Otvor se nalazi iz /scan: tocke ostaju u redoslijedu skena, pa je praznina u
+tom nizu praznina u prostoru gledano sa senzora. Trazi se praznina sirine
+bliske DOORWAY_WIDTH_M. Trazenje jednog ruba dovratnika se pokazalo
+neupotrebljivim (nadjen u 44% ciklusa, rasap 600 mm); praznina poznate sirine
+ima dva ogranicenja umjesto jednog.
 
-Raniji pristup - trazenje jednog ruba dovratnika - nije bio upotrebljiv: rub
-nadjen u 44% ciklusa uz rasap od 600 mm. Praznina poznate sirine ima dva
-ogranicenja umjesto jednog, pa ju je puno teze zamijeniti s necim drugim.
-
-FAZE
-  1. RELEASE - otvori gripper, pa se BAZOM odmakni unatrag. Gripper je nakon
-     otpustanja jos oko sipke; put do parkirne poze vodi kroz nju, pa bi ruka
-     odgurnula vrata. Odmicanje bazom je jednostavnije od planiranja pomaka
-     rukom i nema rizika da putanja prodje kroz kvaku.
-  2. PARK   - ruka u parkirnu pozu (istu koju salje full_stack launch). Bez
-     toga gripper strsi u ravnini vrata i zapinje pri prolasku.
-  3. ALIGN  - bocno gibanje (holonomna baza, linear.y) dok otvor ne dodje
-     ravno ispred. Baza se NE rotira, pa ostaje okomita na vrata.
-  4. DRIVE  - ravno naprijed kroz otvor, dok prijedjeni put ne premasi
-     PASS_DISTANCE_M ili dok /scan ne javi prepreku preblizu.
-
-BRZINE: baza postize samo dio naredjenog. Uzduzno oko 45%, bocno oko 11% -
-sto odgovara specifikaciji KMR-a (3.6 naspram 2.0 km/h) uz prag statickog
-trenja koji pri malim brzinama udara jace. Naredbe su zato postavljene znatno
-iznad zeljene brzine, a vremenska ogranicenja su velikodusna.
+Prijedjeni put se mjeri odometrijom. Baza postize samo dio naredjene brzine
+(oko 45% uzduzno, 11% bocno), pa je racunanje puta iz naredbe i vremena
+neupotrebljivo.
 
 Preduvjet: vrata su otvorena, robot drzi ili je upravo pustio kvaku,
-arm_controller i /scan rade.
+arm_controller i /scan rade, cmd_vel_bridge vrti OdomPublisher.
 
 Pokrece se iz door_task_node (funkcija run) ili zasebno preko
 `ros2 run kmr_iiwa_task pass_through_door`.
@@ -46,53 +29,45 @@ import time
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import Twist
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float32
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from kmr_iiwa_task.geometry import quat_rotate_vector, wrap_pi
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
-# Ista poza koju full_stack.launch.py salje pri dizanju kontrolera.
-PARK_POSE = [0.0, -0.6, 0.0, -2.2, 0.0, 0.8, 0.0]
+PARK_POSE = [0.0, -0.6, 0.0, -2.2, 0.0, 0.8, 0.0]  # ista koju salje full_stack
 PARK_TIME_SEC = 4
 
 LIDAR_FRAME = "lidar_link"
+# Prednji uglovi kucista su tangentne tocke sjene pod +-95.44 deg; malo uze da
+# se pojas oko ruba sigurno odbaci.
 SELF_OCCLUSION_HALF_ANGLE_DEG = 94.0
 
-# --- Detekcija otvora ---
 DOORWAY_WIDTH_M = 0.85
 WIDTH_TOL_M = 0.35
 GAP_MIN_M = 0.30
 MAX_RANGE_M = 6.0
 
-# --- Odmicanje od kvake (baza unatrag) ---
+RETREAT_DISTANCE_M = 0.20  # odmicanje od kvake prije parkiranja ruke
 RETREAT_SPEED_MPS = 0.15
-RETREAT_TIME_SEC = 3.0
 
-# --- Poravnavanje (bocno, bez rotacije) ---
-ALIGN_SPEED_MPS = 0.22  # bocno se postize ~11% naredjenog, pa naredba mora
-# biti znatno veca od zeljene brzine
+ALIGN_SPEED_MPS = 0.22
 ALIGN_TOL_M = 0.05
 ALIGN_TIMEOUT_SEC = 150.0
 
-# --- Prolazak ---
 DRIVE_SPEED_MPS = 0.22
-# Prolazak se mjeri iz percepcije: cx je udaljenost do sredista otvora. Kad
-# padne ispod PASS_CX_M, ravnina zida je iza prednjeg ruba baze. Integracija
-# naredbe se ne koristi kao kriterij - visestruko precjenjuje.
-PASS_CX_M = -0.30
-DRIVE_TIMEOUT_SEC = 120.0
-LOST_DOORWAY_STEPS = 20  # koliko ciklusa bez otvora znaci da smo prosli
+PASS_CX_M = -0.30  # srediste otvora iza ove tocke znaci da je zid prosao
 PASS_MARGIN_M = 0.10  # koliko straznji rub baze prolazi iza ravnine zida
-BASE_SPEED_EFFICIENCY = 0.45  # baza uzduzno postize ~45% naredjenog
+LOST_DOORWAY_STEPS = 20
+DRIVE_TIMEOUT_SEC = 120.0
 
-# --- Sigurnost ---
 KMR_LENGTH_M = 1.08
 KMR_WIDTH_M = 0.63
 FRONT_X_MIN_M = KMR_LENGTH_M / 2.0
@@ -116,7 +91,11 @@ def run():
     TransformListener(tf_buffer, node)
 
     state = {"doorway": None, "too_close": False, "have_scan": False}
+    odom = {"xy": None}
     lidar_tf = {"v": None}
+
+    def _on_odom(msg: Odometry):
+        odom["xy"] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
 
     def _ensure_tf():
         if lidar_tf["v"] is not None:
@@ -172,14 +151,14 @@ def run():
         state["doorway"] = best
 
     node.create_subscription(LaserScan, "/scan", _on_scan, 10)
+    node.create_subscription(Odometry, "/odom", _on_odom, 10)
 
     cmd = {"vx": 0.0, "vy": 0.0}
     stop_flag = {"v": False}
 
     def publisher_loop():
         """cmd_vel_bridge primjenjuje zadnju primljenu poruku svaki fizicki
-        korak i nema failsafe timeout, pa naredbe salje zasebna nit u stalnom
-        ritmu - neujednacen ritam znaci trzajno gibanje."""
+        korak i nema failsafe timeout, pa naredbe idu u stalnom ritmu."""
         while rclpy.ok() and not stop_flag["v"]:
             tw = Twist()
             tw.linear.x = cmd["vx"]
@@ -201,29 +180,51 @@ def run():
         time.sleep(0.2)
         node.destroy_node()
 
-    # Vlastiti izvrsavac, ne globalni - vidi isti komentar u open_sliding.
+    def drive_distance(target_m, speed):
+        """Vozi naprijed dok odometrija ne pokaze target_m. Vraca prijedjeni
+        put, ili None ako je prekinuto zbog prepreke."""
+        p0 = odom["xy"].copy()
+        while rclpy.ok():
+            if state["too_close"]:
+                cmd["vx"] = 0.0
+                return None
+            done = float(np.linalg.norm(odom["xy"] - p0))
+            if done >= target_m:
+                cmd["vx"] = 0.0
+                return done
+            cmd["vx"] = speed
+            time.sleep(CONTROL_PERIOD_SEC)
+        cmd["vx"] = 0.0
+        return None
+
+    # rclpy.spin bez izricitog izvrsavaca koristi globalni, pa bi ga druga faza
+    # vrtjela istovremeno iz svoje niti.
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     threading.Thread(target=publisher_loop, daemon=True).start()
 
-    node.get_logger().info("Cekam /scan...")
-    while not state["have_scan"] and rclpy.ok():
+    node.get_logger().info("Cekam /scan i /odom...")
+    t_wait = time.monotonic()
+    while (not state["have_scan"] or odom["xy"] is None) and rclpy.ok():
         time.sleep(0.1)
+        if time.monotonic() - t_wait > 15.0:
+            shutdown("Nema /scan ili /odom - prekidam.", error=True)
+            return
 
-    # --- Faza 1: pusti kvaku i odmakni se od nje ---
+    # Gripper se otvara vise puta jer se jedna poruka poslana odmah po
+    # stvaranju publishera izgubi dok DDS ne uspostavi vezu.
     node.get_logger().info("Otvaram gripper...")
     for _ in range(20):
         gripper_pub.publish(Float32(data=0.0))
         time.sleep(0.1)
 
+    # Gripper je nakon otpustanja jos oko sipke, a put do parkirne poze vodi
+    # kroz nju - zato se prvo odmakne cijela baza.
     node.get_logger().info("Odmicem se od kvake...")
-    cmd["vx"] = -RETREAT_SPEED_MPS
-    time.sleep(RETREAT_TIME_SEC)
-    cmd["vx"] = 0.0
+    drive_distance(RETREAT_DISTANCE_M, -RETREAT_SPEED_MPS)
     time.sleep(0.5)
 
-    # --- Faza 2: parkiraj ruku ---
     node.get_logger().info("Parkiram ruku...")
     traj = JointTrajectory()
     traj.joint_names = JOINT_NAMES
@@ -233,10 +234,8 @@ def run():
     traj.points = [pt]
     traj_pub.publish(traj)
     time.sleep(PARK_TIME_SEC + 1.5)
-    node.get_logger().info("Ruka parkirana.")
 
-    # --- Faza 3: bocno poravnavanje s otvorom (bez rotacije) ---
-    node.get_logger().info("Poravnavam se s otvorom (bocno)...")
+    node.get_logger().info("Poravnavam se s otvorom...")
     t0 = time.monotonic()
     aligned = False
     while rclpy.ok() and time.monotonic() - t0 < ALIGN_TIMEOUT_SEC:
@@ -269,15 +268,15 @@ def run():
         shutdown("Poravnavanje nije uspjelo - ne ulazim.", error=True)
         return
 
-    # --- Faza 4: ravno naprijed kroz otvor ---
     node.get_logger().info("Prolazim kroz otvor...")
+    p_drive_start = odom["xy"].copy()
     t0 = time.monotonic()
     lost = 0
     last_cx = None
     outcome = "vrijeme isteklo"
     while rclpy.ok() and time.monotonic() - t0 < DRIVE_TIMEOUT_SEC:
         if state["too_close"]:
-            outcome = "prepreka preblizu - zaustavljam"
+            outcome = "prepreka preblizu"
             break
 
         cmd["vx"] = DRIVE_SPEED_MPS
@@ -285,23 +284,16 @@ def run():
         if d is None:
             lost += 1
             if lost >= LOST_DOORWAY_STEPS:
-                # Otvor je nestao iz vidnog polja (rubovi su izasli iz maske
-                # samozaklona), ne znaci da smo prosli. Zadnji vidjeni cx je
-                # udaljenost do ravnine zida; do nje treba dodati jos pola
-                # duljine baze da i straznji rub prodje, plus marza.
-                extra = (last_cx or 0.0) + KMR_LENGTH_M / 2.0 + PASS_MARGIN_M
-                secs = extra / (DRIVE_SPEED_MPS * BASE_SPEED_EFFICIENCY)
+                # Rubovi otvora su izasli iz maske samozaklona, sto ne znaci da
+                # smo prosli. Zadnji vidjeni cx je udaljenost do ravnine zida;
+                # do nje treba jos pola duljine baze i marza.
+                need = (last_cx or 0.0) + KMR_LENGTH_M / 2.0 + PASS_MARGIN_M
                 node.get_logger().info(
-                    f"Otvor izasao iz vidnog polja na cx={last_cx:+.2f} m - "
-                    f"vozim jos {secs:.0f} s da straznji rub prodje."
+                    f"Otvor izvan vidnog polja na cx={last_cx:+.2f} m - "
+                    f"vozim jos {need:.2f} m."
                 )
-                t_extra = time.monotonic()
-                while rclpy.ok() and time.monotonic() - t_extra < secs:
-                    if state["too_close"]:
-                        break
-                    cmd["vx"] = DRIVE_SPEED_MPS
-                    time.sleep(CONTROL_PERIOD_SEC)
-                outcome = "prosao"
+                done = drive_distance(need, DRIVE_SPEED_MPS)
+                outcome = "prosao" if done is not None else "prepreka preblizu"
                 break
         else:
             lost = 0
@@ -316,19 +308,14 @@ def run():
         time.sleep(CONTROL_PERIOD_SEC)
 
     cmd["vx"] = 0.0
+    travelled = float(np.linalg.norm(odom["xy"] - p_drive_start))
     node.get_logger().info("=== SAZETAK ===")
     node.get_logger().info(f"  ishod: {outcome}")
-    shutdown()
-
-    cmd["vx"] = 0.0
-    node.get_logger().info("=== SAZETAK ===")
-    node.get_logger().info(f"  ishod: {outcome}")
+    node.get_logger().info(f"  prosao naprijed: {travelled*1000:.0f} mm")
     shutdown()
 
 
 def main():
-    """Samostalno pokretanje. Kad se faza poziva iz door_task_node, koristi se
-    run() - kontekst je ondje vec inicijaliziran."""
     rclpy.init()
     try:
         run()
