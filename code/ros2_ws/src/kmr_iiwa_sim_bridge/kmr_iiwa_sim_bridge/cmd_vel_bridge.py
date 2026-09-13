@@ -90,11 +90,10 @@ simulation_app.update()
 
 # ROS2 se moze importati bilo kad, ali logicki grupiramo ovdje
 import rclpy  # noqa: E402
-from geometry_msgs.msg import Twist, TransformStamped  # noqa: E402
+from geometry_msgs.msg import Twist  # noqa: E402
 from nav_msgs.msg import Odometry  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
-from tf2_ros import TransformBroadcaster  # noqa: E402
 
 
 class CmdVelBuffer:
@@ -134,7 +133,6 @@ class OdomPublisher(Node):
     def __init__(self, topic: str, publish_every: int):
         super().__init__("kmr_odom_publisher")
         self._pub = self.create_publisher(Odometry, topic, 10)
-        self._tf = TransformBroadcaster(self)
         self._every = max(1, publish_every)
         self._i = 0
         # Ishodiste odom okvira je poza baze pri pokretanju, pa odometrija
@@ -179,16 +177,6 @@ class OdomPublisher(Node):
         msg.twist.twist.linear.y = vx * sy + vy * cy
         msg.twist.twist.angular.z = float(ang_vel[2])
         self._pub.publish(msg)
-
-        tf = TransformStamped()
-        tf.header.stamp = stamp
-        tf.header.frame_id = "odom"
-        tf.child_frame_id = "base_link"
-        tf.transform.translation.x = x
-        tf.transform.translation.y = y
-        tf.transform.rotation.z = qz
-        tf.transform.rotation.w = qw
-        self._tf.sendTransform(tf)
 
 
 def quat_to_yaw(quat_wxyz: np.ndarray) -> float:
