@@ -1,28 +1,30 @@
 """base_speed_test.py - mjeri postize li baza naredjenu brzinu BEZ kontakta s
-vratima.
+vratima, i kako izgleda profil brzine kroz voznju.
 
-Svrha: razdvojiti dva moguca uzroka toga sto baza pri otvaranju vrata postize
-samo ~23% naredjene brzine (izmjereno protiv ground trutha, i na kliznim i na
-zakretnim vratima):
-  a) vrata pruzaju otpor -> baza zastaje  (ocekivano, rjesiv problem)
-  b) baza ni slobodno ne postize naredjeno -> problem je u cmd_vel_bridgeu ili
-     u fizici platforme, a sva dosadasnja mjerenja na vratima su posljedica
+Svrha: razdvojiti tri moguca uzroka toga sto baza ne prelazi naredjeni put:
+  a) kasnjenje starta - naredba stigne, ali robot krene tek nakon nekog
+     vremena, pa se gubi dio intervala
+  b) baza ne dosegne naredjenu brzinu
+  c) dosegne je, ali je ne zadrzi
 
-Test vozi bazu kroz nekoliko brzina i za svaku usporedi naredjeni pomak sa
-stvarnim iz /ground_truth/base_pose (koji objavljuje door_gt_publisher).
+Zato se uz ukupni pomak biljezi i PROFIL brzine, racunat iz uzastopnih poza s
+/ground_truth/base_pose. Prosjek put/vrijeme sam po sebi ne razlikuje ta tri
+slucaja - robot koji pola intervala stoji pa vozi punom brzinom daje isti
+prosjek kao onaj koji cijelo vrijeme vozi upola sporije.
 
 PREDUVJET
 - cmd_vel_bridge radi, s aktivnim door_gt_publisherom
 - robot NE drzi kvaku i ima slobodan prostor u smjeru voznje
 - ruka u neutralnoj pozi
 
-Zadano vozi UNATRAG (-x), dalje od vrata, da ne udari u njih. Provjeri da iza
-robota ima barem 2 m slobodnog prostora prije pokretanja.
+Zadano vozi UNATRAG (-x), dalje od vrata. Provjeri da iza robota ima barem 2 m
+slobodnog prostora prije pokretanja.
 
 Pokretanje:
     ros2 run kmr_iiwa_task base_speed_test
     ros2 run kmr_iiwa_task base_speed_test --ros-args -p axis:=y
-    ros2 run kmr_iiwa_task base_speed_test --ros-args -p speeds:="[0.05,0.1,0.2]"
+    ros2 run kmr_iiwa_task base_speed_test --ros-args -p speeds:="[0.15]" \
+        -p duration_sec:=10.0
 """
 
 import json
@@ -61,6 +63,11 @@ class BaseSpeedTest(Node):
         )
 
         self.base_xy = None
+        # Uzorci brzine: popunjavaju se samo dok je samples lista (tj. tijekom
+        # mjerene dionice), inace se preskacu.
+        self.samples = None
+        self.t0 = 0.0
+        self._last_t = None
         self.create_subscription(
             PoseStamped, "/ground_truth/base_pose", self._on_base, 10
         )
@@ -70,7 +77,16 @@ class BaseSpeedTest(Node):
         self.stop_flag = False
 
     def _on_base(self, msg: PoseStamped):
-        self.base_xy = np.array([msg.pose.position.x, msg.pose.position.y])
+        p = np.array([msg.pose.position.x, msg.pose.position.y])
+        t = time.monotonic()
+        if self.samples is not None and self.base_xy is not None:
+            dt = t - self._last_t
+            if dt > 1e-6:
+                self.samples.append(
+                    (t - self.t0, float(np.linalg.norm(p - self.base_xy)) / dt)
+                )
+        self.base_xy = p
+        self._last_t = t
 
     def publisher_loop(self):
         """cmd_vel se salje iz zasebne niti u stalnom ritmu - cmd_vel_bridge
@@ -118,6 +134,9 @@ def main():
 
         p_start = node.base_xy.copy()
         t_start = time.monotonic()
+        node.t0 = t_start
+        node._last_t = t_start
+        node.samples = []
         node.cmd_speed = node.direction * speed
 
         while time.monotonic() - t_start < node.duration and rclpy.ok():
@@ -126,6 +145,8 @@ def main():
         p_end = node.base_xy.copy()  # ocitaj PRIJE zaustavljanja
         node.cmd_speed = 0.0
         t_end = time.monotonic()
+        samples = node.samples or []
+        node.samples = None
         time.sleep(0.5)
 
         elapsed = t_end - t_start
@@ -136,8 +157,31 @@ def main():
         node.get_logger().info(
             f"  naredjeno {speed:.2f} m/s -> presao {actual*1000:6.0f} mm od "
             f"{commanded*1000:6.0f} mm  ({100*ratio:5.1f}%),  "
-            f"stvarna brzina {actual/elapsed:.3f} m/s"
+            f"prosjek put/vrijeme {actual/elapsed:.3f} m/s"
         )
+
+        # Profil razlikuje kasnjenje starta od gubitka brzine - prosjek
+        # put/vrijeme to ne moze.
+        if samples:
+            vmax = max(v for _, v in samples)
+            t_reach = next((t for t, v in samples if v >= 0.9 * speed), None)
+            v_late = [v for t, v in samples if t > 0.7 * elapsed]
+            node.get_logger().info(
+                f"    najveca izmjerena brzina {vmax:.3f} m/s"
+                + (
+                    f", 90% naredjene dosegnuto u {t_reach:.2f} s"
+                    if t_reach is not None
+                    else ", 90% naredjene NIKAD dosegnuto"
+                )
+                + (
+                    f", prosjek zadnje trecine {sum(v_late)/len(v_late):.3f} m/s"
+                    if v_late
+                    else ""
+                )
+            )
+            node.get_logger().info("    profil (s -> m/s):")
+            for t_rel, v in samples[::5]:
+                node.get_logger().info(f"      {t_rel:5.2f}  {v:.3f}")
         results.append(
             {
                 "commanded_speed_mps": speed,
@@ -146,6 +190,7 @@ def main():
                 "actual_m": actual,
                 "ratio": ratio,
                 "actual_speed_mps": actual / elapsed,
+                "profile": [[round(t, 3), round(v, 4)] for t, v in samples],
             }
         )
 
