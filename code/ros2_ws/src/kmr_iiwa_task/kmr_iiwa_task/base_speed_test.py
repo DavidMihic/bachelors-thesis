@@ -23,6 +23,7 @@ slobodnog prostora prije pokretanja.
 Pokretanje:
     ros2 run kmr_iiwa_task base_speed_test
     ros2 run kmr_iiwa_task base_speed_test --ros-args -p axis:=y
+    ros2 run kmr_iiwa_task base_speed_test --ros-args -p axis:=yaw
     ros2 run kmr_iiwa_task base_speed_test --ros-args -p speeds:="[0.15]" \
         -p duration_sec:=10.0
 """
@@ -35,6 +36,7 @@ import time
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 
 PUBLISH_PERIOD_SEC = 0.02  # 50 Hz, isti ritam kao open_sliding/open_revolute
@@ -46,7 +48,7 @@ class BaseSpeedTest(Node):
     def __init__(self):
         super().__init__("base_speed_test")
 
-        self.declare_parameter("axis", "x")
+        self.declare_parameter("axis", "x")  # x, y ili yaw
         self.declare_parameter("direction", -1.0)  # -1 = unatrag, dalje od vrata
         self.declare_parameter("speeds", [0.05, 0.10, 0.15, 0.22])
         self.declare_parameter("duration_sec", 3.0)
@@ -63,6 +65,10 @@ class BaseSpeedTest(Node):
         )
 
         self.base_xy = None
+        # Odometrija iz /odom - usporeduje se s ground truth pozom da se
+        # provjeri moze li joj se vjerovati prije nego na nju vezemo regulaciju.
+        self.odom_xy = None
+        self.odom_yaw = None
         # Uzorci brzine: popunjavaju se samo dok je samples lista (tj. tijekom
         # mjerene dionice), inace se preskacu.
         self.samples = None
@@ -71,6 +77,7 @@ class BaseSpeedTest(Node):
         self.create_subscription(
             PoseStamped, "/ground_truth/base_pose", self._on_base, 10
         )
+        self.create_subscription(Odometry, "/odom", self._on_odom, 10)
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
 
         self.cmd_speed = 0.0
@@ -88,13 +95,22 @@ class BaseSpeedTest(Node):
         self.base_xy = p
         self._last_t = t
 
+    def _on_odom(self, msg: Odometry):
+        self.odom_xy = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        q = msg.pose.pose.orientation
+        self.odom_yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
+
     def publisher_loop(self):
         """cmd_vel se salje iz zasebne niti u stalnom ritmu - cmd_vel_bridge
         primjenjuje zadnju primljenu poruku svaki fizicki korak i nema failsafe
         timeout, pa neujednacen ritam znaci trzajno gibanje."""
         while rclpy.ok() and not self.stop_flag:
             tw = Twist()
-            if self.axis == "y":
+            if self.axis == "yaw":
+                tw.angular.z = self.cmd_speed
+            elif self.axis == "y":
                 tw.linear.y = self.cmd_speed
             else:
                 tw.linear.x = self.cmd_speed
@@ -107,19 +123,26 @@ def main():
     node = BaseSpeedTest()
     threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
 
-    node.get_logger().info("Cekam /ground_truth/base_pose...")
+    node.get_logger().info("Cekam /ground_truth/base_pose i /odom...")
     t0 = time.monotonic()
-    while node.base_xy is None and rclpy.ok():
+    while (
+        node.base_xy is None or node.odom_xy is None or node.odom_yaw is None
+    ) and rclpy.ok():
         time.sleep(0.1)
         if time.monotonic() - t0 > 10.0:
             node.get_logger().error(
-                "Nema /ground_truth/base_pose - je li door_gt_publisher aktivan "
-                "u cmd_vel_bridgeu? Bez njega ovaj test nema sto mjeriti."
+                "Nema /ground_truth/base_pose ili /odom - jesu li "
+                "door_gt_publisher i OdomPublisher aktivni u cmd_vel_bridgeu?"
             )
             rclpy.shutdown()
             return
 
     threading.Thread(target=node.publisher_loop, daemon=True).start()
+
+    if node.axis == "yaw" and node.speeds == [0.05, 0.10, 0.15, 0.22]:
+        # Zadane brzine su za translaciju; za rotaciju uzmi razuman raspon.
+        node.speeds = [0.1, 0.2, 0.3, 0.5]
+        node.get_logger().info("Os yaw - koristim brzine [0.1, 0.2, 0.3, 0.5] rad/s.")
 
     node.get_logger().info(
         f"Os {node.axis}, smjer {node.direction:+.0f}, "
@@ -133,6 +156,8 @@ def main():
         time.sleep(SETTLE_SEC)
 
         p_start = node.base_xy.copy()
+        o_start = node.odom_xy.copy()
+        yaw_start = node.odom_yaw
         t_start = time.monotonic()
         node.t0 = t_start
         node._last_t = t_start
@@ -143,6 +168,8 @@ def main():
             time.sleep(0.02)
 
         p_end = node.base_xy.copy()  # ocitaj PRIJE zaustavljanja
+        o_end = node.odom_xy.copy()
+        yaw_end = node.odom_yaw
         node.cmd_speed = 0.0
         t_end = time.monotonic()
         samples = node.samples or []
@@ -151,18 +178,40 @@ def main():
 
         elapsed = t_end - t_start
         commanded = speed * elapsed
-        actual = float(np.linalg.norm(p_end - p_start))
+        if node.axis == "yaw":
+            # Zakret se mjeri iz odometrije; ground truth poza ne nosi
+            # orijentaciju, pa se za rotaciju usporedba s njom ne radi.
+            d = math.atan2(math.sin(yaw_end - yaw_start), math.cos(yaw_end - yaw_start))
+            actual = odom_travel = abs(d)
+        else:
+            actual = float(np.linalg.norm(p_end - p_start))
+            odom_travel = float(np.linalg.norm(o_end - o_start))
+        odom_err = abs(odom_travel - actual)
         ratio = actual / commanded if commanded > 1e-9 else float("nan")
 
-        node.get_logger().info(
-            f"  naredjeno {speed:.2f} m/s -> presao {actual*1000:6.0f} mm od "
-            f"{commanded*1000:6.0f} mm  ({100*ratio:5.1f}%),  "
-            f"prosjek put/vrijeme {actual/elapsed:.3f} m/s"
-        )
+        if node.axis == "yaw":
+            node.get_logger().info(
+                f"  naredjeno {speed:.2f} rad/s -> zakret "
+                f"{math.degrees(actual):6.1f} deg od {math.degrees(commanded):6.1f} "
+                f"deg  ({100*ratio:5.1f}%),  prosjek "
+                f"{math.degrees(actual/elapsed):.2f} deg/s"
+            )
+        else:
+            node.get_logger().info(
+                f"  naredjeno {speed:.2f} m/s -> presao {actual*1000:6.0f} mm od "
+                f"{commanded*1000:6.0f} mm  ({100*ratio:5.1f}%),  "
+                f"prosjek put/vrijeme {actual/elapsed:.3f} m/s"
+            )
+
+        if node.axis != "yaw":
+            node.get_logger().info(
+                f"    odometrija: {odom_travel*1000:6.0f} mm  "
+                f"(ground truth {actual*1000:6.0f} mm, razlika {odom_err*1000:.1f} mm)"
+            )
 
         # Profil razlikuje kasnjenje starta od gubitka brzine - prosjek
         # put/vrijeme to ne moze.
-        if samples:
+        if samples and node.axis != "yaw":
             vmax = max(v for _, v in samples)
             t_reach = next((t for t, v in samples if v >= 0.9 * speed), None)
             v_late = [v for t, v in samples if t > 0.7 * elapsed]
@@ -190,6 +239,8 @@ def main():
                 "actual_m": actual,
                 "ratio": ratio,
                 "actual_speed_mps": actual / elapsed,
+                "odom_travel_m": odom_travel,
+                "odom_error_m": odom_err,
                 "profile": [[round(t, 3), round(v, 4)] for t, v in samples],
             }
         )
@@ -200,6 +251,12 @@ def main():
     time.sleep(0.5)
 
     node.get_logger().info("=== SAZETAK ===")
+    odom_errs = [r["odom_error_m"] for r in results]
+    if odom_errs:
+        node.get_logger().info(
+            f"  odstupanje odometrije od ground trutha: "
+            f"najvece {max(odom_errs)*1000:.1f} mm"
+        )
     ratios = [r["ratio"] for r in results if math.isfinite(r["ratio"])]
     if ratios:
         node.get_logger().info(
