@@ -213,14 +213,14 @@ def main():
     ros_thread = threading.Thread(target=ros_executor.spin, daemon=True)
     ros_thread.start()
 
-    # from handle_gt_publisher import HandleGroundTruth
+    from handle_gt_publisher import HandleGroundTruth
     from door_gt_publisher import DoorGroundTruth
 
-    # gt = HandleGroundTruth(
-    #     tag_a_path="/World/Door/handle_tag_a",
-    #     tag_b_path="/World/Door/handle_tag_b",
-    #     base_path="/World/Robot/base_link",
-    # )
+    gt_handle = HandleGroundTruth(
+        tag_a_path="/World/Door/handle_tag_a",
+        tag_b_path="/World/Door/handle_tag_b",
+        base_path="/World/Robot/base_link",
+    )
 
     gt_door = DoorGroundTruth()
 
@@ -246,14 +246,7 @@ def main():
 
             world.step(render=not args.headless)
 
-            # DIJAGNOSTIKA: usporedi zadanu i stvarnu brzinu odmah nakon koraka
-            # v_meas = robot.get_linear_velocities()[0]
-            # print(
-            #     f"[VEL] zadano ({world_vx:+.3f}, {world_vy:+.3f})  "
-            #     f"izmjereno ({v_meas[0]:+.3f}, {v_meas[1]:+.3f}, {v_meas[2]:+.3f})"
-            # )
-
-            # gt.publish()
+            gt_handle.publish()
             gt_door.publish()
             positions, orientations = robot.get_world_poses()
             odom_node.publish(

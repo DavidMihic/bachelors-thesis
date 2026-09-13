@@ -38,11 +38,13 @@ except ImportError:  # starije inačice
 def _quat_to_R(q_wxyz: np.ndarray) -> np.ndarray:
     """Kvaternion (w, x, y, z) -> matrica rotacije 3x3."""
     w, x, y, z = q_wxyz
-    return np.array([
-        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z),     2 * (x * z + w * y)],
-        [2 * (x * y + w * z),     1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
-        [2 * (x * z - w * y),     2 * (y * z + w * x),     1 - 2 * (x * x + y * y)],
-    ])
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ]
+    )
 
 
 def _R_to_quat(R: np.ndarray) -> np.ndarray:
@@ -50,10 +52,14 @@ def _R_to_quat(R: np.ndarray) -> np.ndarray:
     t = np.trace(R)
     if t > 0.0:
         s = np.sqrt(t + 1.0) * 2.0
-        return np.array([0.25 * s,
-                         (R[2, 1] - R[1, 2]) / s,
-                         (R[0, 2] - R[2, 0]) / s,
-                         (R[1, 0] - R[0, 1]) / s])
+        return np.array(
+            [
+                0.25 * s,
+                (R[2, 1] - R[1, 2]) / s,
+                (R[0, 2] - R[2, 0]) / s,
+                (R[1, 0] - R[0, 1]) / s,
+            ]
+        )
     i = int(np.argmax(np.diag(R)))
     j, k = (i + 1) % 3, (i + 2) % 3
     s = np.sqrt(R[i, i] - R[j, j] - R[k, k] + 1.0) * 2.0
@@ -75,9 +81,23 @@ class HandleGroundTruth:
         base_path: str,
         topic: str = "/ground_truth/handle_pose",
         base_frame: str = "base_link",
-        normal_axis: int = 2,      # 2 = lokalna os z oznake je njezina normala
-        publish_every: int = 4,    # objavi svaki n-ti korak simulacije
+        normal_axis: int = 2,  # 2 = lokalna os z oznake je njezina normala
+        publish_every: int = 4,  # objavi svaki n-ti korak simulacije
     ) -> None:
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        for label, path in (
+            ("tag_a", tag_a_path),
+            ("tag_b", tag_b_path),
+            ("platforma", base_path),
+        ):
+            if stage is None or not stage.GetPrimAtPath(path).IsValid():
+                raise ValueError(
+                    f"handle_gt_publisher: prim za '{label}' ne postoji na "
+                    f"'{path}'. Provjeri putanje u Stage panelu Isaac Sima."
+                )
+
         if not rclpy.ok():
             rclpy.init()
         self._node = Node("handle_gt_publisher")
@@ -140,4 +160,7 @@ class HandleGroundTruth:
         msg.pose.orientation.y = float(q_b[2])
         msg.pose.orientation.z = float(q_b[3])
         self._pub.publish(msg)
-        rclpy.spin_once(self._node, timeout_sec=0.0)
+
+        # NAPOMENA: ovdje se NE poziva rclpy.spin_once. cmd_vel_bridge vec vrti
+        # vlastiti executor u pozadinskoj niti; drugi spin iz glavne niti nad
+        # istim kontekstom rusi proces s "IndexError: wait set index too big".
