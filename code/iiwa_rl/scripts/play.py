@@ -71,12 +71,13 @@ parser.add_argument(
 parser.add_argument(
     "--release-dof",
     type=float,
-    default=1.745,
+    default=None,
     help=(
-        "Stanje DOF-a vrata pri kojem se pusta kvaka. Zakretna: kut u rad "
-        "(1.745 = 100 stupnjeva). Klizna: hod u m (npr. 0.7)."
+        "Stanje DOF-a vrata pri kojem se pusta kvaka. Prazno = prepoznaj iz "
+        "tipa vrata."
     ),
 )
+
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -151,6 +152,9 @@ from iiwa_rl.tasks.door.door_cfg import (  # noqa: E402
 )
 
 from door_passage import DoorPassage  # noqa: E402
+
+import carb
+import omni.appwindow
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 
@@ -360,8 +364,52 @@ def main(
 
     # simulate environment
     count = 0
+
+    # --- upravljanje snimanjem: P pauza, R reset scene ---
+    demo = {"paused": True, "reset": False}
+
+    def _on_key(event, *args, **kwargs):
+        if event.type != carb.input.KeyboardEventType.KEY_PRESS:
+            return True
+        if event.input == carb.input.KeyboardInput.X:
+            demo["paused"] = not demo["paused"]
+            print("[PAUZA]" if demo["paused"] else "[NASTAVAK]", flush=True)
+        elif event.input == carb.input.KeyboardInput.R:
+            demo["reset"] = True
+            print("[RESET]", flush=True)
+        return True
+
+    _app_window = omni.appwindow.get_default_app_window()
+    _input = carb.input.acquire_input_interface()
+    _sub = _input.subscribe_to_keyboard_events(_app_window.get_keyboard(), _on_key)
+    print("\nX = pauza/nastavak   R = reset scene.  Pokrecem PAUZIRANO.\n", flush=True)
+
     while simulation_app.is_running():
         start_time = time.time()
+
+        # Dok je pauzirano, fizika stoji ali se prikaz osvjezava, pa je
+        # scena i dalje interaktivna i moze se namjestiti kadar.
+        if demo["paused"]:
+            env.unwrapped.sim.render()
+            continue
+
+        if demo["reset"]:
+            demo["reset"] = False
+            # MORA biti unutar inference_mode: tenzori okruzenja stvoreni su
+            # u tom kontekstu, pa ih se izvan njega ne smije mijenjati.
+            with torch.inference_mode():
+                env.reset()
+                obs = env.get_observations()
+                if passage is not None:
+                    passage.reset(
+                        torch.ones(
+                            env.unwrapped.num_envs,
+                            dtype=torch.bool,
+                            device=env.unwrapped.device,
+                        )
+                    )
+            count = 0
+
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
