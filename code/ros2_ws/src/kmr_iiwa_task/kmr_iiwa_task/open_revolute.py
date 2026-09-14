@@ -1,47 +1,47 @@
-"""open_revolute.py - otvaranje zakretnih vrata.
+"""
+open_revolute.py - otvaranje zakretnih vrata.
 
-Do BASE_STOP_ANGLE_DEG baza vozi RAVNO naprijed (bez rotacije, cime heading
-ostaje okomit na vrata) i nosi vecinu otvaranja: izmjereno protiv ground
-trutha, vrata se otvore oko 5 deg po koraku dok ruka komandira 1. Lanac
-rame->ruka->gripper->kvaka je gotovo krut, pa gibanje baze samo po sebi zakrece
-vrata; kutni korak ruke sluzi da meta ostane malo ISPRED kvake (bez toga nema
-sile povlacenja), ne kao glavni pogon.
+Baza se giba po tangenti luka kvake, bez rotacije. Ruka pritom koraca po luku
+oko osi sarke.
 
-Iznad tog kuta ruci ponestaje dosega - orijentacija gripera na poluzi je
-fiksna, pa je stvarni radni prostor puno uzi nego sama udaljenost od ramena.
-Zato se dalje IZMJENJUJU faze: ruka otvara dok baza stoji, pa baza vozi dok
-ruka samo drzi kvaku i time se presloziti u povoljniju konfiguraciju. Prijelaz
-ide po STVARNOM ispruzenju ruke (udaljenost kvake od ramena, REACH_MIN/MAX), ne
-po vremenu - vremenska faza je proizvoljna, a limitirajuca velicina je doseg.
-Cilj je 100 deg, isti prag uspjeha koji koristi RL grana.
+Zakretanje baze - i u mjestu i kao kruzenje oko sarke, da rame ide naprijed -
+probano je i odbaceno: rotacija platforme ima mrtvu zonu od 0.36 rad/s
+(izmjereno), pa krece s barem 20 deg/s i trgne krutu vezu ruka-kvaka. Hvat je
+pucao u istom koraku u kojem bi zakretanje pocelo, bez obzira na prag i rampu.
 
-SIDRENJE NA TAG (sve iz percepcije, nista iz simulatora)
-- POZICIJA: expected_tcp = p_tag + R(q_tag) * handle_offset, gdje je
-  handle_offset izmjeren jednom pri hvatu. Cilj se racuna od te tocke, ne od
-  trenutnog p_tcp - inace je cilj samoreferentan i klizanje kvake se ne moze
-  ni ispraviti ni izmjeriti.
-- ORIJENTACIJA: expected_quat = tag_offset_quat * q_tag, isti princip.
-- SARKA: fiksni vektor TAG_TO_HINGE_VEC u okviru taga. Raniji pristup (smjer iz
-  vektora gripper->tag, normala iz orijentacije gripera) ovisio je o p_tcp pa je
-  mjerio i samu sebe: greska protiv GT-a skakala mu je 4-46 mm. Ovako je 1-9 mm.
+Guranje u lokalni +x ima komponentu duz poluge koja raste kao sin(kut vrata) -
+na 50 deg je 77% sile usmjereno prema rubu krila, trenje to ne zadrzava i
+gripper klizi. Tangenta je okomita na polugu, pa te komponente nema. Zakretanje
+uz to primice rame kvaki bez trosenja bocnog prostora, kojeg izmedju zidova ima
+svega oko 11 cm.
+
+Rotacija baze ima prag i zasicenje: izmjereno, postignuto = 0.562 * naredba -
+0.204 [rad/s], ispod 0.36 rad/s se ne mice uopce. Naredba se skalira inverzom.
+
+SVE IZ PERCEPCIJE, BEZ TAGA TIJEKOM OTVARANJA
+Tag se cita samo pri hvatu, jer nakon nekog kuta izlazi iz vidnog polja kamere.
+Dalje:
+- SARKA se fiksira na hvatu i prati kroz odometriju. Nepomicna je u svijetu, pa
+  je dovoljno oduzeti prijedjeni put baze.
+- KUT VRATA je smjer sarka->TCP. Dok hvat drzi, gripper je na kvaki, pa je to
+  ujedno smjer krila.
+- ORIJENTACIJA gripera je poza pri hvatu zakrenuta za izmjereni kut vrata.
+  Mjereno, ne akumulirano - akumulacija je ranije driftala.
+- KLIZANJE se mjeri kao radijalno odstupanje: koliko je gripper dalje od sarke
+  nego pri hvatu.
+
+Tijekom otvaranja nema /scan provjere. Krilo koje robot vuce i zidovi kroz koje
+prolazi stalno su u prozoru provjere, a baza se usput zakrece pa prozor vise ne
+gleda u otvor. Zastita je sila.
 
 TARA: ovaj node NE tarira procjenitelj sile. Tara se postavlja u
 handle_approach dok je gripper jos OTVOREN - stiskanje prstiju unosi oko 1400 N
 u ocitanje bez ikakvog gibanja ruke.
 
-SIGURNOST
-- door_panel i lidar_wall_* kolizijski objekti se brisu na pocetku - zastita je
-  sila (isti obrazac kao door_open.py).
-- baza: provjera koridora izravno iz /scan (baza ne prolazi kroz MoveIt).
-- slip > SLIP_ABORT_M -> NEUSPJEH (kvaka klizi iz hvata).
-- sila > FORCE_ABORT_N kroz vise uzoraka, ili promasaj mete -> NEUSPJEH.
+Ground truth (/ground_truth/*) se cita samo za log, nikad u regulaciji.
 
-GROUND TRUTH (samo log, nikad u regulaciji)
-Pretplata na /ground_truth/door_joint i /ground_truth/hinge_pose koje objavljuje
-door_gt_publisher iz Isaac Sima. Sluzi za validaciju procjene, ne za
-upravljanje. Ako se ne objavljuje, polja u logu ostaju null i sve ostalo radi.
-
-Preduvjet: door_task_node je uhvatio kvaku i miruje; tcp_wrench_estimator radi.
+Preduvjet: door_task_node je uhvatio kvaku i miruje; tcp_wrench_estimator radi;
+cmd_vel_bridge vrti OdomPublisher.
 
 Pokrece se iz door_task_node (funkcija run) ili zasebno preko
 `ros2 run kmr_iiwa_task open_revolute`.
@@ -59,6 +59,7 @@ from pymoveit2 import MoveIt2
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState, LaserScan
 from std_msgs.msg import Empty, Float32
 from tf2_ros import Buffer, TransformListener
@@ -67,7 +68,6 @@ from tf2_ros import LookupException, ConnectivityException, ExtrapolationExcepti
 from kmr_iiwa_task.add_door_collision import COLLISION_OBJECT_ID
 from kmr_iiwa_task.geometry import (
     quat_angle_between,
-    quat_conj,
     quat_mul,
     quat_rotate_vector,
     wrap_pi,
@@ -87,64 +87,80 @@ TAG_TO_HINGE_M = 0.425
 TAG_TO_HINGE_VEC = [0.0, -TAG_TO_HINGE_M, -0.021]
 
 # --- Baza: samo ravno naprijed, bez rotacije ---
-BASE_CRUISE_MPS = 0.20
-BASE_ACCEL_SEC = 1.0
-BASE_DECEL_SEC = 2.0  # zaustavljanje je sporije od kretanja: baza do zakljucavanja
-# nosi vecinu otvaranja (vrata idu ~5 deg po koraku dok ruka komandira 1), pa
-# nagli prekid trgne cijeli lanac
+BASE_MAX_MPS = 0.33
 PUBLISH_PERIOD_SEC = 0.02
 
-# --- Naizmjenicne faze iznad BASE_STOP_ANGLE_DEG ---
-# Ispod tog kuta baza vozi kontinuirano i nosi vecinu otvaranja. Iznad njega
-# ruci ponestaje dosega: orijentacija gripera na poluzi je fiksna, pa je stvarni
-# radni prostor puno uzi nego sama udaljenost od ramena. Zato se izmjenjuju
-# faze - ruka otvara dok baza stoji, pa baza vozi dok ruka samo drzi kvaku i
-# time se presloziti u povoljniju konfiguraciju.
-TARGET_DOOR_ANGLE_DEG = 50.0
-BASE_STOP_ANGLE_DEG = 35.0
-BASE_PHASE_MPS = 0.10  # u fazama baza gura ruku koja vec drzi kvaku pod
-# fiksnom orijentacijom - ista brzina koja je u cruise fazi bila u redu ovdje
-# istrgne polugu iz stiska
-BASE_PHASE_ACCEL_SEC = 2.5
-# Faze se prebacuju po STVARNOM ispruzenju ruke, ne po vremenu: limitirajuca
-# velicina je udaljenost kvake od ramena, a ne koliko je sekundi baza vozila.
-# Histereza sprjecava titranje oko jednog praga.
-REACH_MAX_M = 0.86  # iznad ovoga ruka je pri kraju dosega -> baza vozi
-REACH_MIN_M = 0.79  # ispod ovoga ruka opet ima prostora -> baza staje
+TARGET_DOOR_ANGLE_DEG = 70.0
+
+# --- Gibanje baze ---
+# Baza se giba po TANGENTI luka kvake, ne po lokalnoj x osi. Guranje u +x ima
+# komponentu duz poluge koja raste kao sin(kut vrata) - na 50 deg je 77% sile
+# usmjereno prema rubu krila, trenje to ne zadrzava i gripper klizi. Izmjereno:
+# prirast radijalnog klizanja po koraku podijeljen sa sin(kuta) je konstantan
+# (~6), sto je potpis upravo tog smjera sile. Tangenta je okomita na polugu, pa
+# te komponente nema.
+#
+# Bocni pomak je ogranicen jer baza vozi izmedju zidova: MAX_LATERAL_M je
+# mjereno odometrijom od pocetne poze, i preko te granice ostaje samo x.
+REACH_TARGET_M = 0.45
+REACH_GAIN = 0.8  # m/s po metru greske
+REACH_DEADBAND_M = 0.03
+MAX_LATERAL_M = 0.30
+BASE_RAMP_MPS2 = 0.15  # Naredba translacije se mijenja postupno. Bez toga
+# skoci na punu vrijednost cim reach_err prijede mrtvu zonu, a pucanje hvata se
+# u svim runovima dogadjalo tocno u koraku nakon sto baza prvi put krene.
+
+BASE_RAMP_DECEL_MPS2 = 1.5  # zaustavljanje je brze od kretanja: pri
+# usporavanju nema trzaja kojeg bi rampa stitila, a sporo zaustavljanje pusti
+# krilo da se otme
+YAW_RAMP_DECEL_RADPS2 = 3.0
+
+# Baza se tijekom otvaranja NE zakrece (vidi docstring). Rampa na wz ostaje
+# jer je publisher petlja dijeli s translacijom.
+YAW_RAMP_RADPS2 = 0.5
 SHOULDER_FALLBACK_XY = (0.363, -0.184)  # iiwa_mount_x/y iz kmr_iiwa.urdf.xacro
 
 # --- Ruka ---
-ARM_STEP_DEG = 1.0  # FIKSNO. Korak izveden iz izmjerenog prirasta vrata je
-# pozitivna povratna veza: naredba ruci pomice vrata, veci izmjereni pomak daje
-# jos vecu naredbu. Izmjereno - vrata su u tri koraka otisla s 1.3 na 34.7
-# stupnjeva, sila 1289 N, ruka na rubu dosega.
-ARM_ACCEL_SEC = 0.5  # ruka mora dosegnuti puni korak PRIJE nego baza dosegne
-# puni cruise (BASE_ACCEL_SEC=1.0) - inace baza gura naprijed dok ruka tek
-# "budi se", i napetost odmah skoci vrlo visoko
+# Korak ruke je proporcionalan PROTEKLOM VREMENU, jer baza vozi kontinuirano a
+# ciklus traje 0.4-2.1 s ovisno o tome koliko MoveIt planira. S fiksnim korakom
+# ruka u duljem ciklusu zaostane za onim sto je baza odvezla.
+#
+# Nije isto kao raniji pokusaj da se korak izvede iz IZMJERENOG prirasta vrata:
+# ondje je nastala povratna veza (naredba pomice vrata, veci pomak daje vecu
+# naredbu, vrata su u tri koraka otisla s 1.3 na 34.7 stupnjeva uz 1289 N).
+# Vrijeme robot ne moze ubrzati svojim djelovanjem, pa te veze nema.
+ARM_STEP_DEG_PER_SEC = 1.5
+ARM_STEP_MAX_DEG = 4.0  # gornja granica po koraku
+ARM_ACCEL_SEC = 0.5  # blazi start, da napetost ne skoci u prvim koracima
 SETTLE_SEC = 0.3
+MIN_CYCLE_SEC = 0.0  # bez dopune - korak ruke se skalira vremenom
+MONITOR_PERIOD_SEC = 0.05  # 20 Hz. Sve se prije mjerilo jednom po ciklusu, a
+# ciklus traje 0.4-2.1 s jer ga odreduje MoveIt - za to vrijeme baza vozi i
+# vrata se otvore 15-18 stupnjeva, pa su prag i prekidi uvijek kasnili.
 MIN_RADIUS_M = 0.30
 MAX_RADIUS_M = 1.20
 
-# --- /scan provjera koridora ispred baze ---
+# --- Sigurnosna udaljenost iz /scan ---
+# Umjesto trake ispred baze gleda se NAJBLIZA tocka u punom vidnom polju, jer
+# se baza tijekom otvaranja zakrece pa traka vise ne pokazuje kamo ide. Krilo
+# koje robot vuce se izuzima.
+LIDAR_FRAME = "lidar_link"
+SELF_OCCLUSION_HALF_ANGLE_DEG = 94.0
+LEAF_MASK_M = 0.15
+LEAF_MASK_SKIP_M = 0.25  # maska krila krece tek ovoliko od sarke
+NEAREST_STOP_M = 0.08
 KMR_LENGTH_M = 1.08
 KMR_WIDTH_M = 0.63
-FRONT_X_MIN_M = KMR_LENGTH_M / 2.0
-LOOKAHEAD_MIN_M = 0.6
-LOOKAHEAD_MARGIN_M = 0.5
-HARD_STOP_M = 0.15
-CORRIDOR_HALF_WIDTH_M = KMR_WIDTH_M / 2.0 + 0.10
-SELF_OCCLUSION_HALF_ANGLE_DEG = 94.0  # geometrijski izvod: senzor na
-# (0.57, 0, 0.08) u base_link, prednji uglovi kucista pod +-95.44 deg; malo uze
-# da se pojas oko ruba sigurno odbaci
-LIDAR_FRAME = "lidar_link"
 
 # --- Sigurnosni prekidi ---
 FORCE_ABORT_N = 700.0
 FORCE_SPIKE_STEPS = 3
-TRACKING_HARD_FAIL_M = 0.030
+TRACKING_HARD_FAIL_M = 0.100  # Kad baza zakrece, ruka jedan ciklus zaostane i
+# bez da je hvat stradao - izmjereno, promasaj od 70-90 mm uz rad_odst ispod
+# 4 mm. Stvarno klizanje hvata pokriva SLIP_ABORT_M, sudar pokriva sila.
 TRACKING_FAIL_ERROR_M = 0.03
 TRACKING_FAIL_STEPS = 3
-SLIP_ABORT_M = 0.035  # koliko gripper smije odstupiti od mjesta na kvaki na
+SLIP_ABORT_M = 0.020  # koliko gripper smije odstupiti od mjesta na kvaki na
 # kojem je bio pri hvatu (mjereno preko taga, neovisno o tome kamo ruku
 # saljemo). Ovo JEST klizanje, za razliku od tracking_error koji mjeri samo je
 # li ruka stigla tamo kamo smo je poslali.
@@ -157,11 +173,6 @@ RETARE_MAX_FORCE_N = 50.0  # ne tariraj pod opterecenjem - tada tariranje
 LIDAR_WALL_ID_RANGE = range(20)
 
 LOG_PATH = "/tmp/open_revolute.json"
-
-USE_GT_HINGE = False  # EKSPERIMENT: umjesto procjene iz taga koristi stvarnu
-# poziciju sarke iz simulatora. Sluzi da se provjeri je li greska procjene
-# (izmjereno 5-8 mm, tj. ~0.7 deg pri r=0.65) uzrok zaglavljivanja. Za normalan
-# rad mora ostati False - robot inace ne rjesava zadatak iz percepcije.
 
 
 def run():
@@ -183,21 +194,28 @@ def run():
         group_name="iiwa_arm",
         callback_group=cb,
     )
-    moveit2.max_velocity = 0.08
-    moveit2.max_acceleration = 0.08
+    moveit2.max_velocity = 0.15
+    moveit2.max_acceleration = 0.15
 
     # Wrench/gripper/tare/scan/cmd_vel na zasebnom nodu i izvrsavacu - MoveIt2
     # inace gladuje obicne pretplate na istom nodu (isti razlog kao door_open).
     sensor_node = Node("open_revolute_sensors")
     wrench = {"f": None}
-    scan_state = {"clear": False, "too_close": False, "have_scan": False}
-    door_geom = {"center_y": None, "width_sign": None}
-    scan_params = {"lookahead_m": LOOKAHEAD_MIN_M}
     stop_flag = {"v": False}
-    base_cmd = {"target": BASE_CRUISE_MPS, "current": 0.0}
-    phase = {"mode": "cruise"}
+    base_cmd = {"vx": 0.0, "vy": 0.0, "wz": 0.0}
     # SAMO ZA VALIDACIJU - nikad ne ulazi u regulacijsku petlju.
-    gt = {"angle_rad": None, "hinge_xy": None}
+    gt = {"angle_rad": None, "hinge_xy": None, "handle": None}
+    scan = {"nearest": None, "have": False}
+    leaf_ref = {"seg": None}
+    lidar_tf = {"v": None}
+    odom = {"xy": None, "yaw": None}
+
+    def _on_odom(msg: Odometry):
+        odom["xy"] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        q = msg.pose.pose.orientation
+        odom["yaw"] = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
 
     def _on_wrench(msg: WrenchStamped):
         wrench["f"] = np.array(
@@ -211,78 +229,88 @@ def run():
     def _on_gt_hinge(msg: PoseStamped):
         gt["hinge_xy"] = np.array([msg.pose.position.x, msg.pose.position.y])
 
+    def _on_gt_handle(msg: PoseStamped):
+        gt["handle"] = np.array(
+            [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        )
+
     tf_buffer = Buffer()
     TransformListener(tf_buffer, sensor_node)
 
-    lidar_to_base = {"t": None, "q": None}
-
     def _ensure_lidar_tf():
-        if lidar_to_base["t"] is not None:
+        if lidar_tf["v"] is not None:
             return True
         try:
             tf = tf_buffer.lookup_transform("base_link", LIDAR_FRAME, rclpy.time.Time())
         except (LookupException, ConnectivityException, ExtrapolationException):
             return False
         t, q = tf.transform.translation, tf.transform.rotation
-        lidar_to_base["t"] = np.array([t.x, t.y, t.z])
-        lidar_to_base["q"] = (q.x, q.y, q.z, q.w)
+        lidar_tf["v"] = (np.array([t.x, t.y, t.z]), (q.x, q.y, q.z, q.w))
         return True
 
+    def _on_leaf(x, y):
+        """Lezi li tocka na krilu koje robot vuce? Krilo je duzina sarka->vrh,
+        u smjeru gripera."""
+        seg = leaf_ref["seg"]
+        if seg is None:
+            return False
+        h, tip = seg
+        # Maska krece TEK OD LEAF_MASK_SKIP_M od sarke. Dovratnik je tocno na
+        # sarki, pa bi ga maska koja krece od nje izbrisala zajedno s krilom -
+        # i robot bi se u njega zabio bez upozorenja.
+        dseg = tip - h
+        nseg = float(np.linalg.norm(dseg))
+        if nseg > 1e-6:
+            h = h + dseg / nseg * LEAF_MASK_SKIP_M
+        d = tip - h
+        n2 = float(np.dot(d, d))
+        if n2 < 1e-9:
+            return False
+        u = float(np.clip(np.dot(np.array([x, y]) - h, d) / n2, 0.0, 1.0))
+        return float(np.linalg.norm(np.array([x, y]) - (h + u * d))) < LEAF_MASK_M
+
     def _on_scan(msg: LaserScan):
+        """Najbliza tocka u punom vidnom polju, izuzev krila. Za razliku od
+        trake ispred baze, ovo vrijedi i kad je baza zakrenuta."""
         if not _ensure_lidar_tf():
             return
-        t, q = lidar_to_base["t"], lidar_to_base["q"]
-        mask_rad = math.radians(SELF_OCCLUSION_HALF_ANGLE_DEG)
-        too_close = False
-        center_y = door_geom["center_y"]
-        width_sign = door_geom["width_sign"]
-        clear = center_y is not None and width_sign is not None
-        y_lo = y_hi = None
-        if center_y is not None and width_sign is not None:
-            if width_sign > 0:
-                y_lo = center_y + 0.05
-                y_hi = center_y + DOOR_LEAF_WIDTH_M - 0.05
-            else:
-                y_lo = center_y - (DOOR_LEAF_WIDTH_M - 0.05)
-                y_hi = center_y - 0.05
-
+        t, q = lidar_tf["v"]
+        mask = math.radians(SELF_OCCLUSION_HALF_ANGLE_DEG)
+        nearest = None
         angle = msg.angle_min
         for r in msg.ranges:
             a = angle
             angle += msg.angle_increment
             if not math.isfinite(r) or r < msg.range_min or r > msg.range_max:
                 continue
-            if abs(wrap_pi(a)) > mask_rad:
+            if abs(wrap_pi(a)) > mask:
                 continue
             x_l, y_l = r * math.cos(a), r * math.sin(a)
             x_b, y_b, _ = quat_rotate_vector(q, [x_l, y_l, 0.0])
             x_b += t[0]
             y_b += t[1]
+            if _on_leaf(x_b, y_b):
+                continue
+            d = _dist_to_base(x_b, y_b)
+            if nearest is None or d < nearest:
+                nearest = d
+        scan["nearest"] = nearest
+        scan["have"] = True
 
-            if (
-                abs(y_b) < CORRIDOR_HALF_WIDTH_M
-                and FRONT_X_MIN_M < x_b < FRONT_X_MIN_M + HARD_STOP_M
-            ):
-                too_close = True
-
-            if FRONT_X_MIN_M < x_b < FRONT_X_MIN_M + scan_params["lookahead_m"]:
-                if center_y is not None and y_lo < y_b < y_hi:
-                    clear = False
-
-        scan_state["clear"] = clear
-        scan_state["too_close"] = too_close
-        scan_state["have_scan"] = True
-
+    sensor_node.create_subscription(LaserScan, "/scan", _on_scan, 10)
     sensor_node.create_subscription(
         WrenchStamped, "/estimation/tcp_wrench", _on_wrench, 10
     )
-    sensor_node.create_subscription(LaserScan, "/scan", _on_scan, 10)
     sensor_node.create_subscription(
         JointState, "/ground_truth/door_joint", _on_gt_joint, 10
     )
     sensor_node.create_subscription(
         PoseStamped, "/ground_truth/hinge_pose", _on_gt_hinge, 10
     )
+    sensor_node.create_subscription(
+        PoseStamped, "/ground_truth/handle_pose", _on_gt_handle, 10
+    )
+    sensor_node.create_subscription(Odometry, "/odom", _on_odom, 10)
     tare_pub = sensor_node.create_publisher(Empty, "/estimation/tare", 10)
     gripper_pub = sensor_node.create_publisher(Float32, "/gripper_cmd", 10)
     cmd_vel_pub = sensor_node.create_publisher(Twist, "/cmd_vel", 10)
@@ -329,11 +357,9 @@ def run():
         v = p_tag_now[:2] - center_now
         return math.atan2(v[1], v[0])
 
-    node.get_logger().info("Cekam TF, wrench i /scan...")
+    node.get_logger().warn("Cekam TF, wrench, /scan i /odom...")
     p_tcp, q_tcp = tcp_pose()
-    while (
-        p_tcp is None or wrench["f"] is None or not scan_state["have_scan"]
-    ) and rclpy.ok():
+    while (p_tcp is None or wrench["f"] is None or not scan["have"]) and rclpy.ok():
         time.sleep(0.1)
         p_tcp, q_tcp = tcp_pose()
 
@@ -341,10 +367,6 @@ def run():
     while p_tag is None and rclpy.ok():
         time.sleep(0.1)
         p_tag, q_tag = tag_pose()
-
-    scan_params["lookahead_m"] = max(
-        LOOKAHEAD_MIN_M, float(p_tag[0]) - FRONT_X_MIN_M + LOOKAHEAD_MARGIN_M
-    )
 
     gripper_pub.publish(Float32(data=1.0))
     time.sleep(1.0)
@@ -361,8 +383,6 @@ def run():
     time.sleep(0.5)
 
     center0 = estimate_center(p_tag, q_tag)
-    door_geom["width_sign"] = 1.0 if (p_tag[1] - center0[1]) >= 0.0 else -1.0
-    door_geom["center_y"] = float(center0[1])
 
     radius0 = float(np.linalg.norm(p_tcp[:2] - center0))
     if not (MIN_RADIUS_M <= radius0 <= MAX_RADIUS_M):
@@ -382,11 +402,78 @@ def run():
     tang0 = np.array([-rad_vec0[1], rad_vec0[0]]) / radius0
     sign = 1.0 if float(np.dot(tang0, normal0)) > 0.0 else -1.0
 
-    # Fiksni odnos gripper<->tag, izmjeren jednom dok hvat sigurno drzi.
-    tag_offset_quat = quat_mul(q_tcp, quat_conj(q_tag))
-    handle_offset = np.array(quat_rotate_vector(quat_conj(q_tag), list(p_tcp - p_tag)))
+    # Orijentacija gripera pri hvatu - referenca za ciljnu orijentaciju.
+    q_tcp_grasp = list(q_tcp)
 
-    door_theta0 = door_angle_from_tag(p_tag, center0)
+    # Ista referenca, ali prema STVARNOJ kvaki iz simulatora. Sluzi da se
+    # izmjereno klizanje razdvoji od greske procjene taga: slip se racuna preko
+    # q_tag, a greska od 2 deg u orijentaciji taga daje oko 8 mm laznog
+    # klizanja pri |handle_offset| = 0.22 m.
+    gt_handle_ref = None if gt["handle"] is None else (p_tcp - gt["handle"]).copy()
+
+    # Radijus mjeren protiv STVARNE sarke. Ako je radius0 (mjeren protiv
+    # procijenjene) veci, cilj na luku stalno stoji malo predaleko od sarke, pa
+    # ruka svaki korak vuce gripper prema van duz poluge.
+    gt_radius0 = (
+        None
+        if gt["hinge_xy"] is None
+        else float(np.linalg.norm(p_tcp[:2] - gt["hinge_xy"]))
+    )
+    if gt_radius0 is not None:
+        node.get_logger().info(
+            f"Radijus: procijenjen {radius0:.4f} m, stvarni {gt_radius0:.4f} m, "
+            f"razlika {(radius0 - gt_radius0)*1000:+.1f} mm"
+        )
+
+    # Sarka je nepomicna u svijetu: fiksiramo je na hvatu i dalje pratimo kroz
+    # odometriju. Time otvaranje ne ovisi o tagu, koji nakon nekog kuta izlazi
+    # iz vidnog polja kamere.
+    # Sarka u odom okviru. base_link se pod odom okvirom i pomice i ZAKRECE,
+    # pa pretvorba mora uracunati i rotaciju - bez nje procjena odluta cim baza
+    # pocne zakretati (izmjereno, greska je narasla do 836 mm).
+    def base_to_odom(p_base):
+        c, sn = math.cos(odom["yaw"]), math.sin(odom["yaw"])
+        return odom["xy"] + np.array(
+            [c * p_base[0] - sn * p_base[1], sn * p_base[0] + c * p_base[1]]
+        )
+
+    def odom_to_base(p_odom):
+        c, sn = math.cos(odom["yaw"]), math.sin(odom["yaw"])
+        d = p_odom - odom["xy"]
+        return np.array([c * d[0] + sn * d[1], -sn * d[0] + c * d[1]])
+
+    hinge_odom = (
+        None if (odom["xy"] is None or odom["yaw"] is None) else base_to_odom(center0)
+    )
+
+    node.get_logger().info(
+        f"hinge_odom: {hinge_odom}, odom xy={odom['xy']} yaw={odom['yaw']}"
+    )
+
+    def hinge_now():
+        """Sarka u base_link, iz fiksne poze u odom okviru."""
+        if hinge_odom is None or odom["xy"] is None or odom["yaw"] is None:
+            return center0
+        return odom_to_base(hinge_odom)
+
+    # Kut vrata se racuna iz smjera sarka->TCP. Dok hvat drzi, gripper je na
+    # kvaki, pa je to ujedno i smjer krila.
+    def door_dir_angle(p_tcp_xy=None):
+        """Kut smjera sarka->TCP u ODOM okviru.
+
+        Racuna se u odom, ne u base_link: baza tijekom kruzenja rotira, pa bi
+        se u base_link vlastita rotacija mjerila kao otvorenost vrata i prag bi
+        se dosegao prerano, bez da su se vrata stvarno pomakla.
+        """
+        p_xy = p_tcp_now_ref["v"][:2] if p_tcp_xy is None else p_tcp_xy
+        if hinge_odom is None or odom["xy"] is None or odom["yaw"] is None:
+            v = p_xy - hinge_now()
+        else:
+            v = base_to_odom(p_xy) - hinge_odom
+        return math.atan2(v[1], v[0])
+
+    p_tcp_now_ref = {"v": p_tcp}
+    door_theta0 = door_dir_angle()
 
     node.get_logger().info(
         f"Os sarke: ({center0[0]:.3f}, {center0[1]:.3f}), radijus {radius0:.3f}m, "
@@ -395,24 +482,43 @@ def run():
 
     stop_flag = {"v": False}
 
+    wz_state = {"cur": 0.0, "t": time.monotonic()}
+    v_state = {"vx": 0.0, "vy": 0.0}
+
     def base_publisher_loop():
-        last = time.monotonic()
+        """Naredbe idu u stalnom ritmu - cmd_vel_bridge primjenjuje zadnju
+        primljenu poruku svaki fizicki korak i nema failsafe timeout."""
         while rclpy.ok() and not stop_flag["v"]:
-            now = time.monotonic()
-            dt = now - last
-            last = now
-            tgt = base_cmd["target"]
-            cur = base_cmd["current"]
-            ramp_sec = BASE_ACCEL_SEC if tgt > cur else BASE_DECEL_SEC
-            if phase["mode"] != "cruise" and tgt > cur:
-                ramp_sec = BASE_PHASE_ACCEL_SEC
-            step = BASE_CRUISE_MPS / ramp_sec * dt if ramp_sec > 0 else abs(tgt - cur)
-            base_cmd["current"] = (
-                min(tgt, cur + step) if cur < tgt else max(tgt, cur - step)
-            )
             gripper_pub.publish(Float32(data=1.0))
+            now_p = time.monotonic()
+            dt_p = now_p - wz_state["t"]
+            wz_state["t"] = now_p
             tw = Twist()
-            tw.linear.x = base_cmd["current"]
+            # Zaustavljanje ide brzom rampom, kretanje sporom.
+            for axis in ("vx", "vy"):
+                tgt_v, cur_v = base_cmd[axis], v_state[axis]
+                rate = (
+                    BASE_RAMP_DECEL_MPS2 if abs(tgt_v) < abs(cur_v) else BASE_RAMP_MPS2
+                )
+                step_v = rate * dt_p
+                v_state[axis] = (
+                    min(tgt_v, cur_v + step_v)
+                    if cur_v < tgt_v
+                    else max(tgt_v, cur_v - step_v)
+                )
+            tw.linear.x = v_state["vx"]
+            tw.linear.y = v_state["vy"]
+
+            # Rampa na zakretu, da naredba ne skoci iz nule preko praga.
+            tgt = base_cmd["wz"]
+            cur = wz_state["cur"]
+            yaw_rate = YAW_RAMP_DECEL_RADPS2 if abs(tgt) < abs(cur) else YAW_RAMP_RADPS2
+            step_p = yaw_rate * dt_p
+            wz_state["cur"] = (
+                min(tgt, cur + step_p) if cur < tgt else max(tgt, cur - step_p)
+            )
+            tw.angular.z = wz_state["cur"]
+
             cmd_vel_pub.publish(tw)
             time.sleep(PUBLISH_PERIOD_SEC)
 
@@ -439,7 +545,120 @@ def run():
         node.get_logger().warn("Nema TF za iiwa_link_0 - koristim nominalni mount.")
         shoulder_xy = np.array(SHOULDER_FALLBACK_XY)
 
+    odom_start = None if odom["xy"] is None else odom["xy"].copy()
+
+    # Dijeljeno stanje izmedju nadzorne niti i glavne petlje. Bez brave -
+    # citanja i pisanja su pojedinacni floatovi, pa je najgore sto se moze
+    # dogoditi da glavna petlja procita vrijednost staru 50 ms.
+    mon = {
+        "center": center0,
+        "door_deg": 0.0,
+        "reach": radius0,
+        "radial_dev": 0.0,
+        "p_tcp": p_tcp,
+        "lateral": 0.0,
+        "abort": None,
+        "stop": False,
+    }
+
+    def monitor_loop():
+        """Mjeri i regulira bazu na 20 Hz. Cim neki uvjet okine, ODMAH
+        zaustavlja bazu - cekanje na glavnu petlju znacilo bi da baza jos
+        sekundu i pol gura nakon sto je trebala stati."""
+        while rclpy.ok() and not mon["stop"]:
+            p_now, _ = tcp_pose()
+            if p_now is None:
+                time.sleep(MONITOR_PERIOD_SEC)
+                continue
+
+            c = hinge_now()
+            radial_dir_m = p_now[:2] - c
+            rd_m = float(np.linalg.norm(radial_dir_m))
+            door_deg = math.degrees(
+                abs(wrap_pi(door_dir_angle(p_now[:2]) - door_theta0))
+            )
+            to_h = p_now[:2] - shoulder_xy
+            reach_m = float(np.linalg.norm(to_h))
+            radial_dev_m = rd_m - radius0
+            lat = 0.0
+            if odom["xy"] is not None and odom_start is not None:
+                lat = float((odom["xy"] - odom_start)[1])
+
+            mon["center"] = c
+            mon["door_deg"] = door_deg
+            mon["reach"] = reach_m
+            mon["radial_dev"] = radial_dev_m
+            mon["p_tcp"] = p_now
+            mon["lateral"] = lat
+
+            # --- prekidi ---
+            stop_now = None
+            if door_deg >= TARGET_DOOR_ANGLE_DEG:
+                stop_now = f"USPJEH: vrata otvorena {door_deg:.1f} deg"
+            elif abs(radial_dev_m) > SLIP_ABORT_M:
+                stop_now = (
+                    f"NEUSPJEH: gripper klizi po poluzi "
+                    f"({radial_dev_m*1000:+.0f}mm od hvatista)"
+                )
+            elif scan["nearest"] is not None and scan["nearest"] < NEAREST_STOP_M:
+                stop_now = (
+                    f"NEUSPJEH: prepreka na {scan['nearest']*1000:.0f} mm od baze"
+                )
+
+            if stop_now is not None and mon["abort"] is None:
+                base_cmd["vx"] = base_cmd["vy"] = base_cmd["wz"] = 0.0
+                mon["abort"] = stop_now
+                try:
+                    moveit2.cancel_execution()
+                except Exception:
+                    pass
+                time.sleep(MONITOR_PERIOD_SEC)
+                continue
+
+            if mon["abort"] is not None:
+                time.sleep(MONITOR_PERIOD_SEC)
+                continue
+
+            # --- regulator baze ---
+            # Baza se giba po TANGENTI luka kvake. Guranje u lokalni +x ima
+            # komponentu duz poluge koja raste kao sin(kut vrata) - na 50 deg
+            # je 77% sile usmjereno prema rubu krila i gripper klizi. Tangenta
+            # je okomita na polugu, pa te komponente nema.
+            #
+            # Kruzenje oko sarke (baza istovremeno rotira i translatira, da
+            # rame ide naprijed) je probano i odbaceno: rotacija platforme ima
+            # mrtvu zonu od 0.36 rad/s, pa svako zakretanje krece s barem
+            # 20 deg/s i trgne krutu vezu ruka-kvaka. Hvat je pucao u istom
+            # koraku u kojem bi kruzenje pocelo, bez obzira na prag i rampu.
+            reach_err_m = reach_m - REACH_TARGET_M
+            if rd_m > 1e-6 and abs(reach_err_m) > REACH_DEADBAND_M:
+                u_rad_m = radial_dir_m / rd_m
+                tangent_m = sign * np.array([-u_rad_m[1], u_rad_m[0]])
+                v_m = float(
+                    np.clip(REACH_GAIN * reach_err_m, -BASE_MAX_MPS, BASE_MAX_MPS)
+                )
+                vx_m, vy_m = v_m * tangent_m[0], v_m * tangent_m[1]
+
+                # Bocna granica se provjerava u ODOM okviru - zidovi su
+                # nepomicni u svijetu, a baza se moze zakrenuti.
+                if odom["yaw"] is not None:
+                    cy_m, sy_m = math.cos(odom["yaw"]), math.sin(odom["yaw"])
+                    v_odom_y = sy_m * vx_m + cy_m * vy_m
+                    if abs(lat) >= MAX_LATERAL_M and lat * v_odom_y > 0.0:
+                        v_odom_x = cy_m * vx_m - sy_m * vy_m
+                        vx_m = cy_m * v_odom_x
+                        vy_m = -sy_m * v_odom_x
+                base_cmd["vx"], base_cmd["vy"] = float(vx_m), float(vy_m)
+            else:
+                base_cmd["vx"] = base_cmd["vy"] = 0.0
+            base_cmd["wz"] = 0.0
+
+            time.sleep(MONITOR_PERIOD_SEC)
+
+    threading.Thread(target=monitor_loop, daemon=True).start()
+
     t_start = time.monotonic()
+    last_cycle_s = 1.0  # procjena za prvi korak
     force_spike_count = 0
     tracking_fail_count = 0
     steps_since_retare = 0
@@ -450,100 +669,79 @@ def run():
     while rclpy.ok() and step < MAX_STEPS:
         step += 1
         steps_since_retare += 1
-        elapsed = time.monotonic() - t_start
-
-        # Provjera vrijedi samo dok baza kontinuirano vozi. U fazama je ono
-        # ispred sama vrata koja otvaramo, sto nije prepreka.
-        if phase["mode"] == "cruise" and scan_state["too_close"]:
-            outcome = "NEUSPJEH: prepreka preblizu ispred baze"
-            break
+        cycle_start = time.monotonic()
+        elapsed = cycle_start - t_start
 
         p_tcp_now, q_tcp_now = tcp_pose()
+        if p_tcp_now is None:
+            outcome = "NEUSPJEH: izgubljen TF gripper_tcp"
+            break
+        p_tcp_now_ref["v"] = p_tcp_now
+
+        # Sve mjereno dolazi iz nadzorne niti (20 Hz), ne iz ovog ciklusa.
+        if mon["abort"] is not None:
+            outcome = mon["abort"]
+            break
+
+        center = mon["center"]
+        door_angle_deg = mon["door_deg"]
+        reach = mon["reach"]
+        radial_dev = mon["radial_dev"]
+        lateral = mon["lateral"]
+        radial_dir = p_tcp_now[:2] - center
+        rd = float(np.linalg.norm(radial_dir))
+
+        # Tag se cita samo za log - nakon nekog kuta izlazi iz vidnog polja, pa
+        # se otvaranje na njega vise ne oslanja.
         p_tag_now, q_tag_now = tag_pose()
-        if p_tcp_now is None or p_tag_now is None:
-            outcome = "NEUSPJEH: izgubljen TF gripper_tcp/door_tag_center"
-            break
 
-        # GT snimamo U ISTOM TRENUTKU kad i procjenu - gt se osvjezava
-        # asinkrono, a do upisa u log prodje cijeli goto().
+        # GT se snima nakon sto je procjena osvjezena, da se usporeduju
+        # vrijednosti iz istog koraka.
         gt_hinge_snapshot = gt["hinge_xy"]
-        gt_angle_snapshot = gt["angle_rad"]
-
-        center = estimate_center(p_tag_now, q_tag_now)
-
-        if USE_GT_HINGE and gt_hinge_snapshot is not None:
-            center = gt_hinge_snapshot.copy()
-
-        door_geom["width_sign"] = 1.0 if (p_tag_now[1] - center[1]) >= 0.0 else -1.0
-        door_geom["center_y"] = float(center[1])
-
-        door_angle_deg = math.degrees(
-            abs(wrap_pi(door_angle_from_tag(p_tag_now, center) - door_theta0))
-        )
-        reach = float(np.linalg.norm(p_tcp_now[:2] - shoulder_xy))
-
-        if phase["mode"] == "cruise" and door_angle_deg >= BASE_STOP_ANGLE_DEG:
-            phase["mode"] = "arm"
-            base_cmd["target"] = 0.0
-            node.get_logger().info(
-                f"Vrata na {door_angle_deg:.1f} deg - prelazim na naizmjenicne "
-                f"faze, cilj {TARGET_DOOR_ANGLE_DEG:.0f} deg."
-            )
-        elif phase["mode"] == "arm" and reach > REACH_MAX_M:
-            phase["mode"] = "drive"
-            base_cmd["target"] = BASE_PHASE_MPS
-        elif phase["mode"] == "drive" and reach < REACH_MIN_M:
-            phase["mode"] = "arm"
-            base_cmd["target"] = 0.0
-            node.get_logger().info(f"  doseg {reach:.2f} m -> ruka otvara dalje")
-
-        if door_angle_deg >= TARGET_DOOR_ANGLE_DEG:
-            outcome = f"USPJEH: vrata otvorena {door_angle_deg:.1f} deg"
-            break
-
         gt_angle_deg = (
-            math.degrees(gt_angle_snapshot) if gt_angle_snapshot is not None else None
+            math.degrees(gt["angle_rad"]) if gt["angle_rad"] is not None else None
         )
         center_error_mm = (
             float(np.linalg.norm(center - gt_hinge_snapshot)) * 1000
             if gt_hinge_snapshot is not None
             else None
         )
+        gt_reach = (
+            float(np.linalg.norm(p_tcp_now[:2] - gt_hinge_snapshot))
+            if gt_hinge_snapshot is not None
+            else None
+        )
 
-        # U fazi voznje ruka i dalje dobiva cilj iz svjezeg taga, samo bez
-        # pomaka naprijed - drzi kvaku dok se baza primice.
+        # Krilo za masku: od sarke do vrha, u smjeru gripera.
+        to_tcp = p_tcp_now[:2] - center
+        n_tcp = float(np.linalg.norm(to_tcp))
+        if n_tcp > 1e-6:
+            leaf_ref["seg"] = (center, center + to_tcp / n_tcp * 0.85)
+
         ramp = min(1.0, elapsed / ARM_ACCEL_SEC) if ARM_ACCEL_SEC > 0 else 1.0
-        step_deg = 0.0 if phase["mode"] == "drive" else ARM_STEP_DEG
+        step_deg = min(ARM_STEP_MAX_DEG, ARM_STEP_DEG_PER_SEC * last_cycle_s)
         dtheta = sign * math.radians(step_deg) * ramp
 
-        # Gdje bi gripper TREBAO biti prema svjezem tagu (a ne gdje trenutno
-        # jest). Bez ovoga je cilj samoreferentan: ako kvaka klizne, cilj klizne
-        # s njom i ruka nikad ne dobije naredbu da se vrati.
-        expected_tcp = p_tag_now + np.array(
-            quat_rotate_vector(q_tag_now, list(handle_offset))
-        )
-        slip = float(np.linalg.norm(p_tcp_now - expected_tcp))
-
-        if phase["mode"] == "drive":
-            # Baza vozi, ruka samo drzi kvaku. Cilj je tocno expected_tcp - bez
-            # projekcije na luk, jer se u ovoj fazi i center i expected_tcp
-            # pomicu s bazom, pa projekcija vuce poziciju po luku dok
-            # orijentacija stoji. Ta razlika zavrce gripper oko z na poluzi.
-            target = expected_tcp.copy()
+        # Cilj je tocka na luku oko sarke, radijusa izmjerenog pri hvatu.
+        # Sarka dolazi iz odometrije, ne iz taga.
+        if rd > 1e-6:
+            rad_vec = radial_dir / rd * radius0
         else:
-            rad_vec = expected_tcp[:2] - center
-            rad_norm = np.linalg.norm(rad_vec)
-            if rad_norm > 1e-6:
-                rad_vec = rad_vec / rad_norm * radius0
-            c, s = math.cos(dtheta), math.sin(dtheta)
-            R = np.array([[c, -s], [s, c]])
-            target_xy = center + R @ rad_vec
-            target = np.array([target_xy[0], target_xy[1], expected_tcp[2]])
+            rad_vec = radial_dir
+        c, sn = math.cos(dtheta), math.sin(dtheta)
+        R = np.array([[c, -sn], [sn, c]])
+        target_xy = center + R @ rad_vec
+        target = np.array([target_xy[0], target_xy[1], p_tcp_now[2]])
 
-        expected_quat = quat_mul(tag_offset_quat, q_tag_now)
-        half = dtheta / 2.0
-        dq = [0.0, 0.0, math.sin(half), math.cos(half)]
-        target_quat = quat_mul(dq, expected_quat)
+        # Orijentacija: poza pri hvatu zakrenuta za IZMJERENI kut vrata plus
+        # korak. Mjereno, ne akumulirano - akumulacija je ranije driftala.
+        total = sign * math.radians(door_angle_deg) + dtheta
+        half = total / 2.0
+        target_quat = quat_mul([0.0, 0.0, math.sin(half), math.cos(half)], q_tcp_grasp)
+
+        gt_slip = None
+        if gt["handle"] is not None and gt_handle_ref is not None:
+            gt_slip = float(np.linalg.norm((p_tcp_now - gt["handle"]) - gt_handle_ref))
 
         goto(target, target_quat)
         time.sleep(SETTLE_SEC)
@@ -562,16 +760,29 @@ def run():
             {
                 "step": step,
                 "t": elapsed,
+                "cycle_s": time.monotonic() - cycle_start,
+                "step_deg": step_deg,
                 "door_angle_deg": door_angle_deg,
-                "phase": phase["mode"],
                 "reach_m": reach,
+                "base_vx": base_cmd["vx"],
+                "base_vy": base_cmd["vy"],
+                "base_wz": base_cmd["wz"],
+                "base_wz_out": wz_state["cur"],
+                "base_v_out": [v_state["vx"], v_state["vy"]],
+                "lateral_m": lateral,
+                "nearest_m": scan["nearest"],
                 "center_xy": [float(center[0]), float(center[1])],
                 "tracking_error_m": tracking_error,
                 "angle_error_deg": (
                     math.degrees(angle_error) if angle_error is not None else None
                 ),
                 "force_N": fmag,
-                "slip_mm": slip * 1000,
+                "radial_dev_mm": radial_dev * 1000,
+                "gt_slip_mm": None if gt_slip is None else gt_slip * 1000,
+                "gt_radius_m": gt_reach,
+                "radius_err_mm": (
+                    None if gt_reach is None else (gt_reach - radius0) * 1000
+                ),
                 "gt_door_angle_deg": gt_angle_deg,
                 "center_error_mm": center_error_mm,
             }
@@ -580,18 +791,21 @@ def run():
         if tracking_error is not None:
             gt_str = f"{gt_angle_deg:.1f}" if gt_angle_deg is not None else "n/a"
             ce_str = f"{center_error_mm:.0f}" if center_error_mm is not None else "n/a"
+            gt_slip_str = "n/a" if gt_slip is None else f"{gt_slip*1000:.1f}"
+            near_str = (
+                "n/a" if scan["nearest"] is None else f"{scan['nearest']*1000:.0f}mm"
+            )
             node.get_logger().info(
                 f"korak {step:3d}: vrata {door_angle_deg:5.1f}deg  "
-                f"doseg={reach:.2f}m  "
-                f"greska={tracking_error*1000:.1f}mm  klizanje={slip*1000:.1f}mm  "
-                f"sila={fmag:.0f}N  gt={gt_str}deg  sarka_err={ce_str}mm"
+                f"doseg={reach:.2f}m  greska={tracking_error*1000:.1f}mm  "
+                f"rad_odst={radial_dev*1000:+.1f}mm (gt klizanje {gt_slip_str})  "
+                f"sila={fmag:.0f}N  gt={gt_str}deg  sarka_err={ce_str}mm  "
+                f"r_err={'n/a' if gt_reach is None else f'{(gt_reach - radius0)*1000:+.1f}'}mm  "
+                f"bocno={lateral*1000:+.0f}mm  najblize={near_str}"
+                f"wz={base_cmd['wz']:+.2f}/{wz_state['cur']:+.2f}  "
             )
         else:
             node.get_logger().warn(f"korak {step:3d}: TF izgubljen nakon pomaka")
-
-        if slip > SLIP_ABORT_M:
-            outcome = f"NEUSPJEH: kvaka klizi iz hvata ({slip*1000:.0f}mm od hvatista)"
-            break
 
         if tracking_error is not None and tracking_error > TRACKING_HARD_FAIL_M:
             outcome = (
@@ -619,9 +833,18 @@ def run():
             time.sleep(SETTLE_SEC)
             steps_since_retare = 0
 
+        if MIN_CYCLE_SEC > 0.0:
+            rest = MIN_CYCLE_SEC - (time.monotonic() - cycle_start)
+            if rest > 0:
+                time.sleep(rest)
+        last_cycle_s = time.monotonic() - cycle_start
+
     if outcome is None:
         outcome = "NEUSPJEH: dosegnut MAX_STEPS bez ishoda"
 
+    mon["stop"] = True
+    base_cmd["vx"] = base_cmd["vy"] = base_cmd["wz"] = 0.0
+    time.sleep(0.5)  # pusti da rampa spusti naredbe na nulu
     stop_flag["v"] = True
     time.sleep(0.1)
     cmd_vel_pub.publish(Twist())
@@ -630,7 +853,18 @@ def run():
     node.get_logger().info("=== SAZETAK ===")
     node.get_logger().info(f"  ishod: {outcome}")
     node.get_logger().info(f"  koraka: {step}")
-    node.get_logger().info(f"  vrata otvorena: {door_angle_deg:.1f} deg")
+    # Konacni kut se ocitava nakon sto se sve smiri - vrijednost iz zadnjeg
+    # koraka je snimljena dok je gibanje jos trajalo.
+    time.sleep(1.5)
+    p_final, _ = tcp_pose()
+    if p_final is not None:
+        p_tcp_now_ref["v"] = p_final
+        door_angle_deg = math.degrees(abs(wrap_pi(door_dir_angle() - door_theta0)))
+    gt_final = math.degrees(gt["angle_rad"]) if gt["angle_rad"] is not None else None
+    node.get_logger().info(
+        f"  vrata otvorena: {door_angle_deg:.1f} deg"
+        + (f"  (ground truth {gt_final:.1f} deg)" if gt_final is not None else "")
+    )
     if log["run"]:
         forces = [r["force_N"] for r in log["run"]]
         node.get_logger().info(
@@ -653,6 +887,13 @@ def run():
     node.destroy_node()
     moveit_node.destroy_node()
     sensor_node.destroy_node()
+
+
+def _dist_to_base(x, y):
+    """Udaljenost tocke do ruba pravokutne baze, u base_link."""
+    dx = max(abs(x) - KMR_LENGTH_M / 2.0, 0.0)
+    dy = max(abs(y) - KMR_WIDTH_M / 2.0, 0.0)
+    return math.hypot(dx, dy)
 
 
 def main():

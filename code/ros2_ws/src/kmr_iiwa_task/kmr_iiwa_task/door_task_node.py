@@ -429,19 +429,11 @@ def main():
         else:
             node.get_logger().info("=== Otvaram zakretna vrata ===")
             run_open_revolute()
-            # Prolazak je izveden samo za klizna vrata: ondje robot cijelo
-            # vrijeme ostaje s iste strane zida, pa mu otvor na kraju ostane
-            # bocno i do njega se dolazi bocnim gibanjem. Kod zakretnih vrata
-            # robot krilo vuce prema sebi i putanja kroz otvor je bitno
-            # drugacija, pa bi trebala zasebna izvedba.
-            node.get_logger().info(
-                "Prolazak kroz zakretna vrata nije izveden - zadatak zavrsava "
-                "nakon otvaranja."
-            )
+            node.get_logger().info("=== Prolazim kroz vrata ===")
+            # Kod zakretnih vrata baza zavrsi blizu zida i zakrenuta.
+            run_pass_through(back_off_m=0.35)
 
-        node._append_log(
-            {"event": "task_complete", "vertical_bar": bool(vertical_bar)}
-        )
+        node._append_log({"event": "task_complete", "vertical_bar": bool(vertical_bar)})
         node.get_logger().info("=== ZADATAK ZAVRSEN ===")
 
         while rclpy.ok():

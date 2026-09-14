@@ -1,23 +1,44 @@
-"""
-pass_through_door.py - nakon otvaranja vrata robot pusta kvaku, parkira ruku,
-poravnava se s otvorom i prolazi kroz njega.
+"""pass_through_door.py - nakon otvaranja vrata: pusti kvaku, odmakni se,
+parkiraj ruku, poravnaj se s otvorom i prodji kroz njega.
 
-Kod kliznih vrata robot se dok je vukao krilo pomaknuo skoro metar u stranu,
-pa mu otvor na kraju nije ispred nego bocno. Do njega dolazi bocnim gibanjem,
-bez rotacije, cime ostaje okomit na vrata.
+Pokrece se nakon open_sliding (ili open_revolute). U tom trenutku robot vise
+NIJE ispred otvora - kod kliznih vrata se pomaknuo skoro metar u stranu dok je
+vukao krilo, pa mu je otvor bocno, ne ispred.
 
-Otvor se nalazi iz /scan: tocke ostaju u redoslijedu skena, pa je praznina u
-tom nizu praznina u prostoru gledano sa senzora. Trazi se praznina sirine
-bliske DOORWAY_WIDTH_M. Trazenje jednog ruba dovratnika se pokazalo
-neupotrebljivim (nadjen u 44% ciklusa, rasap 600 mm); praznina poznate sirine
-ima dva ogranicenja umjesto jednog.
+DETEKCIJA OTVORA
+Tocke iz /scan ostaju u redoslijedu skena, pa je praznina u tom nizu praznina
+u prostoru gledano sa senzora. Trazi se praznina sirine bliske
+DOORWAY_WIDTH_M izmedju dva niza tocaka. Izmjereno na mirujucem robotu:
+srediste stabilno unutar ~1 cm kroz minutu, sirina 0.85-0.86 m naspram
+stvarnih 0.85. Pred zatvorenim vratima ispravno ne nalazi nista.
 
-Prijedjeni put se mjeri odometrijom. Baza postize samo dio naredjene brzine
-(oko 45% uzduzno, 11% bocno), pa je racunanje puta iz naredbe i vremena
-neupotrebljivo.
+Raniji pristup - trazenje jednog ruba dovratnika - nije bio upotrebljiv: rub
+nadjen u 44% ciklusa uz rasap od 600 mm. Praznina poznate sirine ima dva
+ogranicenja umjesto jednog, pa ju je puno teze zamijeniti s necim drugim.
+
+FAZE
+  1. RELEASE - otvori gripper, pa se BAZOM odmakni unatrag. Gripper je nakon
+     otpustanja jos oko sipke; put do parkirne poze vodi kroz nju, pa bi ruka
+     odgurnula vrata. Odmicanje bazom je jednostavnije od planiranja pomaka
+     rukom i nema rizika da putanja prodje kroz kvaku.
+  2. PARK   - ruka u parkirnu pozu (istu koju salje full_stack launch). Bez
+     toga gripper strsi u ravnini vrata i zapinje pri prolasku.
+  3. ALIGN  - bocno gibanje (holonomna baza, linear.y) dok otvor ne dodje
+     ravno ispred. Baza se NE rotira, pa ostaje okomita na vrata.
+  4. DRIVE  - ravno naprijed kroz otvor, dok prijedjeni put ne premasi
+     PASS_DISTANCE_M ili dok /scan ne javi prepreku preblizu.
+
+BRZINE: baza postize samo dio naredjenog. Uzduzno oko 45%, bocno oko 11% -
+sto odgovara specifikaciji KMR-a (3.6 naspram 2.0 km/h) uz prag statickog
+trenja koji pri malim brzinama udara jace. Naredbe su zato postavljene znatno
+iznad zeljene brzine, a vremenska ogranicenja su velikodusna.
+
+Kod zakretnih vrata baza nakon otvaranja ostane blizu zida i zakrenuta, pa se
+prije prolaska odmakne (back_off_m) i ispravi okomito na zid. Kod kliznih ne
+rotira i stoji dalje, pa joj to ne treba.
 
 Preduvjet: vrata su otvorena, robot drzi ili je upravo pustio kvaku,
-arm_controller i /scan rade, cmd_vel_bridge vrti OdomPublisher.
+arm_controller i /scan rade.
 
 Pokrece se iz door_task_node (funkcija run) ili zasebno preko
 `ros2 run kmr_iiwa_task pass_through_door`.
@@ -29,56 +50,239 @@ import time
 
 import numpy as np
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
-from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from pymoveit2 import MoveIt2
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
+from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float32
 from tf2_ros import Buffer, TransformListener
 from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 from kmr_iiwa_task.geometry import quat_rotate_vector, wrap_pi
 
 JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
-PARK_POSE = [0.0, -0.6, 0.0, -2.2, 0.0, 0.8, 0.0]  # ista koju salje full_stack
+# Ista poza koju full_stack.launch.py salje pri dizanju kontrolera.
+PARK_POSE = [0.0, -0.6, 0.0, -2.2, 0.0, 0.8, 0.0]
 PARK_TIME_SEC = 4
 
 LIDAR_FRAME = "lidar_link"
-# Prednji uglovi kucista su tangentne tocke sjene pod +-95.44 deg; malo uze da
-# se pojas oko ruba sigurno odbaci.
 SELF_OCCLUSION_HALF_ANGLE_DEG = 94.0
 
+# --- Detekcija otvora ---
 DOORWAY_WIDTH_M = 0.85
 WIDTH_TOL_M = 0.35
 GAP_MIN_M = 0.30
+WALL_INLIER_M = 0.06  # koliko tocka smije odstupati od pravca zida
+WALL_MIN_POINTS = 30
+RANSAC_ITERS = 60
+WALL_DIR_MIN_Y = 0.7
+MEMORY_CAP = 20000
+MEMORY_CELL_M = 0.05
+
+# Tamponska zona oko krila. Krilo pri 70 deg strsi u otvor - slobodni
+# pravocrtni koridor je tada 0.56 m, a platforma je 0.63. Robot ga zato
+# zaobilazi bocno dok prolazi.
+LEAF_BUFFER_M = 0.20
+LEAF_AVOID_MPS = 0.25
+# Ispod CLEAR_ACT_M se robot aktivno odmice od blize strane. Sama usporedba
+# strana nije dovoljna: dok je prilazio otvoru razlika je stajala na 53-64 mm,
+# ispod mrtve zone, pa korekcije nije bilo sve dok lijeva strana nije pala na
+# 89 mm - a tada je vec bilo prekasno.
+CLEAR_ACT_M = 0.25
+CLEAR_TARGET_M = 0.20  # zeljeni razmak od blize strane
+CLEAR_GAIN = 1.5
+CLEAR_BALANCE_TOL_M = 0.02
+GATE_LAT_GAIN = 0.8
+GATE_YAW_GAIN = 0.8
+# Zakret je dvopolozajan po prirodi: ispod 0.36 rad/s baza se ne mice, pa se i
+# najmanja greska pretvara u naredbu te velicine. Bez histereze i filtriranja
+# regulator prebaci preko cilja pa se vraca, u kratkim ciklusima.
+GATE_YAW_ON_RAD = 0.10  # iznad ove greske se zakret UKLJUCUJE (~6 deg)
+GATE_YAW_OFF_RAD = 0.04  # ispod ove se ISKLJUCUJE (~2 deg)
+GATE_FILTER_ALPHA = 0.3  # nize = jace izgladeno
+BALANCE_GAIN = 0.6
+CLEARANCE_STOP_M = 0.04  # udaljenost do RUBA baze, ne do sredista
 MAX_RANGE_M = 6.0
 
-RETREAT_DISTANCE_M = 0.20  # odmicanje od kvake prije parkiranja ruke
-RETREAT_SPEED_MPS = 0.15
+# --- Odmicanje od kvake (baza unatrag) ---
+RETREAT_M = 0.08  # koliko se TCP povuce od kvake prije parkiranja ruke
 
-ALIGN_SPEED_MPS = 0.22
+# Kod zakretnih vrata baza ostane blizu zida i zakrenuta od otvaranja, pa se
+# prije prolaska mora odmaknuti i ispraviti. Kod kliznih ne rotira i stoji
+# dalje, pa joj to ne treba - iznos dolazi kao argument.
+STRAIGHTEN_TOL_RAD = 0.03
+STRAIGHTEN_GAIN = 1.2
+STRAIGHTEN_TIMEOUT_SEC = 60.0
+ALIGN_GAIN = 1.2  # proporcionalno umjesto bang-bang, da ne titra oko cilja
+STRAIGHTEN_TOL_RAD = 0.03
+STRAIGHTEN_GAIN = 1.2
+STRAIGHTEN_TIMEOUT_SEC = 60.0
+ALIGN_MIN_MPS = 0.18  # ispod ovoga se baza bocno ne mice (prag trenja)
+
+# --- Poravnavanje (bocno, bez rotacije) ---
+ALIGN_SPEED_MPS = 0.22  # bocno se postize ~11% naredjenog, pa naredba mora
+# biti znatno veca od zeljene brzine
 ALIGN_TOL_M = 0.05
 ALIGN_TIMEOUT_SEC = 150.0
 
+# --- Prolazak ---
 DRIVE_SPEED_MPS = 0.22
-PASS_CX_M = -0.30  # srediste otvora iza ove tocke znaci da je zid prosao
-PASS_MARGIN_M = 0.10  # koliko straznji rub baze prolazi iza ravnine zida
-LOST_DOORWAY_STEPS = 20
+# Prolazak se mjeri iz percepcije: cx je udaljenost do sredista otvora. Kad
+# padne ispod PASS_CX_M, ravnina zida je iza prednjeg ruba baze. Integracija
+# naredbe se ne koristi kao kriterij - visestruko precjenjuje.
+PASS_CX_M = -0.30
 DRIVE_TIMEOUT_SEC = 120.0
+LOST_DOORWAY_STEPS = 20  # koliko ciklusa bez otvora znaci da smo prosli
+PASS_MARGIN_M = 0.10  # koliko straznji rub baze prolazi iza ravnine zida
 
+# --- Sigurnost ---
 KMR_LENGTH_M = 1.08
 KMR_WIDTH_M = 0.63
-FRONT_X_MIN_M = KMR_LENGTH_M / 2.0
-HARD_STOP_M = 0.12
-CORRIDOR_HALF_WIDTH_M = KMR_WIDTH_M / 2.0 + 0.05
 
 PUBLISH_PERIOD_SEC = 0.02
 CONTROL_PERIOD_SEC = 0.05
 
 
-def run():
+def _fit_wall(pts):
+    """Najjaci pravac kroz tocke skena, RANSAC-om. Vraca (tocka, smjer,
+    pristalice).
+
+    Oba zida leze u istoj ravnini, pa daju jedan pravac s puno pristalica.
+    Otvoreno krilo stoji pod kutom i ispada iz te skupine - bez toga se
+    praznina trazila i preko tocaka na krilu, sto je davalo lazne otvore.
+    """
+    n = len(pts)
+    if n < WALL_MIN_POINTS:
+        return None
+    arr = np.asarray(pts)
+    best = (0, None, None)
+    rng = np.random.default_rng(0)
+    for _ in range(RANSAC_ITERS):
+        i, j = rng.integers(0, n, 2)
+        if i == j:
+            continue
+        p0, p1 = arr[i], arr[j]
+        d = p1 - p0
+        dn = float(np.linalg.norm(d))
+        if dn < 0.3:  # preblizu jedna drugoj, smjer je nepouzdan
+            continue
+        d = d / dn
+        # Zid je okomit na robota, pa mu smjer mora biti pretezno po y.
+        # Bez toga RANSAC zna uhvatiti KRILO: kad je robot blizu, zid se vidi
+        # pod ostrim kutom i daje malo tocaka, a krilo je odmah ispred i gusto
+        # uzorkovano - pa ispadne "najjaci pravac", zidne tocke se proglase
+        # krilom i izbjegavanje radi naopako.
+        if abs(d[1]) < WALL_DIR_MIN_Y:
+            continue
+        nrm = np.array([-d[1], d[0]])
+        dist = np.abs((arr - p0) @ nrm)
+        cnt = int(np.count_nonzero(dist < WALL_INLIER_M))
+        if cnt > best[0]:
+            best = (cnt, p0, d)
+    if best[1] is None or best[0] < WALL_MIN_POINTS:
+        return None
+    p0, d = best[1], best[2]
+    nrm = np.array([-d[1], d[0]])
+    inl = arr[np.abs((arr - p0) @ nrm) < WALL_INLIER_M]
+    return p0, d, inl
+
+
+def _merge(old, new, cell=MEMORY_CELL_M, cap=MEMORY_CAP):
+    """Dodaj nove tocke u memoriju, sazete u prostornu resetku.
+
+    Ranije se pamtilo zadnjih N tocaka, a svaki sken ih doda nekoliko stotina -
+    pa je memorija drzala samo zadnja dva-tri skena i sve vidjeno pri prilasku
+    bi ispalo. Robot bi tada mislio da je strana koju je upravo prosao slobodna
+    (izmjereno: desni dovratnik uz bok prikazivan kao 1000+ mm) i strugao bi po
+    njoj. S resetkom se svaka celija pamti jednom, pa memorija ostaje mala a
+    nista se ne gubi.
+    """
+    m = new if old is None or len(old) == 0 else np.vstack([old, new])
+    keys = np.round(m / cell).astype(np.int64)
+    _, idx = np.unique(keys, axis=0, return_index=True)
+    m = m[np.sort(idx)]
+    if len(m) > cap:
+        m = m[-cap:]
+    return m
+
+
+def _min_dist_and_y(pts_base):
+    """Najmanja udaljenost do RUBA baze, uz (x, y) te tocke. None ako nema
+    tocaka. Vraca (d, x, y)."""
+    best = None
+    for q in pts_base:
+        d = _dist_to_base(float(q[0]), float(q[1]))
+        if best is None or d < best[0]:
+            best = (d, float(q[0]), float(q[1]))
+    return best
+
+
+def _gate_target(left, right):
+    """Iz najblize lijeve i desne tocke odredi najuzi prolaz.
+
+    Te dvije tocke su vrh krila i suprotni dovratnik - spojnica medju njima je
+    mjesto kroz koje robot mora proci. Iz nje slijedi CILJNA orijentacija
+    (okomica na spojnicu) i CILJNA bocna pozicija (poloviste). Oboje su
+    apsolutni ciljevi, pa se greska ne gomila kao kad se zadaje samo kutna
+    brzina.
+
+    Vraca (yaw_err, lateral_err) ili None.
+    """
+    if left is None or right is None:
+        return None
+    a = np.array([left[1], left[2]])
+    b = np.array([right[1], right[2]])
+    gate = b - a
+    span = float(np.linalg.norm(gate))
+    if span < 0.3 or span > 2.0:
+        return None
+    n = np.array([gate[1], -gate[0]])
+    if n[0] < 0.0:
+        n = -n
+    yaw_err = math.atan2(n[1], n[0])
+    mid = 0.5 * (a + b)
+    return yaw_err, float(mid[1])
+
+
+def _dist_to_base(x, y):
+    """Udaljenost tocke do RUBA pravokutne baze, u base_link."""
+    dx = max(abs(x) - KMR_LENGTH_M / 2.0, 0.0)
+    dy = max(abs(y) - KMR_WIDTH_M / 2.0, 0.0)
+    return math.hypot(dx, dy)
+
+
+def _find_doorway_from(fit):
+    """Otvor u zidu: praznina sirine bliske DOORWAY_WIDTH_M medju tockama koje
+    leze NA ZIDU. Vraca (sirina, cx, cy, rub_a, rub_b) ili None."""
+    if fit is None:
+        return None
+    p0, d, inl = fit
+    # Poredaj zidne tocke duz zida, pa trazi prazninu medu njima.
+    order = np.argsort((inl - p0) @ d)
+    wall = inl[order]
+    best = None
+    for i in range(len(wall) - 1):
+        a, b = wall[i], wall[i + 1]
+        w = float(np.linalg.norm(b - a))
+        if w > GAP_MIN_M and abs(w - DOORWAY_WIDTH_M) < WIDTH_TOL_M:
+            if best is None or abs(w - DOORWAY_WIDTH_M) < abs(
+                best[0] - DOORWAY_WIDTH_M
+            ):
+                best = (
+                    w,
+                    0.5 * float(a[0] + b[0]),
+                    0.5 * float(a[1] + b[1]),
+                    a,
+                    b,
+                )
+    return best
+
+
+def run(back_off_m=0.0):
     node = Node("pass_through_door")
 
     cmd_vel_pub = node.create_publisher(Twist, "/cmd_vel", 10)
@@ -90,12 +294,69 @@ def run():
     tf_buffer = Buffer()
     TransformListener(tf_buffer, node)
 
-    state = {"doorway": None, "too_close": False, "have_scan": False}
-    odom = {"xy": None}
-    lidar_tf = {"v": None}
+    # MoveIt2 loggira "Joint states are not available yet!" pri svakom pozivu,
+    # pa dobiva vlastiti node koji se moze utisati.
+    moveit_node = Node("pass_through_moveit")
+    rclpy.logging.set_logger_level(
+        "pass_through_moveit", rclpy.logging.LoggingSeverity.ERROR
+    )
+    moveit_executor = MultiThreadedExecutor(2)
+    moveit_executor.add_node(moveit_node)
+    threading.Thread(target=moveit_executor.spin, daemon=True).start()
+
+    moveit2 = MoveIt2(
+        node=moveit_node,
+        joint_names=JOINT_NAMES,
+        base_link_name="base_link",
+        end_effector_name="gripper_tcp",
+        group_name="iiwa_arm",
+        callback_group=ReentrantCallbackGroup(),
+    )
+    moveit2.max_velocity = 0.1
+    moveit2.max_acceleration = 0.1
+
+    def tcp_pose():
+        try:
+            t = tf_buffer.lookup_transform(
+                "base_link", "gripper_tcp", rclpy.time.Time()
+            )
+            tr, r = t.transform.translation, t.transform.rotation
+            return np.array([tr.x, tr.y, tr.z]), [r.x, r.y, r.z, r.w]
+        except (LookupException, ConnectivityException, ExtrapolationException):
+            return None, None
+
+    mem = {"pts": None}
+    state = {
+        "doorway": None,
+        "too_close": False,
+        "have_scan": False,
+        "nearest": None,
+        "leaf_near": None,
+    }
+    odom = {"xy": None, "yaw": None}
 
     def _on_odom(msg: Odometry):
         odom["xy"] = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        q = msg.pose.pose.orientation
+        odom["yaw"] = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
+
+    def base_to_odom(p_base):
+        c, sn = math.cos(odom["yaw"]), math.sin(odom["yaw"])
+        return odom["xy"] + np.array(
+            [
+                c * p_base[:, 0] - sn * p_base[:, 1],
+                sn * p_base[:, 0] + c * p_base[:, 1],
+            ]
+        ).T
+
+    def odom_to_base(p_odom):
+        c, sn = math.cos(odom["yaw"]), math.sin(odom["yaw"])
+        d = p_odom - odom["xy"]
+        return np.array([c * d[:, 0] + sn * d[:, 1], -sn * d[:, 0] + c * d[:, 1]]).T
+
+    lidar_tf = {"v": None}
 
     def _ensure_tf():
         if lidar_tf["v"] is not None:
@@ -130,45 +391,174 @@ def run():
             x_b += t[0]
             y_b += t[1]
             pts.append((x_b, y_b))
-            if (
-                abs(y_b) < CORRIDOR_HALF_WIDTH_M
-                and FRONT_X_MIN_M < x_b < FRONT_X_MIN_M + HARD_STOP_M
-            ):
-                too_close = True
+
+        # Udaljenost do RUBA baze, ne do sredista: tlocrt je pravokutnik
+        # 1.08 x 0.63, pa kruznica oko sredista ili traka ispred ne opisuju
+        # gdje robot stvarno moze proci - pogotovo kad je zakrenut.
+        fit = _fit_wall(pts)
+        leaf_pts = []
+        if fit is not None:
+            p0, d, inl = fit
+            nrm = np.array([-d[1], d[0]])
+            # Normala usmjerena PREMA robotu (ishodiste base_link).
+            if float(np.dot(nrm, -p0)) < 0.0:
+                nrm = -nrm
+            arr = np.asarray(pts)
+            signed = (arr - p0) @ nrm
+            # Krilo se otvara prema robotu, pa lezi s NJEGOVE strane ravnine
+            # zida. Bez tog uvjeta u "krilo" upadaju i tocke iza otvora, sum na
+            # rubovima vidnog polja i dijelovi suprotnog zida - pa korekcija
+            # gura robota u zid.
+            leaf_pts = arr[signed >= WALL_INLIER_M]
+
+        nearest = None
+        for x_b, y_b in pts:
+            dd = _dist_to_base(x_b, y_b)
+            if nearest is None or dd < nearest:
+                nearest = dd
+        too_close = nearest is not None and nearest < CLEARANCE_STOP_M
+
+        leaf_near = None
+        for q_pt in leaf_pts:
+            dd = _dist_to_base(float(q_pt[0]), float(q_pt[1]))
+            if leaf_near is None or dd < leaf_near[0]:
+                leaf_near = (dd, float(q_pt[1]))
+
+        # Sve tocke se pamte u ODOM okviru, BEZ klasifikacije na zid i krilo.
+        # Za prolazak je vazno samo koliko ima mjesta lijevo a koliko desno -
+        # je li prepreka krilo ili dovratnik ne mijenja nista. Razdvajanje se
+        # pokazalo nepouzdanim: dovratnici i suprotni zid upadali su u "krilo",
+        # a memorija se gomilala pa je jedan los fit trajno kvario skup.
+        if odom["xy"] is not None and odom["yaw"] is not None and pts:
+            mem["pts"] = _merge(mem["pts"], base_to_odom(np.asarray(pts)))
 
         state["too_close"] = too_close
+        state["nearest"] = nearest
+        state["leaf_near"] = leaf_near
         state["have_scan"] = True
-
-        best = None
-        for i in range(len(pts) - 1):
-            p, n = pts[i], pts[i + 1]
-            w = math.hypot(n[0] - p[0], n[1] - p[1])
-            if w > GAP_MIN_M and abs(w - DOORWAY_WIDTH_M) < WIDTH_TOL_M:
-                if best is None or abs(w - DOORWAY_WIDTH_M) < abs(
-                    best[0] - DOORWAY_WIDTH_M
-                ):
-                    best = (w, 0.5 * (p[0] + n[0]), 0.5 * (p[1] + n[1]))
-        state["doorway"] = best
+        state["doorway"] = _find_doorway_from(fit)
 
     node.create_subscription(LaserScan, "/scan", _on_scan, 10)
     node.create_subscription(Odometry, "/odom", _on_odom, 10)
 
-    cmd = {"vx": 0.0, "vy": 0.0}
+    cmd = {"vx": 0.0, "vy": 0.0, "wz": 0.0}
     stop_flag = {"v": False}
 
     def publisher_loop():
         """cmd_vel_bridge primjenjuje zadnju primljenu poruku svaki fizicki
-        korak i nema failsafe timeout, pa naredbe idu u stalnom ritmu."""
+        korak i nema failsafe timeout, pa naredbe salje zasebna nit u stalnom
+        ritmu - neujednacen ritam znaci trzajno gibanje."""
         while rclpy.ok() and not stop_flag["v"]:
             tw = Twist()
             tw.linear.x = cmd["vx"]
             tw.linear.y = cmd["vy"]
+            tw.angular.z = cmd["wz"]
             cmd_vel_pub.publish(tw)
             time.sleep(PUBLISH_PERIOD_SEC)
 
+    gate_filt = {"yaw": None, "lat": None, "on": False}
+
+    def gate_smooth(gate):
+        """Izgladi ciljni kut i bocnu gresku, pa odluci je li zakret aktivan.
+
+        Najbliza tocka zna skociti s jedne prepreke na drugu, pa sirovi ciljni
+        kut treperi. Histereza sprjecava ukljucivanje i iskljucivanje oko istog
+        praga.
+        """
+        if gate is None:
+            gate_filt["on"] = False
+            return None
+        ye, le = gate
+        for key, val in (("yaw", ye), ("lat", le)):
+            prev = gate_filt[key]
+            gate_filt[key] = (
+                val if prev is None else prev + GATE_FILTER_ALPHA * (val - prev)
+            )
+        ysm = gate_filt["yaw"]
+        if gate_filt["on"]:
+            if abs(ysm) < GATE_YAW_OFF_RAD:
+                gate_filt["on"] = False
+        elif abs(ysm) > GATE_YAW_ON_RAD:
+            gate_filt["on"] = True
+        return ysm, gate_filt["lat"], gate_filt["on"]
+
+    def clearances():
+        """Najmanja udaljenost do ruba baze, zasebno LIJEVO (+y) i DESNO (-y).
+
+        Racuna se iz memorije prebacene u base_link, pa vrijedi i kad lidar
+        prepreku vise ne vidi - a to se dogodi bas kad joj je robot najblizi,
+        jer je senzor na prednjoj strani.
+        """
+        out = {"left": None, "right": None}
+        if odom["xy"] is None or odom["yaw"] is None:
+            return out
+        pts_m = mem["pts"]
+        if pts_m is None or len(pts_m) == 0:
+            return out
+        base = odom_to_base(pts_m)
+        # BEZ filtriranja po x. Dovratnik uz bok robota, koji je upravo prosao
+        # prednjim rubom, i dalje je opasan za straznji kut. Filtar po x ga je
+        # izbacivao iz racuna cim mu x padne ispod -L/2, pa je "lijevo" naglo
+        # skakalo (izmjereno 166 -> 319 mm u jednom ciklusu) i robot je skretao
+        # ravno u njega. _dist_to_base ionako daje velike vrijednosti za ono
+        # sto je stvarno daleko.
+        if len(base) == 0:
+            return out
+        left = base[base[:, 1] >= 0.0]
+        right = base[base[:, 1] < 0.0]
+        if len(left):
+            out["left"] = _min_dist_and_y(left)
+        if len(right):
+            out["right"] = _min_dist_and_y(right)
+        return out
+
+    def drive_distance(target_m, speed, avoid=False):
+        """Vozi dok odometrija ne pokaze target_m. Vraca prijedjeni put, ili
+        None ako je prekinuto zbog prepreke. Put se MJERI - racunanje iz brzine
+        i vremena promasuje jer baza postize samo dio naredjenog.
+
+        S avoid=True usput izbjegava krilo i blago zakrece od njega. Bez toga
+        zadnja dionica (kad otvor vise nije vidljiv) ide slijepo, a upravo je
+        tada robot najblize krilu."""
+        if odom["xy"] is None:
+            return None
+        p0 = odom["xy"].copy()
+        while rclpy.ok():
+            if state["too_close"]:
+                cmd["vx"] = cmd["vy"] = cmd["wz"] = 0.0
+                return None
+            done = float(np.linalg.norm(odom["xy"] - p0))
+            if done >= target_m:
+                cmd["vx"] = cmd["vy"] = cmd["wz"] = 0.0
+                return done
+            cmd["vx"] = speed
+            if avoid:
+                clr = clearances()
+                lf, rt = clr["left"], clr["right"]
+                g = gate_smooth(_gate_target(lf, rt))
+                if g is not None:
+                    ye, le, on = g
+                    cmd["vy"] = float(
+                        np.clip(GATE_LAT_GAIN * le, -ALIGN_SPEED_MPS, ALIGN_SPEED_MPS)
+                    )
+                    if on:
+                        ww = float(np.clip(GATE_YAW_GAIN * ye, -0.3, 0.3))
+                        cmd["wz"] = math.copysign((abs(ww) + 0.204) / 0.562, ww)
+                    else:
+                        cmd["wz"] = 0.0
+                    node.get_logger().info(
+                        f"lijevo={lf[0]*1000:.0f}mm desno={rt[0]*1000:.0f}mm "
+                        f"kut={math.degrees(ye):+.1f}deg",
+                        throttle_duration_sec=1.0,
+                    )
+                else:
+                    cmd["vy"] = cmd["wz"] = 0.0
+            time.sleep(CONTROL_PERIOD_SEC)
+        cmd["vx"] = cmd["vy"] = cmd["wz"] = 0.0
+        return None
+
     def shutdown(msg=None, error=False):
-        cmd["vx"] = 0.0
-        cmd["vy"] = 0.0
+        cmd["vx"] = cmd["vy"] = cmd["wz"] = 0.0
         time.sleep(0.2)
         stop_flag["v"] = True
         time.sleep(0.1)
@@ -177,28 +567,12 @@ def run():
         if msg:
             (node.get_logger().error if error else node.get_logger().info)(msg)
         executor.shutdown()
+        moveit_executor.shutdown()
         time.sleep(0.2)
         node.destroy_node()
+        moveit_node.destroy_node()
 
-    def drive_distance(target_m, speed):
-        """Vozi naprijed dok odometrija ne pokaze target_m. Vraca prijedjeni
-        put, ili None ako je prekinuto zbog prepreke."""
-        p0 = odom["xy"].copy()
-        while rclpy.ok():
-            if state["too_close"]:
-                cmd["vx"] = 0.0
-                return None
-            done = float(np.linalg.norm(odom["xy"] - p0))
-            if done >= target_m:
-                cmd["vx"] = 0.0
-                return done
-            cmd["vx"] = speed
-            time.sleep(CONTROL_PERIOD_SEC)
-        cmd["vx"] = 0.0
-        return None
-
-    # rclpy.spin bez izricitog izvrsavaca koristi globalni, pa bi ga druga faza
-    # vrtjela istovremeno iz svoje niti.
+    # Vlastiti izvrsavac, ne globalni - vidi isti komentar u open_sliding.
     executor = SingleThreadedExecutor()
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
@@ -212,19 +586,27 @@ def run():
             shutdown("Nema /scan ili /odom - prekidam.", error=True)
             return
 
-    # Gripper se otvara vise puta jer se jedna poruka poslana odmah po
-    # stvaranju publishera izgubi dok DDS ne uspostavi vezu.
+    # --- Faza 1: pusti kvaku i odmakni se od nje ---
     node.get_logger().info("Otvaram gripper...")
     for _ in range(20):
         gripper_pub.publish(Float32(data=0.0))
         time.sleep(0.1)
 
-    # Gripper je nakon otpustanja jos oko sipke, a put do parkirne poze vodi
-    # kroz nju - zato se prvo odmakne cijela baza.
-    node.get_logger().info("Odmicem se od kvake...")
-    drive_distance(RETREAT_DISTANCE_M, -RETREAT_SPEED_MPS)
-    time.sleep(0.5)
+    # Gripper je nakon otpustanja jos oko kvake, a put do parkirne poze vodi
+    # kroz nju. Ruka se zato prvo povuce po svojoj osi prilaza.
+    p_tcp, q_tcp = tcp_pose()
+    if p_tcp is not None:
+        approach = np.array(quat_rotate_vector(q_tcp, [0.0, 0.0, 1.0]))
+        target = p_tcp - RETREAT_M * approach
+        node.get_logger().info(f"Odmicem ruku {RETREAT_M*100:.0f} cm od kvake...")
+        moveit2.move_to_pose(
+            position=list(target), quat_xyzw=list(q_tcp), cartesian=True
+        )
+        moveit2.wait_until_executed()
+    else:
+        node.get_logger().warn("Nema TF gripper_tcp - preskacem odmicanje.")
 
+    # --- Faza 2: parkiraj ruku ---
     node.get_logger().info("Parkiram ruku...")
     traj = JointTrajectory()
     traj.joint_names = JOINT_NAMES
@@ -234,7 +616,50 @@ def run():
     traj.points = [pt]
     traj_pub.publish(traj)
     time.sleep(PARK_TIME_SEC + 1.5)
+    node.get_logger().info("Ruka parkirana.")
 
+    if back_off_m > 0.0:
+        node.get_logger().info(f"Odmicem bazu {back_off_m:.2f} m unatrag...")
+        drive_distance(back_off_m, -DRIVE_SPEED_MPS)
+        time.sleep(0.5)
+
+    # Baza je nakon otvaranja zakrenuta, pa bi voznja "naprijed" isla
+    # dijagonalno u zid. Ispravlja se prema ZIDU, ne prema odometriji: rubovi
+    # praznine leze na zidu, njihov spojni vektor daje smjer zida, a robot
+    # treba gledati po normali na njega.
+    node.get_logger().info("Ispravljam se okomito na zid...")
+    t0 = time.monotonic()
+    while rclpy.ok() and time.monotonic() - t0 < STRAIGHTEN_TIMEOUT_SEC:
+        d = state["doorway"]
+        if d is None:
+            cmd["wz"] = 0.0
+            node.get_logger().warn(
+                "Otvor nije vidljiv - stojim.", throttle_duration_sec=2.0
+            )
+            time.sleep(CONTROL_PERIOD_SEC)
+            continue
+        _, cx, cy, pa, pb = d
+        wall = pb - pa
+        nrm = np.array([-wall[1], wall[0]])
+        if float(np.dot(nrm, np.array([cx, cy]))) < 0.0:
+            nrm = -nrm
+        yaw_err = math.atan2(nrm[1], nrm[0])
+        if abs(yaw_err) < STRAIGHTEN_TOL_RAD:
+            cmd["wz"] = 0.0
+            node.get_logger().info(
+                f"Ispravljen (greska {math.degrees(yaw_err):+.1f} deg)."
+            )
+            break
+        want = float(np.clip(STRAIGHTEN_GAIN * yaw_err, -0.4, 0.4))
+        cmd["wz"] = float(math.copysign((abs(want) + 0.204) / 0.562, want))
+        node.get_logger().info(
+            f"zakret {math.degrees(yaw_err):+.1f} deg", throttle_duration_sec=2.0
+        )
+        time.sleep(CONTROL_PERIOD_SEC)
+    cmd["wz"] = 0.0
+    time.sleep(0.5)
+
+    # --- Faza 4: bocno poravnavanje s otvorom ---
     node.get_logger().info("Poravnavam se s otvorom...")
     t0 = time.monotonic()
     aligned = False
@@ -248,13 +673,14 @@ def run():
             time.sleep(CONTROL_PERIOD_SEC)
             continue
 
-        _, cx, cy = d
+        _, cx, cy, _, _ = d
         if abs(cy) < ALIGN_TOL_M:
             cmd["vy"] = 0.0
             aligned = True
             node.get_logger().info(f"Poravnat: otvor na ({cx:+.2f}, {cy:+.2f}) m.")
             break
-        cmd["vy"] = math.copysign(ALIGN_SPEED_MPS, cy)
+        want_v = min(ALIGN_SPEED_MPS, ALIGN_GAIN * abs(cy) + ALIGN_MIN_MPS)
+        cmd["vy"] = math.copysign(want_v, cy)
         node.get_logger().info(
             f"otvor ({cx:+.2f}, {cy:+.2f}) -> vy={cmd['vy']:+.2f}",
             throttle_duration_sec=2.0,
@@ -268,36 +694,88 @@ def run():
         shutdown("Poravnavanje nije uspjelo - ne ulazim.", error=True)
         return
 
+    # --- Faza 4: ravno naprijed kroz otvor ---
     node.get_logger().info("Prolazim kroz otvor...")
-    p_drive_start = odom["xy"].copy()
     t0 = time.monotonic()
     lost = 0
     last_cx = None
     outcome = "vrijeme isteklo"
     while rclpy.ok() and time.monotonic() - t0 < DRIVE_TIMEOUT_SEC:
         if state["too_close"]:
-            outcome = "prepreka preblizu"
+            outcome = (
+                f"prepreka na {state['nearest']*1000:.0f} mm od ruba baze"
+                if state["nearest"] is not None
+                else "prepreka preblizu"
+            )
             break
 
         cmd["vx"] = DRIVE_SPEED_MPS
+
+        # Bocna korekcija drzi robota IZMEDU krila i zida. Prolaz je uzak, pa
+        # bjezanje samo od krila zavrsi udarcem u suprotni zid. Obje udaljenosti
+        # se racunaju iz memorije u odom okviru, pa vrijede i kad ih lidar vise
+        # ne vidi.
+        vy = 0.0
         d = state["doorway"]
+        clr = clearances()
+        left, right = clr["left"], clr["right"]
+
+        gate = gate_smooth(_gate_target(left, right))
+        yaw_err, yaw_on = 0.0, False
+        if gate is not None:
+            yaw_err, lat_err, yaw_on = gate
+            vy = float(
+                np.clip(GATE_LAT_GAIN * lat_err, -ALIGN_SPEED_MPS, ALIGN_SPEED_MPS)
+            )
+        elif d is not None:
+            vy = float(np.clip(ALIGN_GAIN * d[2], -ALIGN_SPEED_MPS, ALIGN_SPEED_MPS))
+        node.get_logger().info(
+            f"lijevo={'n/a' if left is None else f'{left[0]*1000:.0f}mm'}  "
+            f"desno={'n/a' if right is None else f'{right[0]*1000:.0f}mm'}  "
+            f"kut={math.degrees(yaw_err):+.1f}deg  vy={vy:+.2f}",
+            throttle_duration_sec=1.0,
+        )
+        # Ispod praga trenja se baza bocno ne mice, pa se mala naredba podize
+        # na prag umjesto da se odbaci.
+        if 1e-6 < abs(vy) < ALIGN_MIN_MPS:
+            vy = math.copysign(ALIGN_MIN_MPS, vy)
+        cmd["vy"] = float(np.clip(vy, -ALIGN_SPEED_MPS, ALIGN_SPEED_MPS))
+
+        # Zakret krece tek kad prednji rub baze prijedje ravninu zidova, i ide
+        # OD krila. Rotacija ima mrtvu zonu od 0.36 rad/s, pa se naredba skalira
+        # inverzom izmjerene relacije.
+        # Zakret ovisi samo o blizini krila, ne o vidljivosti otvora - otvor
+        # nestane iz skena prije nego prednji rub baze prijedje ravninu zidova.
+        # Zakret prema CILJNOJ orijentaciji - okomici na spojnicu najuzeg
+        # prolaza. Ranije se zadavala samo kutna brzina bez cilja, pa se zakret
+        # gomilao i robot je spiralno skretao.
+        wz = 0.0
+        if yaw_on:
+            want_w = float(np.clip(GATE_YAW_GAIN * yaw_err, -0.3, 0.3))
+            wz = math.copysign((abs(want_w) + 0.204) / 0.562, want_w)
+        cmd["wz"] = float(wz)
+
         if d is None:
             lost += 1
             if lost >= LOST_DOORWAY_STEPS:
-                # Rubovi otvora su izasli iz maske samozaklona, sto ne znaci da
-                # smo prosli. Zadnji vidjeni cx je udaljenost do ravnine zida;
-                # do nje treba jos pola duljine baze i marza.
-                need = (last_cx or 0.0) + KMR_LENGTH_M / 2.0 + PASS_MARGIN_M
+                # Otvor je nestao iz vidnog polja (rubovi su izasli iz maske
+                # samozaklona), ne znaci da smo prosli. Zadnji vidjeni cx je
+                # udaljenost do ravnine zida; do nje treba dodati jos pola
+                # duljine baze da i straznji rub prodje, plus marza.
+                if last_cx is None:
+                    outcome = "otvor nikad nije vidjen - ne ulazim"
+                    break
+                need = last_cx + KMR_LENGTH_M / 2.0 + PASS_MARGIN_M
                 node.get_logger().info(
-                    f"Otvor izvan vidnog polja na cx={last_cx:+.2f} m - "
-                    f"vozim jos {need:.2f} m."
+                    f"Otvor izasao iz vidnog polja na cx={last_cx:+.2f} m - "
+                    f"vozim jos {need:.2f} m (mjereno odometrijom)."
                 )
-                done = drive_distance(need, DRIVE_SPEED_MPS)
+                done = drive_distance(need, DRIVE_SPEED_MPS, avoid=True)
                 outcome = "prosao" if done is not None else "prepreka preblizu"
                 break
         else:
             lost = 0
-            _, cx, cy = d
+            _, cx, cy, _, _ = d
             last_cx = cx
             node.get_logger().info(
                 f"otvor na cx={cx:+.2f} m", throttle_duration_sec=2.0
@@ -308,14 +786,19 @@ def run():
         time.sleep(CONTROL_PERIOD_SEC)
 
     cmd["vx"] = 0.0
-    travelled = float(np.linalg.norm(odom["xy"] - p_drive_start))
     node.get_logger().info("=== SAZETAK ===")
     node.get_logger().info(f"  ishod: {outcome}")
-    node.get_logger().info(f"  prosao naprijed: {travelled*1000:.0f} mm")
+    shutdown()
+
+    cmd["vx"] = 0.0
+    node.get_logger().info("=== SAZETAK ===")
+    node.get_logger().info(f"  ishod: {outcome}")
     shutdown()
 
 
 def main():
+    """Samostalno pokretanje. Kad se faza poziva iz door_task_node, koristi se
+    run() - kontekst je ondje vec inicijaliziran."""
     rclpy.init()
     try:
         run()
