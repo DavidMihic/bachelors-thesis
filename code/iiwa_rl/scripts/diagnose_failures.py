@@ -171,6 +171,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     print(f"[INFO] Checkpoint: {resume_path}")
 
     env = gym.make(args_cli.task, cfg=env_cfg)
+
+    # Kurikulum racuna iteraciju iz common_step_counter, koji pri evaluaciji
+    # krece od nule, pa bi otpor ostao na pocetnoj vrijednosti. Ovim se rampa
+    # odmah dovrsi i mjeri se na punom rasponu, kakav je na kraju treninga.
+    if "door_resistance" in unwrapped.curriculum_manager.active_terms:
+        term = unwrapped.curriculum_manager.get_term_cfg("door_resistance")
+        term.params["start_iterations"] = 0
+        term.params["full_iterations"] = 1
+
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
     runner = OnPolicyRunner(
