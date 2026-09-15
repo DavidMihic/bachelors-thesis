@@ -167,8 +167,15 @@ SLIP_ABORT_M = 0.020  # koliko gripper smije odstupiti od mjesta na kvaki na
 MAX_STEPS = 200
 RETARE_EVERY = 6
 RETARE_MAX_FORCE_N = 50.0  # ne tariraj pod opterecenjem - tada tariranje
-# "izbrise" stvarnu silu u novu nulu umjesto da nulira samo gravitacijsku i
+# "izbrise" stvarnu silu u novu nulu u
+# mjesto da nulira samo gravitacijsku i
 # konfiguracijsku pristranost
+
+PIVOT_X_M = 0.54  # sredina prednje strane baze
+PIVOT_Y_M = 0.0
+PIVOT_ANGLE_DEG = 20.0
+PIVOT_RATE_RADPS = 0.25
+PIVOT_TIMEOUT_SEC = 30.0
 
 LIDAR_WALL_ID_RANGE = range(20)
 
@@ -841,6 +848,35 @@ def run():
 
     if outcome is None:
         outcome = "NEUSPJEH: dosegnut MAX_STEPS bez ishoda"
+
+    if outcome is not None and outcome.startswith("USPJEH"):
+        # Nadzorna nit u ovom trenutku vise ne regulira bazu (abort je
+        # postavljen), ali je gasimo da sigurno ne prepise base_cmd.
+        mon["stop"] = True
+        time.sleep(0.2)
+
+        yaw0 = odom["yaw"]
+        if yaw0 is not None:
+            target = yaw0 + math.radians(PIVOT_ANGLE_DEG)
+            node.get_logger().info(
+                f"Zakrecem {PIVOT_ANGLE_DEG:+.0f} deg oko ({PIVOT_X_M}, {PIVOT_Y_M})."
+            )
+            t_piv = time.monotonic()
+            while rclpy.ok() and time.monotonic() - t_piv < PIVOT_TIMEOUT_SEC:
+                err = wrap_pi(target - odom["yaw"])
+                if abs(err) < math.radians(1.5):
+                    break
+                w = math.copysign(PIVOT_RATE_RADPS, err)
+                # Kruzenje oko tocke c: v = w x (0 - c)
+                base_cmd["vx"] = w * PIVOT_Y_M
+                base_cmd["vy"] = -w * PIVOT_X_M
+                base_cmd["wz"] = math.copysign((abs(w) + 0.204) / 0.562, w)
+                time.sleep(0.05)
+            base_cmd["vx"] = base_cmd["vy"] = base_cmd["wz"] = 0.0
+            node.get_logger().info(
+                f"Zakret gotov (greska {math.degrees(wrap_pi(target - odom['yaw'])):+.1f} deg)."
+            )
+            time.sleep(0.5)
 
     mon["stop"] = True
     base_cmd["vx"] = base_cmd["vy"] = base_cmd["wz"] = 0.0

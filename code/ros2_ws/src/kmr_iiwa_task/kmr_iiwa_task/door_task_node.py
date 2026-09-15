@@ -430,8 +430,9 @@ def main():
             node.get_logger().info("=== Otvaram zakretna vrata ===")
             run_open_revolute()
             node.get_logger().info("=== Prolazim kroz vrata ===")
-            # Kod zakretnih vrata baza zavrsi blizu zida i zakrenuta.
-            run_pass_through(back_off_m=0.35)
+            # Kod zakretnih vrata baza zavrsi blizu zida i zakrenuta, a krilo
+            # strsi u otvor - zato odmicanje i zaobilazenje pri prolasku.
+            run_pass_through(back_off_m=0.35, steer=True)
 
         node._append_log({"event": "task_complete", "vertical_bar": bool(vertical_bar)})
         node.get_logger().info("=== ZADATAK ZAVRSEN ===")
