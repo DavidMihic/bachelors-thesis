@@ -12,9 +12,8 @@ iz percepcije, poznatog oblika prihvatnice i, za zakretna vrata, geometrijski iz
 Zadatak je organiziran u četiri faze: prilaz, hvat, otvaranje i prolazak. Tip vrata robot prepoznaje
 sam, iz geometrije kvake, tijekom faze hvata (potpoglavlje \ref{sec:prilaz}).
 Ta odluka određuje koja se grana faze otvaranja pokreće.
-Prolazak kroz vrata izveden je i potvrđen samo za klizna vrata; kod zakretnih vrata zadatak
-završava otvaranjem, iz razloga navedenog u potpoglavlju \ref{sec:klasicni-limits}. Slijed je
-prikazan na slici \ref{fig:faze}.
+Prolazak kroz vrata izveden je za oba tipa, uz razliku u načinu vođenja opisanu u
+potpoglavlju \ref{sec:prolazak}. Slijed je prikazan na slici \ref{fig:faze}.
 
 \begin{figure}[H]
       \centering
@@ -31,16 +30,16 @@ prikazan na slici \ref{fig:faze}.
                   \node[box]  (hvat)   at (6.6,0)  {hvat};
                   \node[box]  (slide)  at (10.4,0.9)  {\texttt{open\_sliding}\\[-1pt]\scriptsize klizna vrata};
                   \node[box]  (arc)    at (10.4,-0.9) {\texttt{open\_revolute}\\[-1pt]\scriptsize zakretna vrata};
-                  \node[box]  (pass)   at (14.2,0.9)  {\texttt{pass\_through\_door}};
-                  \node[term] (end)    at (14.2,-0.9) {kraj};
+                  \node[box]  (pass)   at (14.4,0)  {\texttt{pass\_through\_door}};
+                  \node[term] (end)    at (18.0,0) {kraj};
 
                   \draw[ar] (start) -- (prilaz);
                   \draw[ar] (prilaz) -- (hvat);
                   \draw[ar] (hvat.north) |- (slide.west);
                   \draw[ar] (hvat.south) |- (arc.west);
-                  \draw[ar] (slide.east) -- (pass.west);
-                  \draw[ar] (pass.south) -- (pass.south |- end.north);
-                  \draw[ar] (arc.east)   -- (end.west);
+                  \draw[ar] (slide.east) -| (pass.north);
+                  \draw[ar] (arc.east)   -| (pass.south);
+                  \draw[ar] (pass) -- (end);
             \end{tikzpicture}
       }
       \caption{Slijed faza klasičnog pristupa}
@@ -82,9 +81,9 @@ pokreće (potpoglavlje \ref{sec:otvaranje}).
 \begin{enumerate}
       \item \textbf{Ponovno čitanje poze.} Na početnoj udaljenosti kvaka je izvan dosega
             manipulatora pri nepomičnoj platformi, pa se platforma nakon prvog očitanja poze
-            dodatno primakne. Kako platforma nema odometriju, poza kvake se pritom ne prati nego
-            se rekonstruira iz njezina nepromjenjivog odnosa prema velikoj oznaci, koja ostaje u
-            vidnom polju tijekom cijelog primicanja.
+            dodatno primakne. Poza kvake se pritom ne prati kontinuirano, nego se rekonstruira iz
+            njezina nepromjenjivog odnosa prema velikoj oznaci, koja ostaje u vidnom polju
+            tijekom cijelog primicanja.
       \item \textbf{Prilaz.} Manipulator se dovodi u pozu prilaska ispred kvake te se zatim
             približava do konačne poze hvata.
       \item \textbf{Bočna korekcija.} Parovi prstiju prihvatnice ne gibaju se savršeno
@@ -143,9 +142,10 @@ isključivo kao sigurnosni prekid.
 Hod kliznih vrata premašuje ono što platforma stigne prijeći unutar jednog trapeznog profila, pa
 se vožnja prema potrebi ponavlja u više prolaza, bez ponovnog hvata. Prihvatnica drži
 kvaku neprekidno, platforma se samo zaustavi na kraju jednog profila i ponovno krene s početka
-sljedećeg. Napredak nakon svakog prolaza provjerava se prema stvarnom pomaku zgloba vrata,
-očitanom izravno u simulatoru; razlog za to odstupanje od uobičajenog pravila naveden je u
-potpoglavlju \ref{sec:klasicni-limits}.
+sljedećeg. Napredak nakon svakog prolaza provjerava se iz percepcije, kao pomak velike oznake
+izražen u nepomičnom okviru: poza oznake u koordinatnom sustavu platforme pretvara se u taj okvir
+pomoću odometrije (potpoglavlje \ref{sec:odometrija}). Odstupanje tako dobivenog pomaka od
+stvarnog stanja zgloba vrata iznosi 44 mm, odnosno 4,6 \%.
 
 \subsection{Zakretna vrata}
 \label{sec:otvaranje-zakretna}
@@ -154,18 +154,28 @@ Kod zakretnih vrata gibanje platforme nije jednostavna translacija, pa način na
 otvaranje ostvareno bitno odstupa od kliznih vrata: umjesto da precizno praćenje luka izvodi
 platforma, tu je zadaću preuzeo manipulator, dok platforma ima samo pomoćnu ulogu.
 
-Otvaranje ne teče tako da platforma i manipulator rade istovremeno kroz cijelu fazu, nego u
-naizmjeničnim koracima. U jednom koraku platforma miruje, a manipulator zakreće vrh alata za
-jedan mali, unaprijed zadani kut duž procijenjene kružnice, inverznom kinematikom. U sljedećem
-koraku manipulator samo drži kvaku u dosegnutoj pozi, dok platforma vozi naprijed konstantnom
-brzinom. Ideja iza tog pristupa je da primicanje platforme
-manipulatoru vrati doseg koji je prethodnim zakretanjem potrošio.
+Otvaranje se izvodi u dvije uzastopne faze: guranjem, u kojem robot kvaku vodi po luku, i
+završnim zakretom platforme, kojim se vrata doguravaju do konačnog kuta.
 
-Precizno vođenje po luku time je u cijelosti prepušteno manipulatoru, a platformi ostaje samo
-jednostavna translacija. Cilj se pritom sidri na oznaku, na način opisan u potpoglavlju
-\ref{sec:sidrenje}, čime se u svakom koraku nadovezuje na stvarno postignuto stanje kvake, a ne
-na vlastitu prethodnu naredbu. Ovakva podjela uloga posljedica je ograničenog kapaciteta platforme
-da precizno prati zadanu brzinu (potpoglavlje \ref{sec:klasicni-limits}).
+Tijekom guranja platforma se giba po smjeru tangente luka kvake, a manipulator u svakom koraku
+zakreće vrh alata za mali kut duž procijenjene kružnice, inverznom kinematikom. Precizno vođenje
+po luku time je prepušteno manipulatoru, a platformi ostaje gibanje po pravcu. Cilj se pritom
+sidri na oznaku, na način opisan u potpoglavlju \ref{sec:sidrenje}, čime se u svakom koraku
+nadovezuje na stvarno postignuto stanje kvake, a ne na vlastitu prethodnu naredbu.
+
+Izbor smjera tangente za gibanje baze počiva na činjenici da se sila kojom baza gura prenosi kroz
+krutu ruku na kvaku. Ako ta sila ima komponentu duž kvake, ta komponenta izvlači prihvatnicu s
+kvake i hvat klizi.
+
+Korak manipulatora nije fiksan, nego razmjeran trajanju prethodnog ciklusa upravljanja, uz gornju
+granicu. Razlog je taj što platforma vozi neprekidno, a trajanje ciklusa određuje planiranje
+gibanja i kreće se između 0,4 i 2,1 s; uz fiksni korak manipulator bi u duljem ciklusu zaostao za
+platformom.
+
+Mjerenja i sigurnosni prekidi ne izvode se u glavnoj petlji, nego u zasebnoj niti na 20 Hz. Kako
+ciklus glavne petlje traje i do dvije sekunde, a platforma za to vrijeme vozi i vrata se otvore
+15 do 18\textdegree{}, prag bi se inače uvijek prekoračio prije nego bi ga sustav primijetio. Ta
+nit ujedno vodi regulator platforme i sama je zaustavlja čim uvjet prekida okine.
 
 Budući da vrh alata inverznom kinematikom vodi MoveIt, prije početka povlačenja iz njegove
 planerske scene uklanjaju se kolizijski objekti vrata i zidova (potpoglavlje \ref{sec:vrata}).
@@ -238,55 +248,197 @@ svega 1 mm, pa je ukupni $\delta$ 21 mm.
       \label{fig:os-sarke}
 \end{figure}
 
-Os se preračunava iz svježe poze oznake u svakom koraku upravljanja. Budući da je odmak
-$\bm{v}_{\mathrm{hinge}}$ izražen u koordinatnom sustavu same oznake, koja je kruto vezana uz
-krilo, procjena ostaje ispravna i dok se vrata otvaraju: kako oznaka rotira zajedno s krilom oko
-prave, nepomične osi šarke u svijetu, umnožak $\bm{R}(\bm{q}_{\mathrm{tag}})\,\bm{v}_{\mathrm{hinge}}$
-rotira s njom na jednak način, pa zbroj \eqref{eq:axis} u svakom trenutku ponovno pogađa istu,
-stvarnu točku u prostoru. Procjena tako ne zahtijeva praćenje kuta vrata kroz vrijeme, nego je
-ispravna iz jednog, trenutnog očitanja poze oznake.
+Izraz \eqref{eq:axis} vrijedi iz jednog, trenutnog očitanja poze oznake, bez praćenja kuta vrata
+kroz vrijeme: kako oznaka rotira zajedno s krilom oko prave, nepomične osi šarke, umnožak
+$\bm{R}(\bm{q}_{\mathrm{tag}})\,\bm{v}_{\mathrm{hinge}}$ rotira s njom na jednak način, pa zbroj
+u svakom trenutku ponovno pogađa istu točku u prostoru.
+
+Oznaka se ipak koristi samo do hvata. Kako se vrata otvaraju, ona izlazi iz vidnog polja kamere,
+pa se položaj osi šarke jednom utvrdi pri hvatu i dalje prati odometrijom (potpoglavlje
+\ref{sec:odometrija}). To je moguće jer je os šarke nepomična u prostoru, pa je dovoljno pratiti
+gibanje same platforme.
+
+Iz istog razloga i kut otvorenosti vrata prati se posredno. Dok prihvatnica drži kvaku, smjer od
+osi šarke prema vrhu alata ujedno je i smjer krila, pa se kut računa iz te dvije poze, i to u
+nepomičnom okviru.
+
+\subsection{Završni zakret platforme}
+\label{sec:zavrsni-zakret}
+
+Guranje se zaustavlja na 70\textdegree{}, iz razloga navedenog u potpoglavlju
+\ref{sec:klasicni-limits}. Taj kut nije dovoljan za prolazak, pa slijedi druga faza, u kojoj
+platforma zakreće oko točke na sredini vlastite prednje strane, za otprilike 20\textdegree{}.
+
+Bitna je razlika u tome što manipulator tijekom tog zakreta miruje u dosegnutoj konfiguraciji, a
+prihvatnica i dalje drži kvaku. Cijeli se sklop (platforma, manipulator i krilo) giba kao
+jedno tijelo, pa hvat nije dodatno opterećen. Za kruženje oko točke $\bm{c}$ izražene u
+koordinatnom sustavu platforme, naredba brzine slijedi iz uvjeta da ta točka miruje:
+
+\begin{equation}
+      v_x = \omega\, c_y , \qquad v_y = -\omega\, c_x , \qquad \omega_z = \omega .
+      \label{eq:pivot}
+\end{equation}
+
+Time se vrata doguravaju do otprilike 100\textdegree{} pa krilo više ne strši u prolaz, a
+robot može nesmetano proći.
 
 \section{Prolazak kroz vrata}
 \label{sec:prolazak}
 
-Nakon otvaranja slijedi prolazak, izveden i potvrđen za klizna vrata. Zadatak se ovdje ne
-oslanja na kameru, nego na lidar (potpoglavlje \ref{sec:lidar}): budući da sken lidara zadržava
-poredak točaka onako kako ih senzor redom očitava, praznina u tom nizu odgovara praznini u
-prostoru gledano sa senzora, a otvor u zidu prepoznaje se kao praznina čija širina odgovara
-poznatoj širini dovratnika.
+Nakon otvaranja slijedi prolazak, izveden za oba tipa vrata. Robot se ovdje oslanja na lidar
+(potpoglavlje \ref{sec:lidar}).
 
-Postupak ima četiri koraka:
+Otvor se iz skena traži u dva koraka. Najprije se postupkom konsenzusa slučajnog uzorka
+(\textit{RANSAC}, engl. \textit{Random Sample Consensus}) među točkama skena traži najizraženiji pravac,
+koji odgovara ravnini zidova, uz uvjet da mu je smjer pretežno poprečan u odnosu na robota.
+Taj je uvjet nužan jer bez njega, kad je robot blizu vrata, gusto uzorkovano krilo postane
+najizraženiji pravac i klasifikacija pada. Zatim se među točkama koje pripadaju zidu
+traži praznina širine bliske poznatoj širini dovratnika. Na mirujućem robotu središte i
+širina tako pronađenog otvora ostaju točni i precizni unutar otprilike jednog centimetra.
+Pred zatvorenim vratima postupak ispravno ne pronalazi ništa.
+
+Postupak prolaska ima sljedeće korake:
 
 \begin{enumerate}
-      \item \textbf{Otpuštanje.} Prihvatnica otvara prste i pušta kvaku.
-      \item \textbf{Parkiranje ruke.} Manipulator odlazi u unaprijed zadanu poziciju za
-            parkiranje kako se ne bi zabio u zidove dok robot prolazi kroz vrata.
-      \item \textbf{Poravnanje.} Platforma se bočno pomiče, isključivo holonomnim gibanjem u
-            poprečnom smjeru, dok se otvor pronađen u skenu ne dovede u sredinu vidnog polja
-            senzora ili dok sken ne javi prepreku preblizu.
-      \item \textbf{Prolazak.} Platforma se giba naprijed kroz otvor, uz stalno praćenje skena
-            radi pravovremenog zaustavljanja pred neočekivanom preprekom.
+      \item \textbf{Otpuštanje i povlačenje.} Prihvatnica otvara prste, a manipulator se povlači
+            unazad duž osi prilaza, kako se pri odlasku u pozu parkiranja ne bi sudario
+            sa šipkom kvake.
+      \item \textbf{Parkiranje ruke.} Manipulator odlazi u unaprijed zadanu pozu iznad baze kako
+            ne bi zapeo za zidove ili vrata tijekom prolaska.
+      \item \textbf{Odmicanje i ispravljanje} (samo zakretna vrata). Platforma se odmiče
+            0,35 m unatrag i ispravlja okomito na ravninu zida, čime dobiva prostor za manevar
+            pred otvorom.
+      \item \textbf{Poravnanje.} Platforma se bočno pomiče, holonomnim gibanjem u poprečnom
+            smjeru, dok se pronađeni otvor ne dovede pred robota.
+      \item \textbf{Prolazak.} Platforma se giba naprijed kroz otvor.
 \end{enumerate}
+
+Kod kliznih vrata prolazak je pravocrtan i bez korekcije, jer se krilo povuklo u stranu, a
+poravnanje je dovršeno prije nego vožnja počne. Kod zakretnih vrata krilo pri 100\textdegree{}
+više ne strši u koridor, ali ono zna ometati detekciju, pa se robot ne uspije poravnati savršeno
+okomito. Vožnja se ondje vodi odbojnim poljem. Svaka zapamćena točka prepreke unutar
+zadanog dometa gura robota od sebe, jače što je bliže, a doprinosi se zbrajaju i usrednjuju.
+Zbroj preko stotina točaka mijenja se glatko pa nema oscilacija tijekom prolaska.
+
+Tri su pojedinosti nužne da to radi. Polje se računa u točki nešto ispred robota, a ne oko
+njegova trenutnog položaja, jer se ondje doprinosi s lijeve i desne strane međusobno poništavaju
+dok je robot između prepreka, pa reakcija dolazi prekasno; krilo uz to strši ispred robota, ne
+bočno. Doprinosi se ograničavaju po uzdužnoj osi, jer inače udaljeni dijelovi zida nadglasaju
+krilo i polje na većoj udaljenosti pokazuje u krivu stranu. Naposljetku, polje upravlja samo
+zakretom, bez bočne komponente, jer translacija ima istu mrtvu zonu opisanu u potpoglavlju
+\ref{sec:klasicni-limits}, pa bi naredba bila ili puna ili nikakva.
+
+Lidar se nalazi na prednjoj strani platforme, pa robot pri samom prolasku izgubi iz vida i zid i
+krilo upravo kad su mu najbliži. Zbog toga se sve viđene točke pamte u nepomičnom okviru, sažete
+u rešetku ćelija od pet centimetara. Udaljenost do prepreke pritom se računa do ruba pravokutnika
+platforme, a ne do njezina središta, i točke se ne odbacuju prema tome jesu li iza robota, primjerice
+dovratnik uz lijevi bok robota, kojeg je prednji rub upravo prošao, i dalje je opasan za stražnji kut.
 
 \section{Rezultati}
 \label{sec:rezultati-klasicni}
 
+Slike \ref{fig:faze-klasicni-zakretna} i \ref{fig:faze-klasicni-klizna} prikazuju karakteristične
+trenutke izvođenja na oba tipa vrata. Slijed je isti za oba, uz razliku u fazi otvaranja,
+gdje kod zakretnih vrata nakon guranja slijedi završni zakret platforme.
+
+\begin{figure}[H]
+      \centering
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_pocetak.png}
+            \caption{početno stanje}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_prilazak.png}
+            \caption{prilazak vratima}
+      \end{subfigure}
+
+      \vspace{4pt}
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_hvat.png}
+            \caption{hvat kvake}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_otvaranje.png}
+            \caption{otvaranje}
+      \end{subfigure}
+
+      \vspace{4pt}
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_namjestanje.png}
+            \caption{namještanje pred otvorom}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_revolute_prolaz.png}
+            \caption{prolazak kroz vrata}
+      \end{subfigure}
+      \caption{Faze izvođenja klasičnog pristupa na zakretnim vratima}
+      \label{fig:faze-klasicni-zakretna}
+\end{figure}
+
+\begin{figure}[H]
+      \centering
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_pocetak.png}
+            \caption{početno stanje}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_prilazak.png}
+            \caption{prilazak vratima}
+      \end{subfigure}
+
+      \vspace{4pt}
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_hvat.png}
+            \caption{hvat kvake}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_otvaranje.png}
+            \caption{otvaranje}
+      \end{subfigure}
+
+      \vspace{4pt}
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_namjestanje.png}
+            \caption{namještanje pred otvorom}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/kl_slike/kl_sliding_prolaz.png}
+            \caption{prolazak kroz vrata}
+      \end{subfigure}
+      \caption{Faze izvođenja klasičnog pristupa na kliznim vratima}
+      \label{fig:faze-klasicni-klizna}
+\end{figure}
+
 \subsection{Prilazak i hvat}
 
-Pogreška poravnanja platforme iznosi 1.2 do 1.4\textdegree{}. Odstupanje postignute pred-hvatne poze od cilja
+Pogreška poravnanja platforme iznosi 1,2 do 1,5\textdegree{}. Odstupanje postignute pred-hvatne poze od cilja
 iznosi 8 do 11 mm u položaju te 0.1 do 0.2\textdegree{} u orijentaciji, a odstupanje same poze hvata 6 do
 8 mm i oko 0.5\textdegree{}. Prepoznavanje tipa kvake iz geometrije (potpoglavlje \ref{sec:tip-kvake})
 pokazalo se pouzdanim na objema scenama vrata.
 
 \subsection{Zakretna vrata}
 
-Kriterij zaustavljanja postavljen je na kut od 50\textdegree{}. Vrijednost proizlazi iz dvaju međusobno
-suprotstavljenih zahtjeva: prolaz kroz djelomično otvorena vrata mora biti dovoljno širok za
-platformu, a kut mora ostati ispod granice na kojoj hvat popušta (potpoglavlje
-\ref{sec:klasicni-limits}).
-
-Izmjerene vrijednosti pri otvaranju do tog kuta navedene su u tablici
-\ref{tab:rezultati-zakretna}.
+Guranje se zaustavlja na 70\textdegree{}, a završni zakret platforme
+(potpoglavlje \ref{sec:zavrsni-zakret}) vrata doguruje do otprilike 100\textdegree{}, što je
+dovoljno za prolazak. Izmjerene vrijednosti navedene su u tablici \ref{tab:rezultati-zakretna}.
 
 \begin{table}[H]
       \centering
@@ -294,49 +446,46 @@ Izmjerene vrijednosti pri otvaranju do tog kuta navedene su u tablici
       \label{tab:rezultati-zakretna}
       \begin{tabular}{@{}ll@{}}
             \toprule
-            Veličina                      & Vrijednost            \\
+            Veličina                    & Vrijednost                                          \\
             \midrule
-            Pouzdan kut otvaranja         & 50\textdegree{}       \\
-            Najveći postignuti kut        & oko 57\textdegree{}   \\
-            Sila povlačenja, prosječna    & 348 N                 \\
-            Sila povlačenja, najveća      & 625 N                 \\
-            Klizanje hvata                & 3--5 mm               \\
-            Pogreška praćenja položaja    & ispod 2 mm            \\
-            Pogreška procjene osi šarke   & 5--8 mm               \\
-            Pogreška kuta vrata iz oznake & 1.3--2.0\textdegree{} \\
+            Kut otvaranja guranjem      & 70\textdegree{} (cilj), 71\textdegree{}     stvarno \\
+            Kut nakon završnog zakreta  & oko 100\textdegree{}                                \\
+            Sila povlačenja, prosječna  & 320--450 N                                          \\
+            Sila povlačenja, najveća    & do 630 N                                            \\
+            Radijalno klizanje hvata    & do 8 mm                                             \\
+            Pogreška praćenja položaja  & 0,4--2,5 mm                                         \\
+            Pogreška procjene osi šarke & 2--9 mm                                             \\
             \bottomrule
       \end{tabular}
 \end{table}
 
 \subsection{Klizna vrata}
 
-Ostvareno je potpuno otvaranje od 900 mm, u dva prolaza. Sila
-povlačenja iznosila je u prosjeku 258 N, s vrhom do 661 N, a klizanje hvata ostalo je ispod 4 mm
-kroz cijeli manevar, u skladu s time da se kod kliznih vrata smjer sile poklapa sa smjerom gibanja
-hvata, dok kod zakretnih vrata hvat prati zakrivljenu putanju.
+Ostvareno je otvaranje od 904 do 910 mm uz cilj od 900 mm, u dva prolaza, nakon čega je prolazak
+kroz otvor uspješan. Sila povlačenja iznosila je u prosjeku 240 do 260 N, s vrhom do 660 N, a
+klizanje hvata ostalo je između 4 i 6 mm kroz cijeli manevar. To je manje nego kod zakretnih
+vrata, u skladu s time da se kod kliznih vrata smjer sile poklapa sa smjerom gibanja hvata, dok
+kod zakretnih hvat prati zakrivljenu putanju. Prijeđeni put platforme iznosio je 900 mm, mjereno
+odometrijom.
 
 \section{Ograničenja}
 \label{sec:klasicni-limits}
 
 \begin{itemize}
-      \item Mjerenja bez kontakta pokazuju da platforma ostvaruje tek oko 45\,\% naređene brzine
-            u uzdužnom smjeru i oko 11\,\% u poprečnom, dosljedno kroz čitav ispitani raspon
-            brzina od 0.05 do 0.22 m/s; brzina očitana u samom simulatoru pritom odgovara
-            naređenoj, pa je uzrok negdje u prijenosu naredbe do fizike platforme. Manji poprečni
-            omjer u skladu je s odnosom nazivnih brzina platforme u katalogu (potpoglavlje
-            \ref{sec:platforma}), ali sam taj odnos ne objašnjava ni približno toliko nizak
-            uzdužni omjer. Provjereno je i isključeno više mogućih uzroka: pogon zgloba vrata,
-            trenje u tom zglobu, viskozno prigušenje platforme, brzina same simulacije te trajanje
-            prijelazne faze na početku gibanja. Izravna posljedica jest da se
-            prijeđeni put platforme, gdje god se koristi, ne smije uzimati kao pouzdana mjera
-            stvarnog gibanja, jer integracija naređene brzine ostvareni pomak precjenjuje
-            dvostruko do peterostruko.
+      \item Gibanje platforme ima izraženu mrtvu zonu i ne postiže naređenu brzinu. Rotacija se
+            ne pokreće ispod 0,36 rad/s, bočna translacija ispod otprilike 0,18 m/s, a uzdužna
+            translacija postiže oko 45 \% naređenoga. Omjer je dosljedan kroz ispitani raspon
+            brzina od 0,05 do 0,22 m/s, a brzina očitana u samom simulatoru odgovara naređenoj, pa
+            je uzrok negdje u prijenosu naredbe do fizike platforme. Provjereno je i isključeno
+            više mogućih uzroka: pogon i trenje u zglobu vrata, viskozno prigušenje platforme,
+            brzina same simulacije te trajanje prijelazne faze na početku gibanja.
+            Posljedica je da regulator koji zadaje male korekcije postaje dvopoložajan, jer je
+            naredba ili ispod praga i bez učinka, ili puna.
 
-      \item Zbog prethodnog ograničenja, provjera napretka između prolaza pri otvaranju kliznih
-            vrata čita stvarni pomak zgloba vrata izravno iz simulatora, a ne iz veličine
-            dostupne i na stvarnom robotu, što odstupa od načela iz poglavlja \ref{ch:procjena}.
-            Testiran je alternativni pristup gdje se procjenjuje pomak pomoću lidara, ali nije
-            se pokazao dovoljno pouzdanim.
+      \item Prijeđeni put platforme ne smije se računati iz naređene brzine i vremena, iz
+            prethodno navedenog razloga. Umjesto toga se mjeri odometrijom (potpoglavlje
+            \ref{sec:odometrija}), pa se svi iznosi pomaka u ovom poglavlju odnose na izmjerenu,
+            a ne na zadanu veličinu.
 
       \item Kako je navedeno u potpoglavlju \ref{sec:vrata}, zglob koji bi omogućio zakretanje
             kvake u konačnom je modelu nepomičan. Ta je odluka svjesno smanjenje opsega rada, ne
@@ -347,13 +496,15 @@ hvata, dok kod zakretnih vrata hvat prati zakrivljenu putanju.
             i u pristupu temeljenom na učenju, opisanom u poglavlju \ref{ch:rl}, čime ostaje
             osnova za usporedbu dvaju pristupa.
 
-      \item Zakretna se vrata ne mogu otvoriti preko otprilike 57\textdegree{}. Provjerena je
-            metoda radijalne kompenzacije klizanja, no hvat i dalje popusti.
-            Prihvatnica je vlastito izrađena za ovaj rad, a ne model
-            postojećeg uređaja, pa se problem ne može rješavati jednostavnim povećanjem stiska
-            bez gubitka fizikalne vjerodostojnosti. Mogući zaobilazak ove granice je prepozicioniranje
-            hvata, tj. manipulator pusti kvaku, platforma se premjesti, a kvaka se ponovno uhvati iz
-            povoljnije konfiguracije. Ovakav pristup nije izveden u opsegu ovog rada.
+      \item Guranje zakretnih vrata ne prelazi otprilike 71\textdegree{}. Kako se vrata otvaraju,
+            potreban doseg manipulatora raste s 0,81 na 0,88 m, a to se ne može nadoknaditi
+            zakretanjem platforme, jer rotacija ima mrtvu zonu opisanu gore: svaki zakret kreće s
+            barem 20\textdegree{}/s i slomi vezu između manipulatora i kvake. Ograničenje je
+            zaobiđeno završnim zakretom platforme (potpoglavlje \ref{sec:zavrsni-zakret}),
+            koji vrata doguruje do otprilike 100\textdegree{} bez opterećenja hvata.
+            Otvaranje preko 100\textdegree{} zahtijevalo bi prepozicioniranje hvata, dakle
+            puštanje kvake, premještanje platforme i ponovni hvat iz povoljnije konfiguracije, što
+            nije izvedeno u opsegu ovog rada.
 
       \item Sustav sadrži zaseban postupak procjene geometrije ograničenja iz odnosa sile i
             gibanja, opisan u poglavlju \ref{ch:procjena}, ali on u klasičnom pristupu nije

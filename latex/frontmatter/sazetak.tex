@@ -1,7 +1,7 @@
 \frontmatterchapter{SAŽETAK}
 
 U radu se razmatra problem autonomne interakcije mobilnog manipulatora s okolinom, na primjeru
-otvaranja dvije vrste vrata, zakretnih i kliznih. Za mobilni manipulator KUKA KMR iiwa razvijen
+otvaranja zakretnih i kliznih vrata. Za mobilni manipulator KUKA KMR iiwa razvijen
 je u simulacijskom okruženju cjelovit sustav koji objedinjuje percepciju, procjenu sile i
 momenta te upravljanje u kontaktu. Modul percepcije iz slike određuje položaj i orijentaciju
 kvake pomoću vizualnih oznaka, a sila i moment na vrhu alata procjenjuju se iz momenata u
@@ -12,16 +12,19 @@ Zadatak upravljanja riješen je dvama pristupima. Klasični pristup temeljen na 
 cijeli lanac, od prilaska i hvata preko otvaranja do prolaska kroz vrata, oslanjajući se na
 geometriju ograničenja izračunatu iz percepcije. Pristup temeljen na podržanom učenju zadatak
 formulira kao Markovljev proces odlučivanja s varijabilnom impedancijom u prostoru akcije, pri
-čemu politika u svakom koraku bira krutost regulatora po svakoj osi, a geometriju ograničenja
-mora otkriti iz vlastitih opažanja sile i pomaka.
+čemu politika u svakom koraku bira krutost regulatora po svakoj osi, a ponašanje ograničenja
+mora zaključiti iz vlastitih opažanja sile i pomaka.
 
-Oba su pristupa izmjerena na istom robotu, istoj sceni i istim mjerilima uspješnosti. Kod
-kliznih vrata oba dosežu puni cilj u svakom pokušaju. Kod zakretnih vrata klasični pristup
-pouzdano otvara vrata do 50\textdegree{}, ali preko otprilike 57\textdegree{} ne može jer kvaka
-klizne iz prihvatnice, dok naučena politika vrata otvara preko 90\textdegree{} u 96 \% epizoda,
-uz bitno niže kontaktne sile. Zaključak je da je eksplicitno poznavanje geometrije dovoljno kad
-je geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
-krutosti tijekom same interakcije.
+Oba su pristupa izmjerena na istom robotu, istoj sceni i istim mjerilima uspješnosti. Oba dosežu
+zadani cilj na oba tipa vrata, ali uz bitno različito opterećenje. Klasični pristup otvara
+vrata u svakom pokretanju, dok naučena politika kao cjelovito izvođenje uspijeva u otprilike
+polovici epizoda; nad epizodama u kojima izvođenje krene otvara vrata u više od devedeset posto
+slučajeva. Kontaktne su sile pritom red veličine niže kod naučene politike, s efektivnom
+vrijednošću od 29 N naspram 325 N kod zakretnih te 22 N naspram 270 N kod kliznih vrata, jer
+politika vrata otvara silom bliskom njihovu stvarnom otporu, dok kod klasičnog pristupa veći dio
+sile potječe od tranzijenata u krutoj vezi između manipulatora i kvake. Usporedba pritom nije
+usporedba modela s učenjem općenito, nego krutog pozicijskog upravljanja s upravljanjem
+promjenjivom krutošću.
 
 \vspace{8mm}
 \noindent\textbf{KLJUČNE RIJEČI:} mobilni manipulator, fizička interakcija, procjena

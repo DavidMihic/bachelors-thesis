@@ -44,7 +44,7 @@ zasebno i uspoređena s klasičnim pristupom u poglavlju \ref{ch:rezultati}.
 \label{sec:opazanje}
 
 Vrijedi isto načelo kao u klasičnom pristupu: kut ili pomak zgloba vrata, dakle stvarno stanje
-zadatka, nikada nije dio opažanja politike, nego se koristi isključivo u nagradi i terminaciji,
+zadatka, nikada nije dio opažanja politike, nego se koristi isključivo u nagradi i pri prekidu epizode,
 gdje je legitiman jer se računa izvan regulacijske petlje. Opažanje sadrži:
 
 \begin{itemize}
@@ -52,7 +52,7 @@ gdje je legitiman jer se računa izvan regulacijske petlje. Opažanje sadrži:
     \item linearnu i kutnu brzinu vrha alata, u istom koordinatnom sustavu;
     \item brzinu platforme, (linearna brzina po $x$ i $y$, kutna brzina oko $z$);
     \item procijenjenu silu i moment na vrhu alata, uz Gaussov šum standardne devijacije
-          0.5 N, koji odgovara šumu stvarnog procjenitelja iz poglavlja \ref{ch:procjena};
+          0,5 N, koji odgovara šumu stvarnog procjenitelja iz poglavlja \ref{ch:procjena};
     \item vektore od platforme do najbližih točaka susjednih prepreka (zid, dovratnik), uz
           Gaussov šum standardne devijacije 1 cm, koji odgovara izmjerenoj stabilnosti sredine
           otvora iz skena lidara u klasičnom pristupu (potpoglavlje \ref{sec:prolazak});
@@ -68,11 +68,49 @@ pripadnih krutosti, po jedna za svaku os. Time politika izravno bira, u svakom k
 svaku os zasebno, koliko će regulator biti krut, točno ono što je poglavlje
 \ref{ch:klasicni} pokazalo da kruto pozicijsko upravljanje ne može samo po sebi ostvariti.
 
-Sam pomak reference po koraku ograničen je na 15 mm. Pri većoj vrijednosti, istraživačko ponašanje
-na početku učenja trgalo je hvat sa šipke prije nego što bi politika uopće stigla nešto naučiti.
+Uz šest stupnjeva slobode ruke, akcija sadrži i tri komponente brzine platforme, uzdužnu,
+poprečnu i kutnu, pa politika sama koordinira ruku i platformu. Ukupna dimenzija akcijskog
+prostora time iznosi petnaest.
 
-Uz šest stupnjeva slobode ruke, akcija sadrži i tri komponente brzine platforme (uzdužnu,
-poprečnu i kutnu) pa politika sama koordinira ruku i platformu.
+Izlaz politike nije ni u jednoj dimenziji fizikalna veličina, nego bezdimenzijski broj koji se
+množi pripadnim faktorom razmjera. Tablica \ref{tab:akcije} navodi te faktore i granice unutar
+kojih rezultat završava, jer su oni nužni za ponovljivost postupka.
+
+\begin{table}[H]
+    \centering
+    \caption{Sastav akcijskog prostora, faktori razmjera i granice}
+    \label{tab:akcije}
+    \begin{tabular}{@{}llll@{}}
+        \toprule
+        Komponenta                   & Dimenzija & Faktor razmjera \\
+        \midrule
+        Pomak reference, translacija & 3         & 0,015 m         \\
+        Pomak reference, rotacija    & 3         & 0,1 rad         \\
+        Krutost regulatora           & 6         & 300 N/m         \\
+        Brzina platforme, uzdužna    & 1         & 0,1 m/s         \\
+        Brzina platforme, poprečna   & 1         & 0,1 m/s         \\
+        Brzina platforme, kutna      & 1         & 0,17 rad/s      \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Krutost je jedina veličina s tvrdom granicom. Donja granica sprječava da regulator posve popusti,
+a gornja je odabrana tako da umnožak najveće krutosti i faktora razmjera pomaka iznosi 225 N,
+dakle ispod praga od 280 N na kojem počinje kazna za prekomjernu silu. Politika time smije
+odabrati i najveću krutost, a da je sama po sebi ne odvede u kaznu. Ostale su veličine
+neograničene jer je akcija izlaz Gaussove razdiobe, pa je njihov doseg statistički, a ne propisan.
+
+Izlaz politike tipično se kreće u rasponu od otprilike $\pm 3$, pa navedeni faktori daju pomak
+reference reda nekoliko centimetara po koraku te brzinu platforme reda 0,3 m/s i 0,5 rad/s.
+Prigušenje regulatora nije zasebna dimenzija akcije, nego se zadaje omjerom prigušenja jednakim
+jedinici, dakle kritično prigušen odziv pri svakoj krutosti koju politika odabere.
+
+Odabir faktora razmjera za krutost nije bio neutralan. Regulator akciju množi faktorom bez
+pomaka, pa akcija jednaka nuli daje krutost nula, koja se potom ograničava na donju granicu.
+
+Uz sam regulator djeluje i upravljanje u nul-prostoru, s krutošću 10 N/m i kritičnim
+prigušenjem, koje redundantnu konfiguraciju ruke drži blizu nazivne. Bez njega lakat odluta u
+singularitet ili zglobni limit iako vrh alata miruje na svojoj referenci.
 
 \subsection{Koordinacija platforme i manipulatora}
 \label{sec:baza-uci}
@@ -88,50 +126,50 @@ je montirana izvan osi platforme, pa zakret platforme proširuje radni prostor r
 \subsection{Funkcija nagrade}
 \label{sec:nagrada}
 
-Tablica \ref{tab:nagrada} navodi sve članove nagrade. Sve su težine kalibrirane mjerenjem, ne
-pogođene: cilj je bio da svaki član, u konvergiranom pokretanju, iznosi između 3 i 10 \% udjela
-glavnog člana napretka, a postupak je bio pustiti probno pokretanje, očitati udjele i skalirati
-težinu razmjerno odstupanju od tog cilja.
+Tablica \ref{tab:nagrada} navodi sve članove nagrade. Sve su težine određene empirijskim procesom
+kalibracije tako da se provelo kraće treniranje politike (~300 iteracija) s grubo pretpostavljenom
+težinom te se zatim težina skalirala linearno dok član nagrade ne iznosi između 3 i 10 \% udjela
+člana napretka.
 
 \begin{table}[H]
     \centering
     \caption{Članovi funkcije nagrade}
     \label{tab:nagrada}
-    \begin{tabular}{@{}llp{0.5\textwidth}@{}}
+    \begin{tabular}{@{}p{0.26\textwidth}r p{0.47\textwidth}@{}}
         \toprule
-        Član                 & Težina                                 & Svrha                                                   \\
+        Član                 & Težina              & Svrha                                                                         \\
         \midrule
-        napredak             & $+10{,}0$                              & glavni član, normiran na prag uspjeha                   \\
-        okomita sila         & $-0{,}02$                              & kazni silu okomitu na stvarni smjer gibanja vrata       \\
-        zasićenje zglobova   & $-2{,}0$ (klizna), $-6{,}0$ (zakretna) & kazni rad blizu granice
-        raspona zglobova ruke                                                                                                   \\
-        singularitet         & $-20{,}0$                              & kazni pad manipulabilnosti ispod praga                  \\
-        ubrzanje ruke        & $-5\times 10^{-4}$                     & kazni ubrzanje zglobova ruke                            \\
-        trzaj ruke           & $-1\times 10^{-7}$                     & kazni trzaj (drugu derivaciju brzine) zglobova ruke     \\
-        prekomjerna sila     & $-0{,}05$                              & kazni ukupnu silu iznad referentne granice              \\
-        poravnanje hvata     & $-3{,}0$                               & kazni odstupanje prilazne osi hvata od okomice na krilo \\
-        poravnanje platforme & $-6{,}0$ (zakretna), $-0{,}1$ (klizna) & kazni odstupanje
-        platforme od okomice na ravninu vrata                                                                                   \\
-        prodor u krilo       & $-20{,}0$                              & kazni približavanje ruba platforme krilu ispod
-        sigurnog razmaka                                                                                                        \\
-        prodor u zid         & $-20{,}0$                              & kazni približavanje ruba platforme zidu ili dovratniku
-        ispod sigurnog razmaka                                                                                                  \\
-        promjena akcije      & $-0{,}002$                             & kazni razliku uzastopnih akcija                         \\
-        uspjeh               & $+2{,}0$                               & bonus po koraku dok je pomak vrata iznad praga uspjeha  \\
+        napredak             & $+10{,}0$           & glavni član, normiran na prag uspjeha                                         \\
+        okomita sila         & $-0{,}02$           & kazni silu okomitu na stvarni smjer gibanja vrata                             \\
+        zasićenje zglobova   & $-2{,}0$ / $-6{,}0$ & kazni rad blizu granice raspona zglobova ruke                                 \\
+        singularitet         & $-20{,}0$           & kazni pad manipulabilnosti ispod praga                                        \\
+        ubrzanje ruke        & $-5 \cdot 10^{-4}$  & kazni ubrzanje zglobova ruke                                                  \\
+        trzaj ruke           & $-1 \cdot 10^{-7}$  & kazni trzaj, dakle drugu derivaciju brzine zglobova                           \\
+        prekomjerna sila     & $-0{,}05$           & kazni ukupnu silu iznad referentne granice                                    \\
+        poravnanje hvata     & $-3{,}0$            & kazni odstupanje prilazne osi hvata od okomice na krilo                       \\
+        poravnanje platforme & $-0{,}1$ / $-6{,}0$ & kazni odstupanje platforme od okomice na ravninu vrata                        \\
+        prodor u krilo       & $-20{,}0$           & kazni približavanje ruba platforme krilu ispod sigurnog razmaka               \\
+        prodor u zid         & $-20{,}0$           & kazni približavanje ruba platforme zidu ili dovratniku ispod sigurnog razmaka \\
+        promjena akcije      & $-0{,}002$          & kazni razliku uzastopnih akcija                                               \\
+        uspjeh               & $+2{,}0$            & bonus po koraku dok je pomak vrata iznad praga uspjeha                        \\
         \bottomrule
     \end{tabular}
+
+    \vspace{2mm}
+    {\footnotesize Gdje su navedene dvije težine, prva vrijedi za klizna, a druga za zakretna
+        vrata.}
 \end{table}
 
 Napredak se ne normira na puni hod zgloba vrata, već na puno manju referentnu vrijednost
-0.6 m kod kliznih i 0.5 rad (28.6 \textdegree) kod zakretnih vrata. Uz normiranje na puni hod,
+0,6 m kod kliznih i 0,5 rad (28,6 \textdegree) kod zakretnih vrata. Uz normiranje na puni hod,
 manji pomak nosio bi premalu nagradu da nadjača kazne, pa bi politika naučila dovesti vrata na
 određeni pomak i ne pomicati ih dalje. Time napredak nije ograničen odozgo, već smije prijeći jedinicu,
 što znači da nagrada za napredak raste što su vrata više otvorena.
 
 Prag uspjeha, koji određuje kada se dodjeljuje bonus iz zadnjeg retka tablice \ref{tab:nagrada},
 zasebna je veličina. Kod kliznih vrata poklapa se s referentnom vrijednošću normalizacije i iznosi
-0.6 m. Kod zakretnih vrata je namjerno odvojen i postavljen na 1.57 rad (90 \textdegree).
-Razlog je taj što je 0.5 rad dovoljno da se vrata mjerljivo pomaknu, ali nije dovoljno da
+0,6 m. Kod zakretnih vrata je namjerno odvojen i postavljen na 1,57 rad (90 \textdegree).
+Razlog je taj što je 0,5 rad dovoljno da se vrata mjerljivo pomaknu, ali nije dovoljno da
 robot kroz njih prođe. Normalizacija je pritom ostala nepromijenjena kako bi kalibracija
 svih ostalih veličina ostala valjana. Bonus za uspjeh dodjeljuje se po koraku dok je pomak
 iznad praga, a ne kao jednokratna nagrada uz prekid epizode.
@@ -146,8 +184,8 @@ Kazna na singularitet koristi Yoshikawin indeks manipulabilnosti \cite{yoshikawa
 koji je jednak nuli točno na kinematičkom singularitetu i nigdje drugdje. Kazna je normirana na
 raspon od nule do jedan.
 
-\subsection{Terminacije}
-\label{sec:terminacije}
+\subsection{Prekidi epizode}
+\label{sec:prekidi}
 
 Epizoda prekida prije isteka vremena u četiri slučaja
 
@@ -158,16 +196,16 @@ Epizoda prekida prije isteka vremena u četiri slučaja
     \item rub platforme dotaknuo zid ili dovratnik.
 \end{itemize}
 
-\subsection{Nasumičnost pri resetu i kurikulum otpora}
-\label{sec:randomizacija}
+\subsection{Nasumičnost pri početku epizode i kurikulum otpora}
+\label{sec:nasumicnost}
 
-Pri svakom resetu, kut prilaska platforme vrtnji se nasumično zakreće unutar $\pm$ 20\textdegree{}
-oko nazivne vrijednosti. Otpor vrata randomizira se u rasponima navedenima u poglavlju
-\ref{ch:sustav} (tablica \ref{tab:randomizacija}).
+Pri svakom početku epizode, kut prilaska platforme vratima nasumično se zakreće unutar $\pm$ 20\textdegree{}
+oko nazivne vrijednosti. Otpor vrata bira se nasumično u rasponima navedenima u poglavlju
+\ref{ch:sustav} (tablica \ref{tab:otpor-nasumicnost}).
 
 Kod kliznih vrata otpor se uz to uvodi postupno, kurikulumom koji tijekom prvih 1500 iteracija
 učenja linearno širi gornju granicu trenja i prigušenja s vrijednosti koja odgovara laganim
-vratima do pune vrijednosti iz tablice \ref{tab:randomizacija}, nakon čega ostaje na punoj
+vratima do pune vrijednosti iz tablice \ref{tab:otpor-nasumicnost}, nakon čega ostaje na punoj
 vrijednosti do kraja treninga. Kurikulum politici omogućuje da najprije nauči na lakšim vratima, gdje
 se povratna informacija o napretku redovito javlja, prije nego što se suoči s punim rasponom.
 Zakretna vrata kurikulum nemaju, jer je njihov otpor za red veličine manji i politika na njemu
@@ -180,7 +218,7 @@ zadatka, ne proizvoljne odluke.
 Učenje se provodi algoritmom proksimalne optimizacije politike (PPO) \cite{schulman2017ppo}, s
 hiperparametrima u tablici \ref{tab:ppo}.
 
-PPO pripada familiji postupaka s aktorom i kritikom, koji uče dvije odvojene neuronske mreže.
+PPO pripada obitelji postupaka s aktorom i kritikom, koji uče dvije odvojene neuronske mreže.
 Aktor je sama politika, ona iz opažanja daje srednje vrijednosti normalne razdiobe iz koje se potom
 uzorkuje akcija, po jednu za svaku dimenziju akcijskog prostora. Kritik ničim ne upravlja, nego
 iz opažanja procjenjuje očekivani ukupni diskontirani povrat iz
@@ -233,11 +271,11 @@ negativne vrijednosti postavlja na nulu odbacila polovicu njihova raspona.
         Broj epoha učenja po ažuriranju                    & 5                                            \\
         Broj mini-grupa                                    & 4                                            \\
         Stopa učenja                                       & $10^{-3}$, prilagodljiva prema odstupanju KL \\
-        Diskontni faktor $\gamma$                          & 0.99                                         \\
-        Faktor generalizirane procjene prednosti $\lambda$ & 0.95                                         \\
-        Koeficijent obrezivanja                            & 0.2                                          \\
-        Koeficijent entropije                              & 0.001                                        \\
-        Početna standardna devijacija politike             & 0.5                                          \\
+        Diskontni faktor $\gamma$                          & 0,99                                         \\
+        Faktor generalizirane procjene prednosti $\lambda$ & 0,95                                         \\
+        Koeficijent odsijecanja $\epsilon$                 & 0,2                                          \\
+        Koeficijent entropije                              & 0,001                                        \\
+        Početna standardna devijacija politike             & 0,5                                          \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -250,6 +288,91 @@ predstavljala izvedbu politike.
 \section{Rezultati}
 \label{sec:rl-rezultati}
 
+Slika \ref{fig:faze-rl} prikazuje karakteristične trenutke izvođenja naučene politike. Epizoda
+počinje od stanja u kojem prihvatnica već drži kvaku, u skladu s opsegom iz potpoglavlja
+\ref{sec:rl-opseg}, pa faze prilaska i hvata na slikama nema.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_revolute_pocetak.png}
+        \caption{zakretna: početak}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_revolute_otvaranje.png}
+        \caption{zakretna: otvaranje}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_revolute_prolaz.png}
+        \caption{zakretna: prolazak}
+    \end{subfigure}
+
+    \vspace{4pt}
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_sliding_pocetak.png}
+        \caption{klizna: početak}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_sliding_otvaranje.png}
+        \caption{klizna: otvaranje}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/rl_slike/rl_sliding_prolaz.png}
+        \caption{klizna: prolazak}
+    \end{subfigure}
+    \caption{Faze izvođenja naučene politike na oba tipa vrata}
+    \label{fig:faze-rl}
+\end{figure}
+
+Slika \ref{fig:trening-napredak} prikazuje tijek učenja dvjema veličinama. Gornji red je prosječni
+otvor vrata, dobiven iz pripadnog člana nagrade dijeljenjem njegovom težinom i množenjem
+referentnom vrijednošću. Riječ je o dvostrukom prosjeku, po vremenu unutar epizode i po svim
+istovremenim okruženjima, pa je sustavno niži od otvora postignutog na kraju uspješne epizode:
+epizoda počinje sa zatvorenim vratima, a u prosjek ulaze i okruženja u kojima otvaranje ne
+uspije. Donji red prikazuje udio epizode tijekom kojeg su vrata iznad praga uspjeha, što izravnije
+pokazuje koliko je politika naučila otvarati. Svijetla linija je vrijednost po iteraciji, a tamna
+pomični prosjek.
+
+Obje veličine konvergiraju, uz ustaljenu vrijednost u zadnjoj trećini učenja. Donja krivulja kreće
+kasnije od gornje, jer politika najprije nauči vrata uopće pomaknuti, a tek potom otvoriti ih
+dovoljno široko da prijeđe prag. Kod kliznih vrata ucrtana je i iteracija na kojoj završava
+kurikulum otpora (potpoglavlje \ref{sec:nasumicnost}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics{figures/trening_napredak.pdf}
+    \caption{Tijek učenja: prosječni otvor vrata kroz epizodu, po iteraciji}
+    \label{fig:trening-napredak}
+\end{figure}
+
+Obje politike konvergiraju, uz ustaljenu vrijednost u zadnjoj trećini učenja. Kod kliznih vrata
+ucrtana je i iteracija na kojoj završava kurikulum otpora (potpoglavlje \ref{sec:nasumicnost}),
+pa se vidi mijenja li se ponašanje kad politika prvi put vidi puni raspon otpora.
+
+Slika \ref{fig:trening-prekidi} prikazuje kako se kroz učenje mijenjaju udjeli pojedinih razloga
+prekida epizode.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics{figures/trening_prekidi.pdf}
+    \caption{Udjeli razloga prekida epizode kroz iteracije učenja}
+    \label{fig:trening-prekidi}
+\end{figure}
+
+Udio epizoda prekinutih istekom vremena raste kroz učenje, a udio onih prekinutih gubitkom hvata
+i dodirom krila pada. Politika, dakle, ne uči samo otvarati vrata, nego prije svega prestaje
+raditi ono zbog čega bi epizoda završila prerano.
+
 Tablica \ref{tab:rl-rezultati} navodi rezultate na sceni sa zidovima i s graničnim
 vrijednostima zgloba vrata usklađenima s klasičnim pristupom. Radi usporedivosti, obje su
 politike trenirane s istim brojem okruženja i istim brojem iteracija, a sve su vrijednosti
@@ -259,7 +382,7 @@ Prva dva retka tablice vrijednosti su pripadnih članova nagrade, a ne veličine
 opisuju ishod. Okruženje ih prije zapisivanja dijeli duljinom epizode, pa su ispod svakog člana
 navedene veličine izvedene iz njega: član napretka razmjeran je prosječnom otvoru vrata kroz
 epizodu, a član uspjeha udjelu epizode tijekom kojeg su vrata iznad praga uspjeha. Udjeli
-terminacija u nastavku tablice jesu udjeli epizoda i zbrajaju se na jedinicu.
+prekida u nastavku tablice jesu udjeli epizoda i zbrajaju se na jedinicu.
 
 \begin{table}[H]
     \centering
@@ -269,17 +392,17 @@ terminacija u nastavku tablice jesu udjeli epizoda i zbrajaju se na jedinicu.
         \toprule
         Veličina                           & Zakretna vrata & Klizna vrata \\
         \midrule
-        Član napretka                      & 18.93          & 9.87         \\
-        \quad prosječni otvor kroz epizodu & 0.947 rad      & 0.592 m      \\
-        Član uspjeha                       & 0.743          & 0.831        \\
-        \quad udio epizode iznad praga     & 0.371          & 0.416        \\
+        Član napretka                      & 18,93          & 9,87         \\
+        \quad prosječni otvor kroz epizodu & 0,947 rad      & 0,592 m      \\
+        Član uspjeha                       & 0,743          & 0,831        \\
+        \quad udio epizode iznad praga     & 0,371          & 0,416        \\
         \midrule
-        Udio: izgubljen hvat               & 0.072          & 0.000        \\
-        Udio: dodir krila                  & 0.061          & 0.003        \\
-        Udio: dodir zida                   & 0.002          & 0.000        \\
-        Udio: prekomjerna sila             & 0.006          & 0.028        \\
-        Udio: istek vremena                & 0.860          & 0.969        \\
-        Duljina epizode, koraci            & 561.8          & 587.4        \\
+        Udio: izgubljen hvat               & 0,072          & 0,000        \\
+        Udio: dodir krila                  & 0,061          & 0,003        \\
+        Udio: dodir zida                   & 0,002          & 0,000        \\
+        Udio: prekomjerna sila             & 0,006          & 0,028        \\
+        Udio: istek vremena                & 0,860          & 0,969        \\
+        Duljina epizode, koraci            & 561,8          & 587,4        \\
         \bottomrule
     \end{tabular}
 \end{table}

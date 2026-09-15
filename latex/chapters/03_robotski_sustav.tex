@@ -50,8 +50,8 @@ manevriranja. Tehnički podaci mobilne platforme nalaze se u tablici \ref{tab:pl
         Dimenzije (V\,$\times$\,Š\,$\times$\,D) & 700\,$\times$\,1080\,$\times$\,630 mm \\
         Masa                                    & 390 kg                                \\
         Najveća nosivost                        & 170 kg (200 kg bez manipulatora)      \\
-        Brzina u uzdužnom smjeru                & najviše 3.6 km/h                      \\
-        Brzina u poprečnom smjeru               & najviše 2.0 km/h                      \\
+        Brzina u uzdužnom smjeru                & najviše 3,6 km/h                      \\
+        Brzina u poprečnom smjeru               & najviše 2,0 km/h                      \\
         Promjer kotača                          & 250 mm                                \\
         Klasa čistoće                           & ISO 5                                 \\
         \bottomrule
@@ -64,10 +64,9 @@ manevriranja. Tehnički podaci mobilne platforme nalaze se u tablici \ref{tab:pl
 Korišten je manipulator LBR iiwa 7 R800, redundantna kinematička struktura sa sedam
 rotacijskih osi. Za ovaj je rad ključno da manipulator ima senzor momenta u svakoj osi, što
 omogućuje procjenu sile i momenta na vrhu alata bez zasebnog senzora sile na zapešću.
-Postupak te procjene opisan je u poglavlju \ref{ch:procjena}. Sedma os čini strukturu
-redundantnom u odnosu na šest stupnjeva slobode zadatka, pa isti položaj i orijentaciju vrha
-alata ostvaruje kontinuum konfiguracija --- svojstvo koje se u poglavlju \ref{ch:rezultati}
-pokazalo dosta važnim. Tehnički podaci manipulatora nalaze se u tablici \ref{tab:lbr}.
+Sedma os čini strukturu redundantnom u odnosu na šest stupnjeva slobode zadatka, pa
+isti položaj i orijentaciju vrha alata ostvaruje veći broj konfiguracija.
+Tehnički podaci manipulatora nalaze se u tablici \ref{tab:lbr}.
 
 \begin{table}[H]
     \centering
@@ -82,9 +81,9 @@ pokazalo dosta važnim. Tehnički podaci manipulatora nalaze se u tablici \ref{t
         Doseg                       & 800 mm             \\
         Izvedba zapešća             & u liniji           \\
         Prirubnica na osi 7         & DIN ISO 9409-1-A50 \\
-        Ponovljivost pozicioniranja & $\pm$0.1 mm        \\
+        Ponovljivost pozicioniranja & $\pm$0,1 mm        \\
         Točnost momenta po osi      & $\pm$2 \%          \\
-        Masa                        & 23.9 kg            \\
+        Masa                        & 23,9 kg            \\
         Stupanj zaštite             & IP54               \\
         Položaj ugradnje            & pod, strop, zid    \\
         \bottomrule
@@ -118,7 +117,7 @@ Prihvatnica ima četiri prsta raspoređena u dva para koja se zatvaraju duž osi
 uhvaćena šipka leži duž osi $y$. Svaki prst na sebi ima utor čiji je unutarnji luk prilagođen
 šipki kvake promjera 28 mm. Pri potpuno zatvorenom hvatu otvor između prstiju uži je od šipke,
 pa hvat ne počiva na geometrijskom dosjedanju nego na sili pogona i popustljivosti prstiju.
-Time se izbjegava zazor koji bi pri vučenju vrata dopustio da se kvaka pomiče unutar hvata.
+Time se izbjegava zazor koji bi pri guranju vrata dopustio da se kvaka pomiče unutar hvata.
 Položaj vrha alata (\textit{TCP}, engl. \textit{tool center point}) može se vidjeti na slici \ref{fig:gripper-tcp}.
 Značajke prihvatnice nalaze se u tablici \ref{tab:gripper}.
 
@@ -152,26 +151,26 @@ poravna nad kvakom prije nego što se hvat zatvori. Postupak je opisan u potpogl
         \midrule
         Promjer prirubnice                   & 63 mm               \\
         Dimenzije nosive ploče               & 85\,$\times$\,85 mm \\
-        Duljina prsta                        & 66.5 mm             \\
+        Duljina prsta                        & 66,5 mm             \\
         Unutarnji polumjer utora             & 16 mm               \\
         Hod po prstu                         & 0--25 mm            \\
         Masa nosivog dijela                  & 442 g               \\
-        Masa prsta                           & 30.6 g              \\
+        Masa prsta                           & 30,6 g              \\
         Ukupna masa                          & 564 g               \\
-        Položaj vrha alata iznad prirubnice  & 74.85 mm            \\
-        Statički koeficijent trenja prstiju  & 1.2                 \\
-        Dinamički koeficijent trenja prstiju & 1.0                 \\
+        Položaj vrha alata iznad prirubnice  & 74,85 mm            \\
+        Statički koeficijent trenja prstiju  & 1,2                 \\
+        Dinamički koeficijent trenja prstiju & 1,0                 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-Vrh alata leži na osi alata, na visini od 74.85 mm iznad prirubnice manipulatora. Ta visina
+Vrh alata leži na osi alata, na visini od 74,85 mm iznad prirubnice manipulatora. Ta visina
 odgovara središtu unutarnjeg luka kuka pri zatvorenom hvatu, dakle visini na kojoj se nalazi
 os uhvaćene šipke. Vrh alata time nije materijalna točka na prihvatnici, nego sjecište osi
 alata i osi predmeta u hvatu, čime regulator momente računa oko stvarnog hvatišta.
 
 Prsti su u simulacijskom modelu upravljani pozicijski, s krutošću pogona 20\,000 N/m,
-prigušenjem 200 Ns/m i graničnom silom 600 N. Pri vučenju vrata silu prenose djelotvorno samo
+prigušenjem 200 Ns/m i graničnom silom 600 N. Pri guranju vrata silu prenose djelotvorno samo
 dva od četiriju prstiju, jer jedan par radi protiv vlastitog pogona, pa je djelotvorna krutost
 hvata polovica nominalne. Ta je pojedinost bitna za tumačenje rezultata u poglavlju
 \ref{ch:rezultati}.
@@ -185,7 +184,7 @@ Sam postupak detekcije i procjene poze opisan je u poglavlju \ref{ch:percepcija}
 ovdje je opisana samo montaža i pripadni koordinatni sustavi.
 
 Nosač kamere oblikovan je tako da iskoristi postojeće provrte na platformi. Manipulator se na
-platformu pričvršćuje preko četiri provrta promjera 13.3 mm raspoređena po kružnici polumjera
+platformu pričvršćuje preko četiri provrta promjera 13,3 mm raspoređena po kružnici polumjera
 108 mm. Ta je kružnica na platformi izvedena zrcalno s obje strane, a strana suprotna
 manipulatoru ostaje slobodna, pa je nosač kamere postavljen upravo na nju. Time montaža ne
 zahtijeva nikakvu izmjenu platforme.
@@ -226,8 +225,8 @@ pristupa; pristup temeljen na učenju ne koristi lidar direktno, već očitava p
 izravno iz simulatora.
 
 Senzor ima i minimalni domet ispod kojeg mjerenja nisu pouzdana. Budući da je kvaka nakon hvata
-na udaljenosti od tek oko 0.65 m od senzora, unutar tog dometa krilo vrata ostaje nevidljivo, pa
-je vrijednost minimalnog dometa u konfiguraciji senzora spuštena na 0.05 m.
+na udaljenosti od tek oko 0,65 m od senzora, unutar tog dometa krilo vrata ostaje nevidljivo, pa
+je vrijednost minimalnog dometa u konfiguraciji senzora spuštena na 0,05 m.
 
 \section{Modeli vrata}
 \label{sec:vrata}
@@ -257,10 +256,10 @@ Geometrijska i inercijska svojstva vrata mogu se vidjeti u tablici \ref{tab:vrat
         Krilo, masa          & 15 kg                                    & 15 kg                                        \\
         Nepomični dio        & stup 60\,$\times$\,60\,$\times$\,2000 mm & vodilica 60\,$\times$\,2000\,$\times$\,60 mm \\
         Stupanj slobode      & rotacija oko osi $z$                     & translacija duž osi $y$                      \\
-        Raspon gibanja       & 0--135 \textdegree{}                     & 0--1.0 m                                     \\
+        Raspon gibanja       & 0--135 \textdegree{}                     & 0--1,0 m                                     \\
         Kvaka, oblik         & poluga, duljina 160 mm                   & šipka, duljina 250 mm                        \\
         Kvaka, promjer šipke & 28 mm                                    & 28 mm                                        \\
-        Kvaka, masa          & 0.35 kg                                  & 0.35 kg                                      \\
+        Kvaka, masa          & 0,35 kg                                  & 0,35 kg                                      \\
         Visina hvatišta      & 1000 mm                                  & 1000 mm                                      \\
         \bottomrule
     \end{tabular}
@@ -277,14 +276,14 @@ Kod kliznih vrata kvaka je okomita šipka pričvršćena dvama odstojnicima, pa 
 dostupno s prednje strane krila po cijeloj visini šipke.
 
 Vrata su s obje strane omeđena zidom, izvedenim kao dva zasebna, nepomična elementa,
-svaki dimenzija 0.06\,$\times$\,2.5\,$\times$\,2.0 m i mase 15 kg.
-Zidovi su postavljeni tako da između njih ostaje slobodan prolaz od 0.85 m,
+svaki dimenzija 0,06\,$\times$\,2,5\,$\times$\,2,0 m i mase 15 kg.
+Zidovi su postavljeni tako da između njih ostaje slobodan prolaz od 0,85 m,
 jednak širini krila vrata, čime nastaje realistična okolina vrata umjesto izoliranog objekta u
 praznom prostoru. Ta je okolina preduvjet za dvije zadaće opisane u poglavlju
 \ref{ch:klasicni}. Lidar treba stvarnu prepreku da bi u njoj prepoznao otvor, a MoveIt treba
 stvarnu geometriju zida da bi je uzeo u obzir pri planiranju gibanja manipulatora.
 
-\subsection{Otpor gibanja i njegova randomizacija}
+\subsection{Otpor gibanja i njegovo nasumično variranje}
 \label{sec:otpor}
 
 Otpor vrata nije zapisan u geometrijskom modelu, nego se postavlja pri svakom pokretanju
@@ -307,21 +306,21 @@ Parametri se zadaju u apsolutnim jedinicama, dakle u njutnima za prizmatični i 
 revolutni zglob, a ne kao bezdimenzijski koeficijenti. Da bi se to potvrdilo, provedeno je
 mjerenje u simulaciji. Vratima je zadana poznata vrijednost trenja, a zatim je polagano rastućom
 silom određena sila pri kojoj se vrata pokrenu. Omjer izmjerene sile pokretanja i zadanog trenja
-kretao se između 1.00 i 1.03 za zadane vrijednosti trenja u rasponu od 5 do 60 N, čime
+kretao se između 1,00 i 1,03 za zadane vrijednosti trenja u rasponu od 5 do 60 N, čime
 je potvrđeno da zadana vrijednost izravno odgovara sili potrebnoj za pokretanje vrata.
 
-U tablici \ref{tab:randomizacija} mogu se vidjeti rasponi iz kojih su birane vrijednosti otpora vrata:
+U tablici \ref{tab:otpor-nasumicnost} mogu se vidjeti rasponi iz kojih su birane vrijednosti otpora vrata:
 
 \begin{table}[H]
     \centering
-    \caption{Rasponi randomizacije otpora vrata}
-    \label{tab:randomizacija}
+    \caption{Rasponi iz kojih se bira otpor vrata}
+    \label{tab:otpor-nasumicnost}
     \begin{tabular}{@{}lcc@{}}
         \toprule
         Tip vrata & Trenje    & Prigušenje     \\
         \midrule
         Klizna    & 5--60 N   & 5--50 Ns/m     \\
-        Zakretna  & 0.5--5 Nm & 0.5--5 Nms/rad \\
+        Zakretna  & 0,5--5 Nm & 0,5--5 Nms/rad \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -450,7 +449,7 @@ simulatoru koristive datoteke u USD formatu.
 \end{figure}
 
 Za učenje se koristi zasebna inačica modela. Iz modela vrata uklonjeni su nosivi elementi
-oznaka za percepciju, jer tijela mase 0.001 kg uz krilo mase 15 kg loše uvjetuju numerički
+oznaka za percepciju, jer tijela mase 0,001 kg uz krilo mase 15 kg loše uvjetuju numerički
 postupak rješavanja. Nazivi članaka i zglobova ujednačeni su između obaju tipova vrata, čime
 jedna programska implementacija okruženja poslužuje oba tipa bez grananja po tipu vrata.
 
@@ -473,6 +472,20 @@ valjaka i ograničenja pogona kotača. Za zadatak u kojem se platforma giba mali
 kojem su zanimljive sile na vrhu alata, a ne na kotačima, to je prihvatljivo, ali ograničava
 prenosivost rezultata na stvarnog robota. Ograničenje je navedeno u poglavlju
 \ref{ch:zakljucak}.
+
+\subsection{Odometrija}
+\label{sec:odometrija}
+
+Prijeđeni put platforme ne računa se iz naređene brzine i vremena, nego se mjeri. Most prema
+simulatoru objavljuje odometriju izvedenu iz stvarne poze članka platforme u sceni, pa se
+podudara sa stvarnim stanjem. Budući da platforma u modelu nema kotače, nego je predstavljena
+jednim kolizijskim tijelom, enkodera iz kojih bi se odometrija inače izvela nema.
+
+Uporaba te veličine u upravljanju ipak ne narušava načelo da se stanje simulacije ne čita u
+regulacijskoj petlji. Odometrija je senzorska veličina koju stvarni KMR iiwa posjeduje i
+objavljuje kao dio isporučene programske podrške, za razliku od, primjerice, kuta zgloba vrata,
+koji na stvarnom robotu ne bi bio dostupan. Razlika je u tome što je ovdje riječ o savršenoj
+odometriji, bez proklizavanja i bez akumulirajućeg odstupanja, što stvarni enkoderi imaju.
 
 \section{Simulacijsko okruženje}
 \label{sec:isaac}
@@ -551,7 +564,7 @@ informaciju o trenutnom položaju i o tome je li zaustavljena prije dolaska u za
 Time je zadovoljen zahtjev iz potpoglavlja \ref{sec:gripper} da se prihvatnica može zamijeniti
 bez izmjena u ostatku sustava.
 
-Na slici \ref{fig:arch-klasicni} može se vidjeti dijagram arhitekture za klasično učenje.
+Na slici \ref{fig:arch-klasicni} može se vidjeti dijagram arhitekture za klasični pristup.
 
 \begin{figure}[H]
     \centering

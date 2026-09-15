@@ -1,189 +1,240 @@
-\chapter{EKSPERIMENTALNI REZULTATI I RASPRAVA}
+\chapter{REZULTATI SIMULACIJSKOG ISPITIVANJA I RASPRAVA}
 \label{ch:rezultati}
 
-Poglavlja \ref{ch:klasicni} i \ref{ch:rl} iznose rezultate svakog pristupa na njegovim
-vlastitim uvjetima. Ovdje se ta dva pristupa međusobno uspoređuju. Najprije se utvrđuje što
-se uopće smije uspoređivati, zatim izlaže usporedba po zajedničkom kriteriju uspjeha,
-kontaktnim silama i načinima otkazivanja, i naposljetku raspravlja o tome što razlike znače.
+Poglavlja \ref{ch:klasicni} i \ref{ch:rl} iznose rezultate svakog pristupa na njegovim vlastitim
+uvjetima, a ovo ih poglavlje uspoređuje. Najprije utvrđuje što se smije uspoređivati, zatim izlaže
+usporedbu po uspješnosti otvaranja, kontaktnim silama i pouzdanosti izvođenja, i naposljetku
+raspravlja o tome što razlike znače.
 
 \section{Protokol usporedbe}
 \label{sec:metrike}
 
-Oba su pristupa mjerena na sceni sa zidovima, uz otpor vrata izvučen iz istog raspona
-(tablica \ref{tab:randomizacija}), ali postupci mjerenja razlikuju se u trima pogledima koji
-određuju koje su tvrdnje opravdane.
+\subsection{Što se uspoređuje}
 
-Klasični pristup izvodi cijeli lanac, od prilaska i hvata preko
-otvaranja do prolaska kroz vrata. Pristup temeljen na učenju rješava isključivo fazu otvaranja i
-kreće od stanja u kojem prihvatnica već drži kvaku (potpoglavlje \ref{sec:rl-opseg}). Usporedba
-se zato odnosi na otvaranje.
+Usporedba obuhvaća isključivo fazu otvaranja vrata. Klasični pristup izvodi cijeli lanac,
+od prilaska i hvata preko otvaranja do prolaska kroz vrata, dok pristup temeljen na učenju kreće
+od stanja u kojem prihvatnica već drži kvaku (potpoglavlje \ref{sec:rl-opseg}). Da bi usporedba
+bila dosljedna, oba pristupa moraju krenuti od uspješno uspostavljenog hvata, tj. neuspjesi klasičnog
+pristupa nastali prije početka otvaranja, dakle u fazi prilaska ili hvata, ne ulaze u
+stopu uspjeha otvaranja, nego se razmatraju zasebno, u potpoglavlju \ref{sec:pouzdanost}.
 
-Klasični je pristup mjeren u deset zasebnih pokušaja po tipu vrata,
-naučena politika u nekoliko stotina epizoda.
+Bitno je razgraničiti i to što se zapravo uspoređuje. Nije riječ o općenitoj usporedbi
+pristupa temeljenih na modelu s onima temeljenima na učenju, nego o usporedbi dviju konkretnih
+izvedbi: klasičnog pristupa koji vrh alata vodi krutim pozicijskim upravljanjem po
+unaprijed izračunatoj putanji, i naučene politike koja upravlja varijabilnom impedancijom.
+Razlika u ostvarenim rezultatima stoga se ne smije pripisati učenju kao takvom. Posve je moguće
+da bi klasični pristup uz impedancijski regulator, kakav je opisan u poglavlju \ref{ch:pregled},
+dao bitno bolje rezultate od ovdje izvedenog; takva usporedba nije provedena i ostaje otvorena.
 
-Pragovi se razlikuju: klasični pristup cilja 50\textdegree{} odnosno
-0.90 m, a naučena politika 90\textdegree{} odnosno 0.60 m. Mjerenja obaju pristupa zato bilježe
-ostvareni otvor kao kontinuiranu veličinu, pa se stopa uspjeha računa za bilo koji prag
-naknadno, upravo zato da usporedba ne ovisi o tome čiji je kriterij odabran.
+\subsection{Dvije različite mjere}
+\label{sec:dvije-mjere}
 
-Pri determinističkom izvođenju naučene politike dio epizoda ne ostvaruje gibanje platforme, pa
-manipulator doseže granicu vlastitog radnog prostora i otvaranje staje na oko 0.45 m odnosno
-12\textdegree{}. Takve su epizode izdvojene iz statistike, pa analiza obuhvaća 305 od 562
-epizode na zakretnim te 286 od 581 na kliznim vratima; uzrok je opisan u potpoglavlju
-\ref{sec:rl-limits}. Navedene brojke time opisuju sposobnost upravljanja, a ne pouzdanost
-izvođenja u cjelini.
+Rezultati naučene politike iskazuju se dvjema odvojenim veličinama, koje se ne smiju miješati.
+
+\textbf{Pouzdanost cjelovitog izvođenja} računa se nad svim evaluacijskim epizodama. U
+dijelu epizoda pri determinističkom izvođenju izostane koordinirano gibanje platforme, pa
+manipulator doseže granicu vlastitog radnog prostora i otvaranje staje na oko 0,45 m odnosno
+12\textdegree{} (potpoglavlje \ref{sec:rl-limits}). Budući da je takvo ponašanje posljedica same
+politike, a ne vanjske smetnje, te epizode predstavljaju neuspjeh upravljačkog sustava i ulaze u
+ovu mjeru.
+
+\textbf{Uspješnost regulatora} računa se samo nad epizodama u kojima je koordinirano gibanje
+ostvareno. Ona ne opisuje pouzdanost sustava, nego sposobnost samog zakona upravljanja da vrata
+otvori kad izvođenje uopće krene.
 
 \section{Uspješnost otvaranja}
 \label{sec:usporedba}
 
-Tablica \ref{tab:usporedba-uspjeh} uspoređuje oba pristupa po pragu koji koristi klasični
-pristup i po pragu koji koristi naučena politika.
-
 \begin{table}[H]
       \centering
-      \caption{Stopa uspjeha po zajedničkim pragovima}
+      \caption{Stopa uspjeha otvaranja, uz uspostavljen hvat na početku}
       \label{tab:usporedba-uspjeh}
-      \begin{tabular}{@{}llcc@{}}
+      \begin{tabular}{@{}llccc@{}}
             \toprule
-            Vrata    & Prag            & Klasični pristup & Pristup učenjem \\
+                     &                 & Klasični & \multicolumn{2}{c}{Pristup učenjem}                         \\
+            \cmidrule(l){4-5}
+            Vrata    & Prag            & pristup  & sve epizode                         & s ostvarenim gibanjem \\
             \midrule
-            zakretna & 50\textdegree{} & 0.80             & 1.00            \\
-            zakretna & 90\textdegree{} & 0.00             & 0.96            \\
-            klizna   & 0.60 m          & 1.00             & 1.00            \\
-            klizna   & 0.90 m          & 1.00             & 1.00            \\
+            zakretna & 50\textdegree{} & 100,0 \% & 54,0 \%                             & 100,0 \%              \\
+            zakretna & 90\textdegree{} & 100,0 \% & 51,9 \%                             & 96,1 \%               \\
+            klizna   & 0,60 m          & 100,0 \% & 48,4 \%                             & 95,1 \%               \\
+            klizna   & 0,90 m          & 100,0 \% & 46,9 \%                             & 93,2 \%               \\
             \bottomrule
       \end{tabular}
+
+      \vspace{2mm}
+      {\footnotesize Stupac \emph{sve epizode} računat je nad svim evaluacijskim epizodama,
+            a stupac \emph{s ostvarenim gibanjem} samo nad epizodama u kojima je ostvareno
+            koordinirano gibanje platforme (potpoglavlje \ref{sec:dvije-mjere}).}
 \end{table}
 
-Kod kliznih vrata oba pristupa dosežu puni cilj od 0.90 m u svakom pokušaju. Zadatak je
-za oba rješiv: ograničenje je pravac poznat iz percepcije kod klasičnog pristupa, odnosno pravac
-koji politika otkriva iz sile i pomaka, a smjer sile poklapa se sa smjerom gibanja. Razlika
-među pristupima ondje se ne očituje u uspješnosti.
+Uz uspostavljen hvat klasični pristup doseže zadani kut u svakom pokretanju, na obama tipovima
+vrata. Kod zakretnih vrata guranje dovodi krilo do otprilike 70\textdegree{}, a završni zakret
+platforme do otprilike 100\textdegree{}, čime se prelazi i prag od 90\textdegree{} koji koristi
+naučena politika. Kliznia vrata otvaraju se 904 do 910 mm uz cilj od 900 mm.
 
-Kod zakretnih vrata razlika je najizraženija u cijelom radu. Naučena politika otvara
-vrata preko 90\textdegree{} u 96 \% epizoda, dok klasični pristup taj kut ne doseže
-nijednom, ne zato što ga ne cilja, nego zato što mu je fizička granica oko
-57\textdegree{}, iznad koje kvaka klizne iz prihvatnice (potpoglavlje \ref{sec:klasicni-limits}).
+Naučena politika, promatrana kao cjelovito izvođenje, uspijeva u otprilike polovici epizoda, i to
+podjednako na oba tipa vrata. Promatra li se samo kao zakon upravljanja, nad epizodama u
+kojima izvođenje ispravno krene, otvara vrata u više od 90 \% epizoda.
 
-Razlika nije samo u dosegnutom pragu nego i u obliku raspodjele. Klasični pristup staje na
-52.12\textdegree{} $\pm$ 0.42\textdegree{}, dakle vrlo ponovljivo i skoro točno ondje gdje mu je cilj
-postavljen. Naučena politika ima medijan otvora na 122\textdegree{}, a gornji kvartil na
-134.1\textdegree{}, praktički na mehaničkoj granici zgloba od 135\textdegree{}. Politika
-vrata redovito otvara do kraja hoda. Ista se slika ponavlja i kod kliznih vrata, gdje
-medijan otvora leži na punom hodu od 1.00 m.
+Promatra li se samo uspješnost, klasični pristup doseže cilj u svakom pokretanju, na oba
+praga i oba tipa vrata, dok naučena politika kao cjelovito izvođenje uspijeva u
+otprilike polovici epizoda. Po tom mjerilu klasični je pristup pouzdaniji i robustniji.
+
+Raspodjela ostvarenog otvora kod naučene politike izrazito je dvomodalna: epizoda ili stane na
+početnoj vrijednosti, ili se vrata otvore gotovo do kraja hoda. Kod zakretnih vrata medijan
+ostvarenog otvora iznosi 122\textdegree{}, a gornji kvartil 134\textdegree{}, praktički na
+mehaničkoj granici zgloba; kod kliznih vrata medijan leži na 0,94 m, tik ispod punog hoda.
+Između praga uspjeha i te granice gotovo da nema epizoda. Klasični se pristup ponaša suprotno:
+ostvareni otvor vrlo je ponovljiv i zaustavlja se točno ondje gdje mu je cilj postavljen.
 
 \section{Kontaktne sile}
 \label{sec:usporedba-sile}
 
-Izmjerene sile klasičnog pristupa navedene su u tablici \ref{tab:usporedba-sile}. Naučena
-politika prosječnu silu ne izvještava izravno, ali je njezina raspodjela ograničena sigurnosnim
-prekidom na 400 N: udio epizoda prekinutih prekoračenjem sile iznosi 0.6 \% kod zakretnih i
-2.8 \% kod kliznih vrata (tablica \ref{tab:rl-rezultati}). Politika dakle u više od 97 \%
-epizoda ostaje ispod te granice.
+Sile se iskazuju trima veličinama. Prosječna vrijednost opisuje tipično opterećenje, efektivna
+vrijednost (RMS) je mjera energije opterećenja i kažnjava trajno visoku silu više nego kratke
+vrhove, a najveća vrijednost opisuje najgori pojedinačni trenutak. Kod naučene politike navode se
+odvojeno za epizode u kojima je ostvareno koordinirano gibanje i za sve epizode, u skladu s
+razgraničenjem iz potpoglavlja \ref{sec:dvije-mjere}.
 
 \begin{table}[H]
       \centering
-      \caption{Kontaktne sile klasičnog pristupa, prosjek deset pokušaja}
+      \caption{Kontaktne sile pri otvaranju}
       \label{tab:usporedba-sile}
-      \begin{tabular}{@{}lcc@{}}
+      \begin{tabular}{@{}llccc@{}}
             \toprule
-            Vrata    & Sila, prosječna & Sila, najveća \\
+            Vrata    & Pristup                        & Prosječna  & RMS    & Najveća \\
             \midrule
-            zakretna & 348 N           & 625 N         \\
-            klizna   & 258 N           & 661 N         \\
+            zakretna & klasični                       & 300--450 N & 325 N  & 645 N   \\
+            zakretna & učenjem, s ostvarenim gibanjem & 20,1 N     & 29,2 N & 391,0 N \\
+            zakretna & učenjem, sve epizode           & 15,5 N     & 21,5 N & 391,0 N \\
+            \midrule
+            klizna   & klasični                       & 240--285 N & 270 N  & 660 N   \\
+            klizna   & učenjem, s ostvarenim gibanjem & 11,9 N     & 21,7 N & 381,0 N \\
+            klizna   & učenjem, sve epizode           & 10,7 N     & 17,5 N & 381,0 N \\
             \bottomrule
       \end{tabular}
+
+      \vspace{2mm}
+      {\footnotesize Efektivna vrijednost računata je unutar pojedine epizode, a zatim usrednjena
+            preko epizoda.}
 \end{table}
 
-Klasični pristup redovito prelazi 400 N, s vršnom silom od 625 N, dok naučena politika tu granicu
-prekoračuje u manje od 1 \% posto epizoda.
-Kod kliznih vrata klasični pristup generalno ostaje ispod granice, ali za otići i preko (vrh 661 N),
-pa je naučena politika i tu bolja.
+Podjela po ishodu epizode otkriva nešto što se iz ukupnog prosjeka ne bi vidjelo, a to je da epizode bez
+ostvarenog gibanja platforme imaju nižu, a ne višu silu. Prosjek preko svih epizoda time
+je niži od prosjeka preko onih u kojima je gibanje ostvareno. Politika u tim epizodama jednostavno
+ne djeluje na vrata.
 
-Taj je nalaz izravna potvrda teze koju rad gradi od poglavlja \ref{ch:klasicni}. Klasični pristup
-vodi vrh alata krutim pozicijskim upravljanjem, pa svako odstupanje između procijenjene i stvarne
-geometrije luka postaje sila. Naučena politika krutost regulatora bira po osi i u svakom koraku,
-pa silu smanjuje popuštanjem u smjeru u kojem se bori s ograničenjem.
+Razlika među pristupima je reda veličine. Efektivna vrijednost sile naučene politike iznosi
+jedanaest do dvanaest puta manje od one kod klasičnog pristupa, na oba tipa vrata. Uzrok
+je razlika u načinu vođenja: klasični pristup vrh alata vodi krutim pozicijskim upravljanjem, pa
+svako odstupanje između procijenjene i stvarne geometrije, kao i svako ubrzanje platforme,
+prolazi kroz krutu vezu i pojavljuje se kao sila. Naučena politika krutost regulatora bira po osi
+i u svakom koraku, pa u smjeru u kojem se bori s ograničenjem popušta.
 
-\section{Načini otkazivanja}
-\label{sec:usporedba-otkazi}
+Da je riječ upravo o tome, potvrđuje usporedba s otporom samih vrata. Kod kliznih vrata otpor je
+varirao u rasponu od 5 do 60 N (tablica \ref{tab:otpor-nasumicnost}), a prosječna sila naučene
+politike iznosi 11,9 N, dakle unutar tog raspona. Politika vrata otvara silom koja je istog reda
+veličine kao njihov stvarni otpor, dok je sila klasičnog pristupa red veličine veća od njega i
+većim dijelom potječe od tranzijenata, a ne od savladavanja otpora.
 
-Kod klasičnog pristupa oba neuspjeha na zakretnim vratima dogodila su se u fazi hvata,
-prije nego je otvaranje uopće počelo. Kad otvaranje jednom krene, uspije svaki put i s vrlo
-malim rasipanjem. Slabija karika klasičnog pristupa kod zakretnih vrata time nije upravljanje
-nego percepcija i hvat.
+Najveća sila kod naučene politike iznosi 391 N na zakretnim i 381 N na kliznim vratima, dakle
+tik ispod granice prekida od 400 N. Ta vrijednost stoga ne opisuje tipično ponašanje, nego vrlo vjerojatno
+mjesto na kojem se epizoda prekida, a udio takvih epizoda iznosi 0,6 \% odnosno 2,8 \%.
 
-Naučena politika otkazuje tijekom same interakcije: gubi hvat u 7.2 \% epizoda na zakretnim
-vratima i dodiruje krilo u 6.1 \%. Kod kliznih su vrata oba gotovo nula. Dodir zida je u oba
-slučaja zanemariv, što pokazuje da je politika naučila pouzdano izbjegavati prepreke.
+Sile kod klasičnog pristupa procijenjene su iz momenata u zglobovima, postupkom čiji je rezidual
+reda dvadesetak njutna (potpoglavlje \ref{sec:wrench-svojstva}), dok su kod naučene politike
+očitane izravno iz simulacije, bez šuma. Rezidual procjenitelja time je istog reda veličine kao
+cjelokupna prosječna sila naučene politike. Razlika od reda veličine ostaje valjana, ali usporedba
+pojedinačnih iznosa ispod otprilike dvadeset njutna nije.
+
+\section{Pouzdanost cjelovitog izvođenja}
+\label{sec:pouzdanost}
+
+Dva pristupa ne otkazuju na istim mjestima, i ta je razlika informativnija od samih stopa uspjeha.
+
+Kod klasičnog pristupa otkazivanje se skoro isključivo javlja prije otvaranja, u fazi hvata.
+Kad otvaranje jednom krene, dovrši se svaki put i s malim rasipanjem.
+Slabija karika klasičnog pristupa time nije upravljanje u kontaktu, nego percepcija i hvat,
+dakle dijelovi koje naučena politika prema odluci o opsegu iz potpoglavlja \ref{sec:rl-opseg}
+uopće ne izvodi.
+
+Naučena politika otkazuje tijekom faze koja se uspoređuje. Uz izostanak koordiniranog
+gibanja platforme, koji je najčešći način otkazivanja, gubi hvat u 5,7 \% epizoda na zakretnim
+vratima i dodiruje krilo u 6,1 \%. Kod kliznih su vrata oba udjela gotovo nula. Dodir zida
+zanemariv je u obama slučajevima, što pokazuje da je politika naučila izbjegavati i prepreku koja
+je u zadatak uvedena kasnije, a ne samo onu koja je od početka bila kažnjavana.
+
+Posljedica je da se prednost jednog ili drugog pristupa ne može izreći jednim brojem. Klasični je
+pristup pouzdaniji i doseže cilj u svakom pokretanju, ali uz opterećenje reda veličine veće od
+otpora samih vrata. Naučena politika djeluje silom bliskom tom otporu, ali u polovici pokretanja
+uopće ne krene.
 
 \section{Rasprava}
 \label{sec:rasprava}
 
 \subsection{Različiti ulazi u isti problem}
 
-Razlika u uspješnosti ne smije se čitati kao razlika u kvaliteti upravljanja, jer dva pristupa ne
-rješavaju problem s istim informacijama.
+Razlika u rezultatima ne smije se čitati samo kao razlika u kvaliteti upravljanja, jer dva
+pristupa ne rješavaju problem s istim informacijama.
 
-Klasični pristup zna gdje je os šarke. Izračunava je iz poze oznake i poznate širine
-krila, kao fiksni vektor u koordinatnom sustavu oznake (izraz \eqref{eq:axis}), uz izmjerenu
-pogrešku od 5 do 8 mm. Naučena politika taj podatak nema ni u kojem obliku: geometriju
-ograničenja mora otkriti iz vlastitih opažanja sile i pomaka, a kut vrata nikada ne ulazi u
-njezino opažanje. Ista asimetrija vrijedi i za smjer klizanja kod kliznih vrata.
+Klasični pristup zna gdje je os šarke. Izračunava je iz poze oznake i poznate širine krila,
+kao fiksni vektor u koordinatnom sustavu oznake (izraz \eqref{eq:axis}), uz izmjerenu pogrešku od
+5,8 mm prosječno do 14,3 mm. Naučena politika taj podatak nema ni u kojem obliku i geometriju ograničenja mora
+zaključiti iz vlastitih opažanja sile i pomaka.
 
-Asimetrija ide i u drugom smjeru. Naučena politika koordinira platformu i manipulator jednom,
-naučenom strategijom (potpoglavlje \ref{sec:baza-uci}), dok klasični pristup taj problem rješava
-unaprijed propisanim slijedom naizmjeničnih faza. Kod zakretnih vrata upravo ta propisana shema
-postaje ograničenje: izmjereno je da primicanje platforme manipulatoru ne vraća doseg, jer kvaka
-putuje zajedno s platformom, pa doseg kroz cijelo pokretanje ostaje između 0.78 i 0.87 m.
-Politika koja koordinaciju uči nije vezana tom pretpostavkom i pronalazi obrazac gibanja koji
-propisani slijed ne sadrži.
+Tu tvrdnju ipak treba uzeti s mjerom opreza. Politika nije jedinstvena: za zakretna i klizna vrata
+istrenirane su zasebne politike, uz različite težine pojedinih članova nagrade i, kod
+kliznih vrata, uz postupno uvođenje otpora tijekom učenja (potpoglavlje \ref{sec:nasumicnost}).
+Svaka politika stoga uči jedan tip ograničenja, a ne razlikovanje među njima. Ono što politika
+doista otkriva jest kako se ograničenje ponaša tijekom interakcije, a ne kojeg je tipa.
 
-\subsection{Zašto se razlika pojavljuje samo na zakretnim vratima}
+Asimetrija ide i u drugom smjeru. Naučena politika koordinaciju platforme i manipulatora uči
+zajedno s ostatkom zadatka, dok je klasični pristup rješava unaprijed propisanim slijedom faza.
 
-Izostanak razlike na kliznim i velika razlika na zakretnim vratima nisu slučajni, nego slijede iz
-toga koliko svaki zadatak traži prilagodbu krutosti tijekom interakcije.
+\subsection{Uspješnost naspram opterećenja}
 
-Klizna su vrata geometrijski jednostavna: ograničenje je pravac, smjer sile poklapa se sa smjerom
-gibanja, a jedina poteškoća je duljina hoda, koju klasični pristup rješava ponavljanjem prolaza.
-Ondje eksplicitno poznavanje geometrije daje sve što treba, pa dodatna sloboda u odabiru krutosti
-ne donosi mjerljivu prednost.
+Nalaz da oba pristupa dosežu cilj, a razlikuju se za red veličine u sili, traži objašnjenje na
+obje strane.
 
-Zakretna vrata traže gibanje po luku, uz stalno mijenjanje odnosa između platforme, manipulatora
-i kvake. Ondje kruto praćenje unaprijed izračunate putanje stvara silu na svako odstupanje, a
-uhvaćena kvaka pritom klizne. Naučena politika, koja krutost mijenja po osi i koordinaciju uči,
-prolazi kroz područje na koje klasični pristup nailazi kao na tvrdu granicu.
+Klasični pristup uspijeva unatoč visokoj sili zato što je ona uglavnom tranzijentna, a ne
+trajna. Nastaje pri pokretanju platforme iz mirovanja i pri svakom odstupanju između procijenjene
+i stvarne geometrije, prolazi kroz krutu vezu manipulatora i kvake, i traje kratko. Model vrata,
+prihvatnica i hvat to opterećenje podnose, pa se zadatak dovrši. Na stvarnom robotu ista bi sila
+bila bitno problematičnija, jer bi je morali podnijeti i stvarni prsti, stvarna kvaka i stvarni
+zglob vrata.
 
-Zaključak je time uvjetovan, a ne općenit: eksplicitno poznavanje geometrije dostatno je kad je
-geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
-krutosti tijekom same interakcije.
+Naučena politika istu razinu sile ne treba jer krutost regulatora bira po osi i u svakom koraku.
+U smjeru u kojem se bori s ograničenjem popušta, pa odstupanje procjene ne postaje sila nego
+pomak reference koji ograničenje samo ispravi. Izmjerena prosječna sila od 11,9 N na kliznim
+vratima, unutar raspona stvarnog otpora od 5 do 60 N, pokazuje da politika vrata otvara gotovo
+isključivo savladavanjem njihova otpora, bez dodatnog opterećenja.
+
+Zaključak je time uvjetovan, a ne općenit. Ako je mjerilo isključivo dovršava li robot zadatak,
+kruto pozicijsko upravljanje uz dobro procijenjenu geometriju dovoljno je i pouzdanije. Ako se u
+mjerilo uključi i opterećenje koje pritom nastaje, prednost prelazi na upravljanje s promjenjivom
+krutošću. Ta razlika nije razlika između modela i učenja, nego između krutog i popustljivog
+vođenja, kako je istaknuto u potpoglavlju \ref{sec:metrike}.
 
 \section{Ograničenja usporedbe}
 \label{sec:usporedba-limits}
 
 \begin{itemize}
-      \item Usporedba obuhvaća isključivo fazu otvaranja. Prilazak, hvat i prolazak kroz vrata
-            klasični pristup izvodi, a naučena politika ne, pa se njihova ukupna sposobnost
-            rješavanja zadatka ovim mjerenjima ne uspoređuje.
+      \item Usporedba obuhvaća isključivo fazu otvaranja. Prilazak i hvat klasični pristup izvodi,
+            a naučena politika ne, pa se ukupna sposobnost rješavanja zadatka ovim mjerenjima ne uspoređuje.
 
-      \item Navedene stope uspjeha naučene politike uvjetne su na način opisan u potpoglavlju
-            \ref{sec:metrike} i opisuju sposobnost upravljanja, a ne pouzdanost izvođenja u
-            cjelini.
+      \item Usporedba nije općenita usporedba pristupa temeljenih na modelu s onima temeljenima na
+            učenju, nego usporedba krutog pozicijskog upravljanja s varijabilnom impedancijom.
+            Klasični pristup izveden s impedancijskim regulatorom nije ispitan.
 
-      \item Stopa uspjeha nije istovrsna veličina na dvjema stranama. Kod klasičnog pristupa riječ
-            je o binarnom ishodu po pokušaju, nad deset pokušaja; kod naučene politike o udjelu
-            nad nekoliko stotina epizoda. Razlika između 0.80 i 1.00 na uzorku od deset pokušaja
-            nije pouzdana; razlika između 0.00 i 0.96 jest.
-
-      \item Naučena politika mjerena je uz nasumičan kut prilaska, kojega u klasičnim pokušajima
-            nema, pa raspon uvjeta nije posve izjednačen.
+      \item Uzorci nisu iste veličine: stotine epizoda naspram 20 pokretanja klasičnog pristupa. Stopa
+            uspjeha klasičnog pristupa time nosi znatno veću nesigurnost.
 
       \item Trajanje izvođenja nije uspoređivano. Epizoda naučene politike traje najviše deset
-            sekundi i najčešće istječe bez prekida, jer uspjeh ne prekida epizodu, dok klasični
-            pristup traje dok zadatak ne dovrši, prosječno 40 s na zakretnim i 28 s na kliznim
-            vratima. Te dvije veličine ne mjere isto.
+            sekundi i najčešće istekne bez prekida, jer uspjeh ne prekida epizodu, dok klasični
+            pristup traje dok zadatak ne dovrši. Te dvije veličine ne mjere isto.
 
-      \item Obje su izvedbe mjerene isključivo u simulaciji. Zaključci se odnose na model, a
-            prenosivost na stvarni robot ograničena je pojednostavljenjima navedenima u poglavljima
-            \ref{ch:sustav} i \ref{ch:percepcija}.
+      \item Obje su izvedbe ispitane isključivo u simulaciji. Zaključci se odnose na model, a
+            prenosivost na stvarni robot ograničena je pojednostavljenjima navedenima u
+            poglavljima \ref{ch:sustav} i \ref{ch:percepcija}.
 \end{itemize}

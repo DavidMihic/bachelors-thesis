@@ -14,16 +14,19 @@ entire task chain, from approach and grasp through opening to passing through th
 relying on the constraint geometry computed from perception. The learning-based approach
 formulates the task as a Markov decision process with variable impedance as the action space, so
 that the policy selects the controller stiffness along each axis at every step, and must infer
-the constraint geometry from its own force and displacement observations.
+the behaviour of the constraint from its own force and displacement observations.
 
 Both approaches were evaluated on the same robot, the same scene and the same success criteria.
-For sliding doors, both reach the full target in every trial. For revolute doors, the classical
-approach reliably opens the door to 50\textdegree{} but cannot exceed approximately
-57\textdegree{}, as the handle slips out of the gripper, whereas the learned policy opens the
-door beyond 90\textdegree{} in 96 \% of episodes, with substantially lower contact forces. The
-conclusion is that explicit knowledge of the constraint geometry is sufficient when that geometry
-is simple and well estimated, but loses its advantage as soon as the task requires the stiffness
-to be adapted during the interaction itself.
+Both reach the target opening on both door types, but at markedly different cost. The classical
+approach opens the door in every run, whereas the learned policy, taken as a complete execution,
+succeeds in roughly half of all episodes; restricted to episodes in which execution gets under
+way, it opens the door in more than ninety per cent of cases. Contact forces are an order of
+magnitude lower for the learned policy, with a root-mean-square value of 29 N against 325 N for
+revolute and 22 N against 270 N for sliding doors, because the policy opens the door with a force
+close to the door's actual resistance, while for the classical approach most of the force
+originates in transients within the rigid link between the manipulator and the handle. The
+comparison is therefore not one between model-based and learning-based control in general, but
+between rigid position control and control with variable stiffness.
 
 \vspace{8mm}
 \noindent\textbf{Key words:} mobile manipulator, physical interaction, environment property

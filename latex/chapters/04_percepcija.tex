@@ -23,7 +23,7 @@ konvolucijskom neuronskom mrežom \cite{stuede2019door} --- ali traže skup poda
 učenja koji nisu bili u opsegu ovog rada. Posljedice su navedene u potpoglavlju
 \ref{sec:perception-limits}.
 
-Od dviju uobičajenih familija oznaka odabran je AprilTag \cite{olson2011apriltag}, i to zbog
+Od dviju uobičajenih obitelji oznaka odabran je AprilTag \cite{olson2011apriltag}, i to zbog
 zrelijih detekcijskih biblioteka u sustavu ROS 2 te točnije procjene orijentacije pri malim
 oznakama nego što je daju usporedive alternative.
 
@@ -47,7 +47,7 @@ udaljenosti da se platforma dovede pred vrata.
 
 Dvije male oznake na krajevima kvake služe fazi hvata, na radnoj udaljenosti od otprilike
 jednog do jednog i pol metra. Njihova je veličina ograničena promjerom šipke kvake, koji iznosi
-28 mm, pa je za njih odabrana familija s mrežom $4 \times 4$ umjesto $6 \times 6$: pri istoj
+28 mm, pa je za njih odabrana obitelj s mrežom $4 \times 4$ umjesto $6 \times 6$: pri istoj
 duljini stranice takva oznaka ima krupnija polja i ostaje čitljiva na većoj udaljenosti.
 Cijena je manja Hammingova udaljenost među kodovima, dakle veća sklonost lažnim detekcijama,
 što je ublaženo time da modul očekuje unaprijed poznate identifikatore i provjerava je li
@@ -59,7 +59,7 @@ izmjereni razmak dviju oznaka u očekivanom rasponu.
     \label{tab:oznake}
     \begin{tabular}{@{}lllll@{}}
         \toprule
-        Oznaka     & Vrata    & Nosivi članak & Veličina & Familija \\
+        Oznaka     & Vrata    & Nosivi članak & Veličina & Obitelj  \\
         \midrule
         središnja  & oba      & krilo         & 80 mm    & tag36h11 \\
         kvaka, $A$ & zakretna & poluga kvake  & 25 mm    & tag16h5  \\
@@ -86,7 +86,7 @@ kliznim vratima, jer je kod zakretnih vrata poluga kvake vodoravna i kraća, a k
 
 Detekcija se provodi gotovim paketom \texttt{apriltag\_ros} za sustav ROS 2, koji iz slike u boji i unutarnjih
 parametara kamere daje potpunu pozu svake prepoznate oznake u optičkom koordinatnom sustavu
-kamere. Kako jedan primjerak čvora obrađuje samo jednu familiju oznaka, pokreću se dva
+kamere. Kako jedan primjerak čvora obrađuje samo jednu obitelj oznaka, pokreću se dva
 primjerka, po jedan za veliku i za male oznake.
 
 Slika i unutarnji parametri kamere dolaze izravno iz simulatora, kao i cijelo stablo
@@ -147,7 +147,7 @@ objavljuje vlastito vrijeme, pa bi takva usporedba spajala dvije nepovezane vrem
 
 Modul objavljuje pozu hvatišta na jednoj temi, s frekvencijom od 10 Hz, izraženu u
 koordinatnom sustavu platforme. Time je sučelje prema ostatku sustava svedeno na jednu poruku,
-neovisno o tome koliko je oznaka i kojih familija upotrijebljeno, pa se postupak detekcije može
+neovisno o tome koliko je oznaka i kojih obitelji upotrijebljeno, pa se postupak detekcije može
 zamijeniti bez izmjena u kodu koji izvodi zadatak.
 
 Dvije skupine oznaka imaju bitno različit radni doseg. Središnja oznaka pouzdano se detektira s

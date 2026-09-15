@@ -32,6 +32,10 @@ Primjenu kartezijskog impedancijskog upravljanja upravo na otvaranje vrata mobil
 manipulatorom prikazali su Ott i suradnici \cite{ott2005door}. Njihov je rad blizak zadatku iz
 ovog rada, s tom razlikom što se oslanja na unaprijed poznat model vrata.
 
+Impedancijsko upravljanje u međuvremenu je preraslo u zasebno područje, u kojem se parametri
+impedancije ne zadaju unaprijed nego mijenjaju tijekom izvođenja ili uče iz podataka; pregled tog
+razvoja daju Abu-Dakka i Saveriano \cite{abudakka2020review}.
+
 Zajednička slabost svih tih pristupa jest osjetljivost na kvalitetu modela. Ako procijenjena
 geometrija ograničenja odstupa od stvarne, regulator tu razliku pretvara u kontaktnu silu, i to
 tim izraženije što je krutost veća. Upravo se ta osjetljivost u ovom radu pokazala kao granica
@@ -76,7 +80,25 @@ modela istoj putanji, stoji iza postupka procjene ograničenja opisanog u poglav
 
 Noviji radovi taj problem rješavaju tijekom samog izvođenja, bez prethodne faze promatranja.
 Rizzi i suradnici predstavili su upravljanje mobilnim manipulatorom temeljeno na uzorkovanju,
-otporno na nepoznate parametre artikuliranog objekta \cite{rizzi2023articulated}.
+otporno na nepoznate parametre artikuliranog objekta \cite{rizzi2023articulated}. Martín-Martín i
+Brock procjenu kinematičkog modela vode kao neprekidan, rekurzivan postupak koji se osvježava
+svakim novim opažanjem tijekom interakcije, umjesto da se provodi jednom prije nje
+\cite{martinmartin2022coupled}.
+
+Mittal i suradnici zadatak promatraju na razini cijelog robota: gibanje platforme i manipulatora
+optimiraju zajedno, u prethodno nepoznatoj sceni, pri čemu se kinematički model objekta
+procjenjuje tijekom izvođenja \cite{mittal2022articulated}. Taj je rad blizak zadatku iz ovog
+rada i po robotu i po postavci, uz razliku što ovdje koordinacija platforme i manipulatora nije
+rezultat optimizacije nego, ovisno o pristupu, unaprijed propisanog slijeda faza ili naučene
+politike.
+
+Osobito je zanimljiv smjer koji ide korak dalje i tvrdi da model objekta uopće nije nužan. Zhao i
+suradnici pokazuju da je dovoljno održavati stabilan dodir između prihvatnice i objekta te
+prilagođavati gibanje prema odstupanjima koja se pritom osjete, čime robot otvara vrata i ladice
+bez ikakvog prethodnog znanja o njihovoj kinematici \cite{zhao2024tacman}. Njihov je argument
+izravno relevantan za ovaj rad: modeli utemeljeni na pretpostavkama gube pouzdanost kad su te
+pretpostavke netočne ili nepotpune, što je upravo ograničenje klasičnog pristupa iz poglavlja
+\ref{ch:klasicni}.
 
 Za ovaj je rad posebno blizak rad Stuedea i suradnika \cite{stuede2019door}, u kojem mobilni
 manipulator istog tipa kao u ovom radu otvara vrata i prolazi kroz njih uz kartezijsko
@@ -99,6 +121,14 @@ zajedno s krutošću regulatora) uči znatno uspješnije \cite{martinmartin2019v
 tada ne uči samo kamo se gibati, nego i koliko biti popustljiva u pojedinom trenutku. Taj je
 akcijski prostor izravna osnova formulacije u poglavlju \ref{ch:rl}.
 
+Taj se smjer nastavio i nakon toga. Yang i suradnici pokazali su da se politika s varijabilnom
+impedancijom može učiti izravno na stvarnom robotu, bez prethodnog učenja u simulaciji, oslanjajući
+se na malen broj nesavršenih demonstracija \cite{yang2022variable}. Zhang i suradnici krutost
+koriste kao sredstvo sigurnosti, tako da politika uz zadatak istovremeno uči i kada popustiti da
+kontaktna sila ostane u dopuštenim granicama \cite{zhang2024srlvic}. Oba rada potvrđuju
+zapažanje koje se pokazalo i ovdje, da je izbor krutosti dio zadatka, a ne postavka koja se zadaje
+unaprijed.
+
 Drugi smjer istraživanja bavi se time kako naučiti gibanje platforme koje manipulatoru održava
 kinematičku izvedivost. Honerkamp i suradnici najprije su pokazali da se politika platforme može
 naučiti tako da prati zadanu putanju vrha alata i drži je unutar dosega
@@ -115,13 +145,33 @@ montiran izvan osi platforme, što zakretom platforme proširuje radni prostor (
 Algoritam korišten u ovom radu je proksimalna optimizacija politike (PPO) \cite{schulman2017ppo},
 odabrana zbog stabilnosti pri velikom broju paralelnih okruženja.
 
+\section{Prijenos iz simulacije na stvarnog robota}
+\label{sec:pregled-sim2real}
+
+Učenje u simulaciji zaobilazi trošak i opasnost prikupljanja podataka na stvarnom robotu, ali
+uvodi vlastiti problem: politika naučena u modelu ne mora raditi na stvarnom uređaju, jer se
+model i stvarnost razlikuju. Pregled postupaka kojima se taj razmak smanjuje daju Zhao i
+suradnici \cite{zhao2020sim2real}.
+
+Najrasprostranjeniji je pristup nasumično variranje parametara simulacije tijekom učenja, pri
+čemu politika ne nauči jedan model nego obitelj njih, među kojima je i stvarni uređaj samo još
+jedna inačica. Tobin i suradnici taj su postupak uveli za vizualne ulaze, mijenjajući teksture i
+osvjetljenje \cite{tobin2017domain}, a Peng i suradnici proširili su ga na dinamiku, mijenjajući
+mase, trenja i vremenska kašnjenja \cite{peng2018dynamics}.
+
+Nasumično variranje dinamičkih parametara izravno je primijenjeno i u ovom radu, gdje se otpor
+vrata mijenja pri svakom resetu okruženja (potpoglavlje \ref{sec:otpor-nasumicnost}). Time politika
+ne uči jedna konkretna vrata nego raspon njih. Prijenos na stvarnog robota, međutim, nije
+proveden, pa zaključci ovog rada ostaju vezani uz model; ograničenja koja iz toga slijede
+navedena su u poglavlju \ref{ch:zakljucak}.
+
 \section{Položaj ovog rada}
 \label{sec:pregled-pozicija}
 
 Navedeni radovi pojedine dijelove zadatka rješavaju bolje nego ovaj rad, ali ga uglavnom
 promatraju odvojeno: ili razvijaju upravljanje uz poznat model objekta, ili uče politiku bez
 usporedbe s klasičnom alternativom. Doprinos ovog rada nije novi postupak upravljanja, nego
-\emph{izravna usporedba} dvaju pristupa izvedenih za istog robota, istu scenu i ista mjerila
+izravna usporedba dvaju pristupa izvedenih za istog robota, istu scenu i ista mjerila
 uspješnosti, uključujući dva tipa vrata koja isti zadatak čine različito teškim. Time se
 pokušava odgovoriti na pitanje pod kojim uvjetima eksplicitno poznavanje geometrije donosi
 prednost, a pod kojima je gubi.

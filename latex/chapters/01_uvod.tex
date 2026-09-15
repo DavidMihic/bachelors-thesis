@@ -51,7 +51,7 @@ Usporedba tih dvaju pristupa ima smisla samo ako se provodi na istom zadatku, is
 istoj fizici okoline. Ovaj rad zato oba pristupa razvija za isti sustav (mobilni manipulator
 KUKA KMR iiwa u simulacijskom okruženju), i uspoređuje ih na istim mjerilima uspješnosti.
 
-\section{Cilj i doprinos rada}
+\section{Cilj rada}
 \label{sec:cilj}
 
 Cilj rada je razviti i eksperimentalno vrednovati sustav koji mobilnom manipulatoru omogućuje
@@ -63,25 +63,19 @@ U sklopu rada razvijen je modul percepcije koji iz slike određuje položaj i or
 postupak procjene sile i momenta na vrhu alata iz momenata u zglobovima, bez zasebnog senzora
 sile, te dva međusobno neovisna rješenja zadatka upravljanja. Klasično rješenje izvodi cijeli
 lanac, od prilaska i hvata preko otvaranja do prolaska kroz vrata, oslanjajući se na geometriju
-ograničenja izračunatu iz percepcije. Rješenje temeljeno na učenju zadatak formulira kao
-Markovljev proces odlučivanja s varijabilnom impedancijom u prostoru akcije, pa politika u svakom
-koraku bira koliko će regulator biti krut po svakoj osi, a geometriju ograničenja mora otkriti iz
-vlastitih opažanja sile i pomaka.
+ograničenja izračunatu iz percepcije. Rješenje temeljeno na učenju zadatak formulira kao Markovljev
+proces odlučivanja s varijabilnom impedancijom u prostoru akcije, pa politika u svakom koraku bira
+koliko će regulator biti krut po svakoj osi, a ponašanje ograničenja mora zaključiti iz vlastitih
+opažanja sile i pomaka.
 
-Usporedba je pokazala da se prednost jednog pristupa nad drugim ne može izreći općenito, nego
-ovisi o tipu vrata. Kod kliznih vrata, gdje je ograničenje pravac, a smjer sile poklapa se sa
-smjerom gibanja, oba pristupa dosežu puni cilj u svakom pokušaju. Kod zakretnih vrata klasični
-pristup pouzdano otvara vrata do 50\textdegree{}, ali preko otprilike 57\textdegree{} ne može,
-jer kvaka klizne iz prihvatnice, dok naučena politika vrata otvara preko 90\textdegree{} u 96 \%
-epizoda, uz niže kontaktne sile. Eksplicitno poznavanje geometrije time je dovoljno kad je
-geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
-krutosti tijekom same interakcije.
-
-Doprinos rada nije novi postupak upravljanja, nego izravna usporedba dvaju pristupa izvedenih za
-istog robota, istu scenu i ista mjerila uspješnosti, uz dva tipa vrata koja isti zadatak čine
-različito teškim. Cjelokupan je rad proveden u simulaciji, pa se zaključci odnose na model, a
-ograničenja koja iz toga slijede navedena su uz pojedine dijelove sustava i sažeta u poglavlju
-\ref{ch:zakljucak}.
+Usporedba je pokazala da oba pristupa dosežu zadani cilj, na oba tipa vrata, ali uz bitno
+različito opterećenje. Klasični pristup otvara vrata u svakom pokretanju, dok naučena politika
+kao cjelovito izvođenje uspijeva u otprilike polovici epizoda; promatra li se samo kao zakon
+upravljanja, nad epizodama u kojima izvođenje krene, otvara vrata u više od devedeset posto
+slučajeva. Kontaktne su sile pritom red veličine niže kod naučene politike: efektivna vrijednost
+iznosi 29 N naspram 325 N kod zakretnih, odnosno 22 N naspram 270 N kod kliznih vrata. Naučena
+politika vrata otvara silom bliskom njihovu stvarnom otporu, dok kod klasičnog pristupa veći dio
+sile potječe od tranzijenata koji nastaju u krutoj vezi između manipulatora i kvake.
 
 \section{Struktura rada}
 \label{sec:struktura}

@@ -69,52 +69,157 @@ niska. U suprotnom bi se u nulu upisala stvarna kontaktna sila, umjesto samo pre
 gravitacijskog doprinosa. Za upravljanje u ovom radu to je dovoljno, jer se sila koristi za
 otkrivanje kontakta i za ograničavanje njezina iznosa, a ne kao precizno mjerilo.
 
-\section{Procjena svojstava okoline iz odnosa sile i gibanja}
+\section{Ispitivanje ograničenja gibanja}
 \label{sec:constraint}
 
-Iz procijenjene sile i istovremeno mjerene poze vrha alata u načelu se mogu procijeniti dva
-svojstva okoline: krutost u smjeru gibanja i geometrija ograničenja kojim je gibanje vrata
-određeno.
+Iz procijenjene sile i istovremeno mjerenog gibanja može se utvrditi u kojim je smjerovima gibanje
+vrata slobodno, a u kojima ograničeno. Postupak je izveden kao zasebna rutina
+(\texttt{door\_probe.py}) koja se pokreće iz uspostavljenog hvata. Vrh alata izvodi male,
+silom nadzirane pomake u šest smjerova, uzduž triju osi koordinatnog sustava prihvatnice u oba
+smjera, po četiri koraka od 3 mm.
 
-Krutost se procjenjuje iz odnosa prirasta sile i prirasta pomaka u smjeru gibanja,
+\subsection{Mjera koja razlikuje slobodan smjer od ograničenog}
 
-\begin{equation}
-    K \approx \frac{\Delta F}{\Delta x} ,
-    \label{eq:krutost}
-\end{equation}
+Kriterij nije iznos sile, već koeficijent sile po naređenom pomaku, izražen u njutnima po metru.
+Razlika između dvaju slučajeva jasno je vidljiva u obliku niza očitanja. U slobodnom smjeru sila
+naraste do razine potrebne da se svlada trenje u zglobu vrata i ondje se zadrži, jer se vrata
+gibaju. U ograničenom smjeru ništa se ne giba, pa se lanac između platforme i vrata samo napinje
+i sila monotono raste. Smjer se proglašava slobodnim ispod 8 N/mm, a ograničenim iznad 40 N/mm.
 
-što je uporabljivo i za otkrivanje zaustavljanja: ako sila raste, a pomak izostaje, vrata su ili
-potpuno otvorena ili blokirana. Ta procjena ima načelno ograničenje o kojem treba voditi računa
-pri tumačenju: krutost izmjerena na vrhu alata jest krutost najmekšeg člana cijelog lanca, a ne
-nužno krutost samih vrata. Kad je popustljivost hvata ili prihvatnice usporediva s krutošću
-vrata, izmjerena vrijednost prvenstveno odražava taj najmekši član. Za mjerenje krutosti samih
-vrata trebalo bi ili upravljati impedancijom vrha alata, ili zasebno izmjeriti i oduzeti
-popustljivost vlastitog lanca. Za procjenu krutosti odgovorna je skripta \texttt{door\_probe.py}.
+\subsection{Razlikovanje tipa vrata}
+\label{sec:tip-iz-sile}
 
-Geometrija ograničenja razlikuje dva tipa vrata prema obliku putanje vrha alata pri
-otvaranju. Kod zakretnih vrata vrh alata opisuje kružni luk oko osi šarke, pa se iz niza
-zabilježenih položaja može prilagoditi kružnica čije je središte procjena položaja osi, a
-polumjer udaljenost hvatišta od nje. Kod kliznih vrata putanja je pravac, pa prilagodba kružnice
-ne konvergira, već polumjer raste bez granice, što je samo po sebi znak da je gibanje
-translacijsko. Načelo je time jedinstveno za oba tipa: isti se postupak prilagodbe primjenjuje
-na oba, a tip vrata proizlazi iz toga koji model bolje pristaje izmjerenoj putanji, a ne iz
-unaprijed zadanog grananja po tipu vrata. Za određivanje vrste vrata analizom gibanja napravljena
-je skripta \texttt{door\_open.py}.
+Ishod ispitivanja razlikuje dva tipa vrata, kako prikazuje tablica \ref{tab:probe-osi}.
+
+\begin{table}[H]
+    \centering
+    \caption{Očekivani ishod ispitivanja po osima prihvatnice}
+    \label{tab:probe-osi}
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Os                         & Zakretna vrata & Klizna vrata \\
+        \midrule
+        prilazna, okomita na krilo & slobodna       & ograničena   \\
+        os zatvaranja prstiju      & ograničena     & slobodna     \\
+        uzduž kvake                & slobodna       & slobodna     \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Kod zakretnih vrata normala na krilo pri zatvorenom stanju poklapa se s tangentom luka između
+šarke i kvake, pa je guranje duž prilazne osi ujedno i smjer otvaranja. Kod kliznih se vrata krilo
+giba u vlastitoj ravnini, pa je slobodna os ona duž koje se prsti zatvaraju. Pravilo je time
+jednostavno: koja je od tih dviju osi mekša, takva su vrata.
+
+Os uzduž kvake ne koristi se jer je slobodna kod obaju tipova, budući da prihvatnica ondje klizi
+duž same kvake. To je ujedno i načelno ograničenje metode: sila sama ne razlikuje gibanje vrata od
+klizanja hvata, jer oboje daje nisku silu.
+
+\subsection{Odnos prema razlikovanju iz percepcije}
+
+Ispitivanje nije neovisan klasifikator. Da bi se uopće izvelo, prihvatnica mora držati kvaku, a za
+hvat je potrebna pripremna poza koja ovisi o tipu kvake, okomitoj šipki naspram vodoravne poluge.
+Tip se dakle mora pretpostaviti prije nego ispitivanje može početi.
+
+Riječ je o dvostupanjskoj shemi. Prvi stupanj daje hipotezu iz percepcije, iz smjera vektora među
+dvjema oznakama na kvaki (potpoglavlje \ref{sec:tip-kvake}). Drugi stupanj tu hipotezu provjerava
+kroz interakciju, mjerenjem odziva sile. Vrijednost drugog stupnja nije u tome da zamijeni prvi,
+nego da ga potvrdi mjerenjem koje ne ovisi o vidljivosti oznaka, osvjetljenju ni kutu gledanja, i
+da usput izmjeri otpor, koji percepcija ne može dati.
+
+U sustavu izvedenom u ovom radu razlikovanje tipa vrata provodi se isključivo iz
+percepcije, bez ispitivanja silom. Razlog je taj što se prvi stupanj pokazao dovoljno pouzdanim.
+U svim je pokretanjima tip vrata prepoznat točno, a ispitivanje silom tu je klasifikaciju potvrdilo
+u svih dvadeset pokretanja, deset po tipu vrata (potpoglavlje \ref{sec:provjera}). Uvođenje drugog
+stupnja u tijek izvođenja dodalo bi trajanje i kontaktne cikluse, a ne bi promijenilo nijednu
+odluku.
+
+Ispitivanje silom time u ovom radu ima ulogu neovisne provjere i mjernog postupka, a ne dijela
+upravljačkog lanca. Njegova bi vrijednost došla do izražaja tek u okolini u kojoj oznake nisu
+postavljene ili nisu pouzdano vidljive, gdje bi preuzelo ulogu prvog stupnja, a ne samo njegove
+potvrde.
+
+\section{Provjera procjena}
+\label{sec:provjera}
+
+Sve su procjene provjerene usporedbom sa stvarnim stanjem scene, koje simulator zna, ali koje u
+upravljačku petlju nikada ne ulazi.
+
+\subsection{Procjena osi šarke i kuta vrata}
+
+Tablica \ref{tab:provjera-os} sažima odstupanja izmjerena kroz deset pokretanja otvaranja
+zakretnih vrata, ukupno 72 koraka upravljanja.
+
+\begin{table}[H]
+    \centering
+    \caption{Odstupanje procjene osi šarke i kuta vrata od stvarnih vrijednosti}
+    \label{tab:provjera-os}
+    \begin{tabular}{@{}lcccc@{}}
+        \toprule
+        Veličina                    & Sredina           & Medijan           & Najveća           & Std. devijacija   \\
+        \midrule
+        Pogreška položaja osi šarke & 5,8 mm            & 4,9 mm            & 14,3 mm           & 3,8 mm            \\
+        Pogreška kuta vrata         & 0,28\textdegree{} & 0,23\textdegree{} & 1,46\textdegree{} & 0,28\textdegree{} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Pogreška položaja osi raste s otvorenošću vrata, otprilike dvostruko između zatvorenog stanja i
+65\textdegree{}. Pogreška kuta pritom nema takav trend, i razlog je geometrijski: pomak
+procijenjene osi uglavnom je usmjeren prema kvaki, a kut se računa upravo iz tog smjera, pa
+pomak duž njega u kut ne ulazi.
+
+Procjena polumjera hvata pokazuje sustavno odstupanje od $-1{,}43$ mm, uz standardnu devijaciju od
+svega 0,17 mm. Uska raspodjela oko konstantne vrijednosti pokazuje da je riječ o pristranosti, a ne
+o šumu, tj. polumjer se dosljedno podcjenjuje.
+
+\subsection{Razlikovanje tipa vrata i otpor}
+
+Ispitivanje je provedeno u deset pokretanja po tipu vrata, pri čemu svako kreće od resetirane
+scene i punog prilaska, pa raspršenje uključuje i promjenjivost samog hvata. Rezultati su u
+tablici \ref{tab:provjera-probe}.
+
+\begin{table}[H]
+    \centering
+    \caption{Ishod ispitivanja ograničenja, deset pokretanja po tipu vrata}
+    \label{tab:provjera-probe}
+    \begin{tabular}{@{}lcc@{}}
+        \toprule
+        Veličina                           & Zakretna  & Klizna    \\
+        \midrule
+        Točno razlikovanih                 & 10/10     & 10/10     \\
+        Koeficijent, prilazna os, medijan  & 4,6 N/mm  & 99,8 N/mm \\
+        Koeficijent, os prstiju, medijan   & 14,0 N/mm & 0,08 N/mm \\
+        Omjer dvaju koeficijenata, medijan & 0,35      & 1081      \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Iz istog se ispitivanja dobiva i otporni moment zakretnih vrata, s medijanom od 260 Nm i rasponom
+od 195 do 325 Nm. Ta se vrijednost poklapa s 280 do 308 Nm izračunatima iz sile izmjerene tijekom
+samog otvaranja, dakle dvije neovisne metode daju isti otpor, što je najjača potvrda da
+procjena mjeri svojstvo vrata, a ne artefakt postupka.
+
+Treba ipak biti precizan oko toga što ta sila jest. Sila izmjerena u hvatu tijekom otvaranja nije
+čisti otpor vrata, nego sadrži i silu kojom platforma gura kroz krutu vezu manipulatora. Zbog toga
+se u ovom radu naziva silom u hvatu, a ne otporom vrata; iznos otpora dobiven ispitivanjem iz
+mirovanja bliži je pravom svojstvu vrata.
 
 \section{Uloga procjene u ovom radu}
 \label{sec:procjena-uloga}
 
-Dva se pristupa upravljanju bitno razlikuju po tome koliko se od gore opisane procjene stvarno
-koriste, i to je jedna od glavnih razlika koja se razmatra u poglavlju \ref{ch:rezultati}.
+Dva se pristupa upravljanju bitno razlikuju po tome koliko se od gore opisanog stvarno koriste, i
+to je jedna od glavnih razlika koja se razmatra u poglavlju \ref{ch:rezultati}.
 
 Klasični pristup, opisan u poglavlju \ref{ch:klasicni}, geometriju ograničenja ne procjenjuje iz
-gibanja, nego je uzima iz poze kvake dobivene percepcijom: os šarke i smjer otvaranja poznati su
-iz položaja i orijentacije hvatišta. Procjena sile i momenta ipak mu je nužna, i to za otkrivanje
-uspješnog hvata te za ograničavanje kontaktne sile tijekom otvaranja. Procjena krutosti i
-geometrije ograničenja iz gibanja u tom pristupu nije bila potrebna.
+gibanja, nego je uzima iz poze kvake dobivene percepcijom. Os šarke i smjer otvaranja poznati su
+iz položaja i orijentacije hvatišta. Procjena sile i momenta ipak mu je nužna, za otkrivanje
+uspješnog hvata i za ograničavanje kontaktne sile tijekom otvaranja. Ispitivanje ograničenja iz
+potpoglavlja \ref{sec:constraint} u njegovu se izvođenju ne koristi, nego služi kao neovisna
+provjera pretpostavke o tipu vrata i kao mjerenje otpora.
 
-Pristup temeljen na učenju, opisan u poglavlju \ref{ch:rl}, geometriju ograničenja ne dobiva ni
-iz percepcije ni iz eksplicitnog procjenitelja, nego je mora otkriti sam, iz procijenjene sile i
-ostvarenog pomaka, i na temelju toga prilagoditi svoje djelovanje. Time procjena sile i momenta
-u tom pristupu nije pomoćni signal, nego jedini put kojim politika uopće doznaje o mehaničkim
-svojstvima okoline.
+Pristup temeljen na učenju, opisan u poglavlju \ref{ch:rl}, geometriju ograničenja ne dobiva ni iz
+percepcije ni iz eksplicitnog procjenitelja, nego ponašanje ograničenja mora zaključiti sam, iz
+procijenjene sile i ostvarenog pomaka, i na temelju toga prilagoditi djelovanje. Time procjena sile
+i momenta u tom pristupu nije pomoćni signal, nego jedini put kojim politika uopće doznaje o
+mehaničkim svojstvima okoline.

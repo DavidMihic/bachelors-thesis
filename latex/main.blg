@@ -25,44 +25,44 @@ Reallocating 'name_of_file' (item size: 1) to 11 items.
 Reallocating 'name_of_file' (item size: 1) to 20 items.
 A level-1 auxiliary file: chapters/prilog.aux
 Database file #1: references.bib
-You've used 19 entries,
+You've used 28 entries,
             1791 wiz_defined-function locations,
-            556 strings with 7325 characters,
-and the built_in function-call counts, 4065 in all, are:
-= -- 349
-> -- 191
-< -- 2
-+ -- 72
-- -- 53
-* -- 237
-:= -- 650
-add.period$ -- 60
-call.type$ -- 19
-change.case$ -- 19
+            598 strings with 9048 characters,
+and the built_in function-call counts, 6999 in all, are:
+= -- 617
+> -- 323
+< -- 6
++ -- 119
+- -- 91
+* -- 445
+:= -- 1072
+add.period$ -- 87
+call.type$ -- 28
+change.case$ -- 28
 chr.to.int$ -- 0
-cite$ -- 19
-duplicate$ -- 183
-empty$ -- 413
-format.name$ -- 53
-if$ -- 910
+cite$ -- 28
+duplicate$ -- 314
+empty$ -- 689
+format.name$ -- 91
+if$ -- 1582
 int.to.chr$ -- 0
-int.to.str$ -- 19
-missing$ -- 15
-newline$ -- 101
-num.names$ -- 19
-pop$ -- 69
+int.to.str$ -- 28
+missing$ -- 24
+newline$ -- 146
+num.names$ -- 28
+pop$ -- 98
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 0
-skip$ -- 91
+skip$ -- 175
 stack$ -- 0
-substring$ -- 211
-swap$ -- 45
-text.length$ -- 2
+substring$ -- 477
+swap$ -- 96
+text.length$ -- 6
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 0
 warning$ -- 0
-while$ -- 35
-width$ -- 21
-write$ -- 206
+while$ -- 65
+width$ -- 30
+write$ -- 305

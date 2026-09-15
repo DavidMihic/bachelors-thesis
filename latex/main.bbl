@@ -33,6 +33,11 @@ Roberto Mart{\'i}n-Mart{\'i}n, Michelle~A. Lee, Rachel Gardner, Silvio
 \newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
   Systems (IROS)}, pages 1010--1017, 2019.
 
+\bibitem{abudakka2020review}
+Fares~J. Abu-Dakka and Matteo Saveriano.
+\newblock Variable impedance control and learning --- a review.
+\newblock {\em Frontiers in Robotics and AI}, 7:590681, 2020.
+
 \bibitem{sandakalum2022review}
 Thushara Sandakalum and Marcelo~H. Ang.
 \newblock Motion planning for mobile manipulators --- a systematic review.
@@ -51,12 +56,46 @@ Giuseppe Rizzi, Jen~Jen Chung, Abel Gawel, Lionel Ott, Marco Tognon, and Roland
   with articulated objects.
 \newblock {\em IEEE Transactions on Robotics}, 39(3), 2023.
 
+\bibitem{martinmartin2022coupled}
+Roberto Mart{\'i}n-Mart{\'i}n and Oliver Brock.
+\newblock Coupled recursive estimation for online interactive perception of
+  articulated objects.
+\newblock {\em The International Journal of Robotics Research}, 41(8):741--777,
+  2022.
+
+\bibitem{mittal2022articulated}
+Mayank Mittal, David Hoeller, Farbod Farshidian, Marco Hutter, and Animesh
+  Garg.
+\newblock Articulated object interaction in unknown scenes with whole-body
+  mobile manipulation.
+\newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS)}, pages 1647--1654, 2022.
+
+\bibitem{zhao2024tacman}
+Zihang Zhao, Yuyang Li, Wanlin Li, Zhenghao Qi, Lecheng Ruan, Yixin Zhu, and
+  Kaspar Althoefer.
+\newblock {Tac-Man}: Tactile-informed prior-free manipulation of articulated
+  objects.
+\newblock {\em IEEE Transactions on Robotics}, 41:538--557, 2024.
+
 \bibitem{stuede2019door}
 Marvin Stuede, Kathrin Nuelle, Svenja Tappe, and Tobias Ortmaier.
 \newblock Door opening and traversal with an industrial cartesian impedance
   controlled mobile robot.
 \newblock In {\em IEEE International Conference on Robotics and Automation
   (ICRA)}, 2019.
+
+\bibitem{yang2022variable}
+Quantao Yang, Alexander D{\"u}rr, Elin~A. Topp, Johannes~A. Stork, and Todor
+  Stoyanov.
+\newblock Variable impedance skill learning for contact-rich manipulation.
+\newblock {\em IEEE Robotics and Automation Letters}, 7(3):8391--8398, 2022.
+
+\bibitem{zhang2024srlvic}
+Heng Zhang, Gokhan Solak, Gustavo J.~G. Lahr, and Arash Ajoudani.
+\newblock {SRL-VIC}: A variable stiffness-based safe reinforcement learning for
+  contact-rich robotic tasks.
+\newblock {\em IEEE Robotics and Automation Letters}, 9(6):5631--5638, 2024.
 
 \bibitem{honerkamp2021feasibility}
 Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
@@ -79,6 +118,27 @@ Raphael Schneider, Daniel Honerkamp, Tim Welschehold, and Abhinav Valada.
 John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov.
 \newblock Proximal policy optimization algorithms.
 \newblock {\em arXiv preprint arXiv:1707.06347}, 2017.
+
+\bibitem{zhao2020sim2real}
+Wenshuai Zhao, Jorge~Pe{\~n}a Queralta, and Tomi Westerlund.
+\newblock Sim-to-real transfer in deep reinforcement learning for robotics: A
+  survey.
+\newblock In {\em IEEE Symposium Series on Computational Intelligence (SSCI)},
+  pages 737--744, 2020.
+
+\bibitem{tobin2017domain}
+Josh Tobin, Rachel Fong, Alex Ray, Jonas Schneider, Wojciech Zaremba, and
+  Pieter Abbeel.
+\newblock Domain randomization for transferring deep neural networks from
+  simulation to the real world.
+\newblock In {\em IEEE/RSJ International Conference on Intelligent Robots and
+  Systems (IROS)}, pages 23--30, 2017.
+
+\bibitem{peng2018dynamics}
+Xue~Bin Peng, Marcin Andrychowicz, Wojciech Zaremba, and Pieter Abbeel.
+\newblock Sim-to-real transfer of robotic control with dynamics randomization.
+\newblock In {\em IEEE International Conference on Robotics and Automation
+  (ICRA)}, pages 3803--3810, 2018.
 
 \bibitem{kuka2024kmriiwa}
 {KUKA Deutschland GmbH}.

@@ -2,7 +2,7 @@
 \label{ch:zakljucak}
 
 U radu je razvijen i eksperimentalno vrednovan sustav za autonomnu interakciju mobilnog
-manipulatora s okolinom, na primjeru otvaranja dvaju vrsti vrata. Sustav objedinjuje percepciju,
+manipulatora s okolinom, na primjeru otvaranja zakretnih i kliznih vrata. Sustav objedinjuje percepciju,
 procjenu sile i momenta te upravljanje u kontaktu, a zadatak upravljanja riješen je dvama
 pristupima: klasičnim, temeljenim na modelu, i pristupom temeljenim na podržanom učenju.
 Pristupi su potom uspoređeni na istom robotu, istoj sceni i istim mjerilima.
@@ -19,30 +19,36 @@ formuliran je kao Markovljev proces odlučivanja s varijabilnom impedancijom u p
 
 \section{Glavni nalazi}
 
-Usporedba dvaju pristupa dala je rezultat koji se ne svodi na prednost jednoga nad drugim, nego
-ovisi o tipu vrata, i upravo je ta ovisnost najvrjedniji nalaz rada.
+Oba pristupa dosežu zadani cilj, na obama tipovima vrata. Razlika među njima ne očituje se u tome
+uspijevaju li, nego u pouzdanosti izvođenja i u opterećenju kojim vrata otvaraju, i upravo je taj
+odnos najvrjedniji nalaz rada.
 
-Kod kliznih vrata oba pristupa dosežu puni cilj u svakom pokušaju. Ograničenje je ondje pravac,
-smjer sile poklapa se sa smjerom gibanja, i eksplicitno poznavanje geometrije daje sve što je
-potrebno, pa dodatna sloboda u odabiru krutosti ne donosi mjerljivu prednost.
+Klasični pristup otvara vrata u svakom pokretanju u kojem je hvat uspješno uspostavljen, uz vrlo
+ponovljiv ishod. Naučena politika, promatrana kao cjelovito izvođenje, uspijeva u otprilike
+polovici epizoda, jer u preostalima izostane koordinirano gibanje platforme; promatra li se samo
+kao zakon upravljanja, nad epizodama u kojima izvođenje krene, otvara vrata u više od devedeset
+posto slučajeva. Te se dvije mjere ne smiju miješati, pa se u radu navode odvojeno.
 
-Kod zakretnih vrata razlika je velika. Klasični pristup pouzdano otvara vrata do 50\textdegree{},
-ali preko otprilike 57\textdegree{} ne može, jer kvaka klizne iz prihvatnice. Naučena politika
-vrata otvara preko 90\textdegree{} u 96 \% epizoda, s medijanom otvora na 122\textdegree{} i
-gornjim kvartilom praktički na mehaničkoj granici zgloba. Uz to, klasični pristup pri otvaranju
-zakretnih vrata redovito prelazi 400 N, s vršnom silom od 625 N, dok naučena politika tu granicu
-prekoračuje u manje od 1 \% epizoda.
+Kontaktne su sile red veličine niže kod naučene politike. Efektivna vrijednost iznosi 29 N
+naspram 325 N kod zakretnih te 22 N naspram 270 N kod kliznih vrata, dakle jedanaest do dvanaest
+puta manje. Usporedba s randomiziranim otporom vrata pokazuje zašto: prosječna sila naučene
+politike na kliznim vratima iznosi 11,9 N, što je unutar raspona stvarnog otpora od 5 do 60 N.
+Politika, dakle, vrata otvara gotovo isključivo savladavanjem njihova otpora, dok kod klasičnog
+pristupa veći dio sile potječe od tranzijenata koji nastaju pri pokretanju platforme i pri svakom
+odstupanju procjene, a prolaze kroz krutu vezu između manipulatora i kvake.
 
-Zaključak je time uvjetovan, a ne općenit: eksplicitno poznavanje geometrije dovoljno je kad je
-geometrija jednostavna i dobro procijenjena, a gubi prednost čim zadatak zahtijeva prilagodbu
-krutosti tijekom same interakcije.
+Zaključak je time uvjetovan, a ne općenit. Ako je mjerilo isključivo dovršava li robot zadatak,
+kruto pozicijsko upravljanje uz dobro procijenjenu geometriju dovoljno je i pouzdanije. Ako se u
+mjerilo uključi i opterećenje koje pritom nastaje, prednost prelazi na upravljanje s promjenjivom
+krutošću. Ta razlika nije razlika između modela i učenja, nego između krutog i popustljivog
+vođenja; klasični pristup izveden s impedancijskim regulatorom nije ispitan i mogao bi dati
+drugačiji ishod.
 
-Dva pristupa razlikuju se i po tome što o zadatku znaju. Klasični pristup položaj osi šarke
-izračunava iz poze oznake i poznate širine krila, uz pogrešku od 5 do 8 mm, dok naučena politika
-tu geometriju nema ni u kojem obliku i mora je otkriti iz vlastitih opažanja sile i pomaka. S
-druge strane, naučena politika koordinaciju platforme i manipulatora uči, dok je klasični pristup
-rješava unaprijed propisanim slijedom faza. Upravo ta propisana shema kod zakretnih vrata
-postaje ograničenje.
+Dva se pristupa razlikuju i po tome što o zadatku znaju. Klasični pristup položaj osi šarke
+izračunava iz poze oznake i poznate širine krila, uz pogrešku od 5,8 mm prosječno do 14,3 mm,
+dok naučena politika tu geometriju nema ni u kojem obliku i ponašanje ograničenja mora zaključiti
+iz vlastitih opažanja sile i pomaka. Tu tvrdnju treba uzeti s mjerom opreza, jer su za svaki tip
+vrata trenirane zasebne politike, pa svaka uči jedan tip ograničenja, a ne razlikovanje među njima.
 
 \section{Ograničenja}
 
@@ -54,11 +60,16 @@ jedan stupanj slobode po tipu vrata. Percepcija se oslanja na vizualne oznake po
 vrata, pa sustav u nepripremljenoj okolini ne bi radio. Mecanum kotači nisu simulirani kao tijela
 u kontaktu s podlogom, nego je gibanje platforme zadano kinematički.
 
-Platforma ostvaruje tek dio naređene brzine, a uzrok tome nije utvrđen unatoč tome što je više
-mogućih objašnjenja provjereno i isključeno. Posljedica je da se prijeđeni put platforme ne smije
-uzimati kao pouzdana mjera gibanja, zbog čega provjera napretka pri otvaranju kliznih vrata čita
-stanje zgloba izravno iz simulatora. Ovo ograničenje vrlo je vjerojatno posljedica simulatora,
-i vjerojatno ne bi bila problem na stvarnom robotu.
+Gibanje platforme ima izraženu mrtvu zonu i ne postiže naređenu brzinu, a uzrok nije utvrđen
+unatoč tomu što je više mogućih objašnjenja provjereno i isključeno. Posljedica je da regulator
+koji zadaje male korekcije postaje dvopoložajan. Prijeđeni put platforme zato se ne računa iz
+naređene brzine nego se mjeri odometrijom.
+
+Pri determinističkom izvođenju naučene politike u dijelu epizoda izostane koordinirano gibanje
+platforme. Uzrok je zatvoreni kinematički lanac koji nastaje kad prihvatnica drži kvaku, a
+manipulator se ispruži do granice radnog prostora, a lanac se tada geometrijski zaključa. Kazna na
+blizinu singularitetu taj problem uklanja tijekom učenja, gdje politika ima šum istraživanja, ali
+se pri izvođenju srednje akcije vraća.
 
 Naposljetku, sustav sadrži postupak procjene geometrije ograničenja iz odnosa sile i gibanja, ali
 on nije povezan s izvođenjem: u klasičnom se pristupu os šarke izračunava iz percepcije, a
@@ -67,32 +78,24 @@ procjena iz gibanja postoji kao zaseban, samostalno provjeren postupak.
 \section{Smjernice za daljnji rad}
 
 \begin{itemize}
-    \item \textbf{Prepozicioniranje hvata.} Jedini put preko granice od 57\textdegree{} kod
-          zakretnih vrata koji ne traži bočni prostor kojega u sceni nema jest da manipulator
-          pusti kvaku, platforma se premjesti, a kvaka se ponovno uhvati iz povoljnije
-          konfiguracije.
+      \item \textbf{Povezivanje procjene ograničenja s izvođenjem.} Pokretanje procjene odmah
+            nakon hvata i odabir načina otvaranja na temelju njezina ishoda uklonilo bi oslanjanje
+            na tip kvake prepoznat iz percepcije i učinilo sustav neovisnim o poznatoj geometriji.
 
-    \item \textbf{Povezivanje procjene ograničenja s izvođenjem.} Pokretanje procjene odmah
-          nakon hvata i odabir načina otvaranja na temelju njezina ishoda uklonilo bi oslanjanje
-          na tip kvake prepoznat iz percepcije i učinilo sustav neovisnim o poznatoj geometriji.
+      \item \textbf{Klasični pristup s impedancijskim regulatorom.} Usporedba provedena u ovom radu
+            suprotstavlja kruto pozicijsko upravljanje upravljanju promjenjivom krutošću. Izvedba
+            klasičnog pristupa s impedancijskim regulatorom pokazala bi koliko je razlika u silama
+            posljedica učenja, a koliko same popustljivosti.
 
-    \item \textbf{Odometrija platforme iz percepcije.} Riješila bi oslanjanje na stanje zgloba
-          očitano iz simulatora i omogućila mjerenje prijeđenog puta veličinama dostupnima i na
-          stvarnom robotu.
+      \item \textbf{Zakretanje kvake.} Vraćanje tog stupnja slobode proširilo bi zadatak na vrata
+            sa stvarnom bravom, ali bi tražilo upravljanje koje kut zakreta kvake ne prati kruto.
 
-    \item \textbf{Prolazak kroz zakretna vrata.} Kod kliznih vrata platforma ostaje uz istu
-          stranu zida, pa je otvor dostupan bočnim gibanjem; kod zakretnih vrata robot samim otvaranjem
-          prolazi kroz vrata.
+      \item \textbf{Detekcija bez oznaka.} Zamjena vizualnih oznaka postupkom koji kvaku
+            prepoznaje izravno iz slike uklonila bi najizraženije pojednostavljenje u radu, pri
+            čemu ostatak sustava ne bi trebalo mijenjati, jer je sučelje prema izvođenju zadatka
+            svedeno na pozu hvatišta.
 
-    \item \textbf{Zakretanje kvake.} Vraćanje tog stupnja slobode proširilo bi zadatak na vrata
-          sa stvarnom bravom, ali bi tražilo upravljanje koje kut zakreta kvake ne prati kruto.
-
-    \item \textbf{Detekcija bez oznaka.} Zamjena vizualnih oznaka postupkom koji kvaku
-          prepoznaje izravno iz slike uklonila bi najizraženije pojednostavljenje u radu, pri
-          čemu ostatak sustava ne bi trebalo mijenjati, jer je sučelje prema izvođenju zadatka
-          svedeno na pozu hvatišta.
-
-    \item \textbf{Prijenos na stvarni robot.} Konačna provjera svih zaključaka traži izvođenje
-          izvan simulacije, pri čemu su procjena sile bez zasebnog senzora i pojednostavljeni
-          model gibanja platforme najizgledniji izvori odstupanja.
+      \item \textbf{Prijenos na stvarni robot.} Konačna provjera svih zaključaka traži izvođenje
+            izvan simulacije, pri čemu su procjena sile bez zasebnog senzora i pojednostavljeni
+            model gibanja platforme najizgledniji izvori odstupanja.
 \end{itemize}
