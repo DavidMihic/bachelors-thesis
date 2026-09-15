@@ -4,10 +4,34 @@ sile i momenta, dok gripper vec drzi kvaku.
 
 Iz uhvacene poze rade se mali, silom-nadzirani pomaci u sest smjerova (+-3
 osi okvira gripera). Za svaki smjer biljezi se ostvareni pomak i porast sile,
-a smjerovi se klasificiraju po prividnoj krutosti (sila po ostvarenom
-pomaku). Omjer ostvareno/naredjeno nije upotrebljiv kao kriterij jer robot s
-krutim pozicijskim upravljanjem progura kamo mu se kaze, dok krutost razdvaja
-smjerove kroz tri reda velicine.
+a smjerovi se klasificiraju po OMJERU ostvareno/naredjeno.
+
+Krutost se i dalje racuna i zapisuje, ali NIJE kriterij. Zakretna vrata nemaju
+povratnu krutost - slobodno se okrecu, a otpor im dolazi iz trenja u zglobu i
+inercije krila. Izmjerena "krutost" je zato dominantno krutost pozicijskog
+upravljanja ruke (pogoni na 100000) koja gura u tu inerciju, pa ispada u
+stotinama kN/m i ne govori nista o vratima. Uz to se racunala iz jednog uzorka
+(sila/pomak), sto pri pomacima ispod desetinke milimetra daje i negativne
+vrijednosti.
+
+Omjer razdvaja smjerove: izmjereno 0,47 u slobodnima naspram 0,003-0,05 u
+ogranicenima, dakle red velicine razlike.
+
+Kao izlazna velicina biljezi se OTPORNI MOMENT (sila puta udaljenost kvake od
+sarke). Za zakretna vrata je izmjereno oko 280 Nm u smjeru otvaranja, sto se
+poklapa s 280-310 Nm izracunatim iz stvarnih runova otvaranja - dakle dvije
+neovisne metode daju isti otpor.
+
+KLASIFIKACIJA TIPA VRATA IZ SILE
+approach je slobodan kod zakretnih (normala na krilo poklapa se s tangentom
+luka sarka-kvaka pri zatvorenim vratima) a blokiran kod kliznih (gura u krilo).
+closing je obrnuto: blokiran kod zakretnih (vertikala) a slobodan kod kliznih
+(smjer klizanja). Koja je od te dvije osi meksa, takva su vrata - neovisno o
+vidu, cime se potvrduje klasifikacija iz geometrije tagova.
+
+along_bar se NE koristi za klasifikaciju: slobodan je kod obje vrste, jer
+gripper ondje klizi duz kvake. To je ujedno i ogranicenje metode - sila sama ne
+razlikuje gibanje vrata od klizanja hvata, oboje daje nisku silu.
 
 Osi se uzimaju iz orijentacije gripera (gripper.xacro: +Z prsti/prilaz, +X
 zatvaranje, +Y duz sipke), a ne iz door_tag_center, koji ima oko 20 stupnjeva
@@ -51,10 +75,15 @@ JOINT_NAMES = [f"iiwa_joint_{i}" for i in range(1, 8)]
 
 STEP_M = 0.003  # velicina jednog koraka
 MAX_STEPS = 4  # najvise koraka po smjeru
-FORCE_ABORT_N = 100.0  # prekid smjera cim sila predje ovo
+FORCE_ABORT_N = 700.0  # prekid smjera cim sila predje ovo. Na 100 i 300 N se
+# approach smjerovi prekidali vec u prvom koraku (izmjereno 424 i 535 N pri
+# pomaku od 3 mm), sto je ispod sile potrebne da se vrata uopce pokrenu.
+HANDLE_RADIUS_M = 0.65  # udaljenost kvake od osi sarke, za otporni moment
 SETTLE_SEC = 0.4  # da se sila smiri nakon koraka
-FREE_STIFFNESS_N_PER_M = 1000.0  # ispod = slobodan smjer
-BLOCKED_STIFFNESS_N_PER_M = 5000.0  # iznad = ogranicen
+# Kriterij je NAGIB sile po naredenom pomaku [N/m]. Izmjereno: slobodan smjer
+# oko 2 000, vertikala oko 19 000, blokiran oko 120 000 N/m.
+FREE_SLOPE_N_PER_M = 8000.0  # ispod = slobodan
+BLOCKED_SLOPE_N_PER_M = 40000.0  # iznad = ogranicen
 
 LOG_PATH = "/tmp/kmr_door_probe.json"
 
@@ -169,6 +198,7 @@ def main():
                     break
                 achieved = float(np.dot(actual - start_pos, direction))
                 f_along = float(np.dot(f, direction))
+
                 samples.append(
                     {
                         "commanded_m": STEP_M * step,
@@ -190,28 +220,72 @@ def main():
 
             if samples:
                 last = samples[-1]
+                # Omjer se uzima iz PRVOG koraka, ne zadnjeg. U zadnjem je sila
+                # najveca, pa dominira popustanje hvata: izmjereno je da
+                # approach- (graniznik zgloba, ne smije se micati) daje 3.14 mm
+                # pri 810 N, dok je u prvom koraku 0.42 mm pri 450 N.
+                first = samples[0]
                 ratio = (
-                    last["achieved_m"] / last["commanded_m"]
-                    if last["commanded_m"]
+                    first["achieved_m"] / first["commanded_m"]
+                    if first["commanded_m"]
                     else 0.0
                 )
+                # Kriterij: kako sila raste s NAREDENIM pomakom.
+                #
+                # Slobodan smjer: sila naraste do razine potrebne da se svlada
+                # trenje u zglobu i tu STAGNIRA, jer se vrata gibaju
+                # (izmjereno 421 -> 449 -> 449 -> 442 N).
+                # Blokiran smjer: sila monotono RASTE, jer se nista ne giba pa
+                # se samo napinje lanac (450 -> 810 N).
+                #
+                # Dijeli se naredenim pomakom, ne ostvarenim: ostvareni sadrzi
+                # prodiranje prstiju u model kvake i zakretanje poluge u hvatu,
+                # pa je izmedu runova varirao i do 3 mm u blokiranim smjerovima.
+                slope = None
+                if len(samples) >= 2:
+                    dcmd = samples[-1]["commanded_m"] - samples[0]["commanded_m"]
+                    dfrc = samples[-1]["force_along_N"] - samples[0]["force_along_N"]
+                    if abs(dcmd) > 1e-9:
+                        slope = dfrc / dcmd
+                elif aborted and samples:
+                    # Jedan uzorak iznad praga sile znaci da se smjer nije mogao
+                    # ni zapoceti - najjasniji moguci znak blokade. Nagib se
+                    # procjenjuje iz te jedne tocke.
+                    slope = samples[0]["force_along_N"] / samples[0]["commanded_m"]
 
-                # Prividna krutost: sila po ostvarenom pomaku. Glavni kriterij
-                # klasifikacije; omjer se biljezi samo za zapis.
+                # Krutost se zapisuje, ali nije kriterij (vidi docstring).
+                # Racuna se kao NAGIB kroz uzorke, ne iz jednog - inace u nju
+                # ulazi i konstantni pomak od pocetka.
                 stiffness = None
-                if abs(last["achieved_m"]) > 1e-4:
+                if len(samples) >= 2:
+                    dx = samples[-1]["achieved_m"] - samples[0]["achieved_m"]
+                    df = samples[-1]["force_along_N"] - samples[0]["force_along_N"]
+                    if abs(dx) > 1e-4:
+                        stiffness = df / dx
+                elif abs(last["achieved_m"]) > 1e-4:
                     stiffness = last["force_along_N"] / last["achieved_m"]
 
-                if stiffness is None or abs(stiffness) > BLOCKED_STIFFNESS_N_PER_M:
-                    verdict = "OGRANICEN"
-                elif abs(stiffness) < FREE_STIFFNESS_N_PER_M:
+                # Pomak suprotnog predznaka od naredbe znaci da se gibalo nesto
+                # drugo - poluga u prstima, ne vrata. Izmjereno: ostvareni pomak
+                # je unutar istog smjera prelazio iz -2.83 u +3.70 mm.
+                if slope is None:
+                    verdict = "NEPOZNAT"
+                elif abs(slope) <= FREE_SLOPE_N_PER_M:
                     verdict = "SLOBODAN"
+                elif abs(slope) >= BLOCKED_SLOPE_N_PER_M:
+                    verdict = "OGRANICEN"
                 else:
                     verdict = "DJELOMICAN"
 
+                # Otporni moment je fizikalno smislena velicina za vrata;
+                # "krutost" nije, jer vrata nisu opruga (vidi docstring).
+                torque = last["force_along_N"] * HANDLE_RADIUS_M
+
                 results[label] = {
                     "verdict": verdict,
+                    "slope_N_per_m": slope,
                     "ratio": ratio,
+                    "torque_Nm": torque,
                     "aborted": aborted,
                     "stiffness_N_per_m": stiffness,
                     "samples": samples,
@@ -221,9 +295,44 @@ def main():
 
     node.get_logger().info("=== SAZETAK ===")
     for label, r in results.items():
+        sl = r["slope_N_per_m"]
         node.get_logger().info(
-            f"  {label:12s} {r['verdict']:12s} omjer={r['ratio']:+.2f}"
+            f"  {label:12s} {r['verdict']:12s} "
+            f"nagib={'n/a' if sl is None else f'{sl/1000:+.1f} N/mm'}  "
+            f"moment={r['torque_Nm']:.0f} Nm  ({len(r['samples'])} uzoraka"
+            f"{', prekinuto silom' if r['aborted'] else ''})"
         )
+
+    # Klasifikacija tipa vrata iz sile, neovisno o vidu.
+    #
+    # approach je slobodan kod zakretnih (vrata se otvaraju po toj normali) a
+    # blokiran kod kliznih (gura u krilo); closing je obrnuto - blokiran kod
+    # zakretnih (vertikala) a slobodan kod kliznih (smjer klizanja). Koja je od
+    # te dvije osi mekša, takva su vrata.
+    #
+    # along_bar se NE koristi: slobodan je kod obje vrste, jer gripper ondje
+    # klizi duz kvake. Sila sama ne razlikuje gibanje vrata od klizanja hvata -
+    # oboje daje nisku silu.
+    def softest(prefix):
+        vals = [
+            abs(r["slope_N_per_m"])
+            for lbl, r in results.items()
+            if lbl.startswith(prefix) and r["slope_N_per_m"] is not None
+        ]
+        return min(vals) if vals else None
+
+    s_app, s_clo = softest("approach"), softest("closing")
+    if s_app is not None and s_clo is not None:
+        door_type = "ZAKRETNA" if s_app < s_clo else "KLIZNA"
+        node.get_logger().info(
+            f"  tip vrata iz sile: {door_type}  "
+            f"(approach {s_app/1000:.1f} N/mm, closing {s_clo/1000:.1f} N/mm)"
+        )
+        results["_door_type"] = {
+            "type": door_type,
+            "approach_slope_N_per_m": s_app,
+            "closing_slope_N_per_m": s_clo,
+        }
 
     with open(LOG_PATH, "w") as fh:
         json.dump(results, fh, indent=2)
