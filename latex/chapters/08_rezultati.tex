@@ -31,19 +31,25 @@ dao bitno bolje rezultate od ovdje izvedenog; takva usporedba nije provedena i o
 
 Rezultati naučene politike iskazuju se dvjema odvojenim veličinama, koje se ne smiju miješati.
 
-\textbf{Pouzdanost cjelovitog izvođenja} računa se nad svim evaluacijskim epizodama. U
+Pouzdanost cjelovitog izvođenja računa se nad svim evaluacijskim epizodama. U
 dijelu epizoda pri determinističkom izvođenju izostane koordinirano gibanje platforme, pa
 manipulator doseže granicu vlastitog radnog prostora i otvaranje staje na oko 0,45 m odnosno
 12\textdegree{} (potpoglavlje \ref{sec:rl-limits}). Budući da je takvo ponašanje posljedica same
 politike, a ne vanjske smetnje, te epizode predstavljaju neuspjeh upravljačkog sustava i ulaze u
 ovu mjeru.
 
-\textbf{Uspješnost regulatora} računa se samo nad epizodama u kojima je koordinirano gibanje
+Uspješnost regulatora računa se samo nad epizodama u kojima je koordinirano gibanje
 ostvareno. Ona ne opisuje pouzdanost sustava, nego sposobnost samog zakona upravljanja da vrata
 otvori kad izvođenje uopće krene.
 
 \section{Uspješnost otvaranja}
 \label{sec:usporedba}
+
+Tablica \ref{tab:usporedba-uspjeh} uspoređuje stopu uspjeha otvaranja za obje vrste pristupa
+te za obje vrste vrata. Važno je naglasiti da se uspoređuju isključivo faze otvaranja, dakle
+i klasični pristup i naučena politika kreću uz uspostavljen hvat na početku. Također je bitno
+primijetiti razliku između vrijednosti stopa uspjeha za sve evaluacijske epizode pristupa učenjem,
+u odnosu na samo one u kojima je ostvareno koordinirano gibanje platforme.
 
 \begin{table}[H]
       \centering
@@ -91,11 +97,11 @@ ostvareni otvor vrlo je ponovljiv i zaustavlja se točno ondje gdje mu je cilj p
 \section{Kontaktne sile}
 \label{sec:usporedba-sile}
 
-Sile se iskazuju trima veličinama. Prosječna vrijednost opisuje tipično opterećenje, efektivna
-vrijednost (RMS) je mjera energije opterećenja i kažnjava trajno visoku silu više nego kratke
-vrhove, a najveća vrijednost opisuje najgori pojedinačni trenutak. Kod naučene politike navode se
-odvojeno za epizode u kojima je ostvareno koordinirano gibanje i za sve epizode, u skladu s
-razgraničenjem iz potpoglavlja \ref{sec:dvije-mjere}.
+Sile se iskazuju trima veličinama (tablica \ref{tab:usporedba-sile}). Prosječna vrijednost opisuje
+tipično opterećenje, efektivna vrijednost (RMS) je mjera energije opterećenja i kažnjava trajno visoku
+silu više nego kratke vrhove, a najveća vrijednost opisuje najgori pojedinačni trenutak. Kod naučene
+politike navode se odvojeno za epizode u kojima je ostvareno koordinirano gibanje i za sve epizode,
+u skladu s razgraničenjem iz potpoglavlja \ref{sec:dvije-mjere}.
 
 \begin{table}[H]
       \centering

@@ -8,7 +8,7 @@
 \contentsline {chapter}{SUMMARY}{x}{chapter*.7}%
 \contentsline {chapter}{\numberline {1.}UVOD}{1}{chapter.1}%
 \contentsline {section}{\numberline {1.1.}Motivacija}{1}{section.1.1}%
-\contentsline {section}{\numberline {1.2.}Cilj rada}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.2.}Cilj i doprinos rada}{2}{section.1.2}%
 \contentsline {section}{\numberline {1.3.}Struktura rada}{3}{section.1.3}%
 \contentsline {chapter}{\numberline {2.}PREGLED DOSADAŠNJIH ISTRAŽIVANJA}{4}{chapter.2}%
 \contentsline {section}{\numberline {2.1.}Klasični pristupi upravljanju u kontaktu}{4}{section.2.1}%
@@ -84,7 +84,7 @@
 \contentsline {subsection}{\numberline {8.1.1.}Što se uspoređuje}{54}{subsection.8.1.1}%
 \contentsline {subsection}{\numberline {8.1.2.}Dvije različite mjere}{54}{subsection.8.1.2}%
 \contentsline {section}{\numberline {8.2.}Uspješnost otvaranja}{55}{section.8.2}%
-\contentsline {section}{\numberline {8.3.}Kontaktne sile}{55}{section.8.3}%
+\contentsline {section}{\numberline {8.3.}Kontaktne sile}{56}{section.8.3}%
 \contentsline {section}{\numberline {8.4.}Pouzdanost cjelovitog izvođenja}{57}{section.8.4}%
 \contentsline {section}{\numberline {8.5.}Rasprava}{57}{section.8.5}%
 \contentsline {subsection}{\numberline {8.5.1.}Različiti ulazi u isti problem}{57}{subsection.8.5.1}%

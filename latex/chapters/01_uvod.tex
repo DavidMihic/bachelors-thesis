@@ -51,7 +51,7 @@ Usporedba tih dvaju pristupa ima smisla samo ako se provodi na istom zadatku, is
 istoj fizici okoline. Ovaj rad zato oba pristupa razvija za isti sustav (mobilni manipulator
 KUKA KMR iiwa u simulacijskom okruženju), i uspoređuje ih na istim mjerilima uspješnosti.
 
-\section{Cilj rada}
+\section{Cilj i doprinos rada}
 \label{sec:cilj}
 
 Cilj rada je razviti i eksperimentalno vrednovati sustav koji mobilnom manipulatoru omogućuje
@@ -76,6 +76,14 @@ slučajeva. Kontaktne su sile pritom red veličine niže kod naučene politike: 
 iznosi 29 N naspram 325 N kod zakretnih, odnosno 22 N naspram 270 N kod kliznih vrata. Naučena
 politika vrata otvara silom bliskom njihovu stvarnom otporu, dok kod klasičnog pristupa veći dio
 sile potječe od tranzijenata koji nastaju u krutoj vezi između manipulatora i kvake.
+
+Doprinos rada nije novi postupak upravljanja, nego izravna usporedba dvaju pristupa izvedenih za
+istog robota, istu scenu i ista mjerila uspješnosti. Usporedba pritom nije općenita usporedba
+pristupa temeljenih na modelu s onima temeljenima na učenju, nego usporedba krutog pozicijskog
+upravljanja s upravljanjem promjenjivom krutošću; klasični pristup izveden s impedancijskim
+regulatorom nije ispitan i mogao bi dati drugačiji ishod. Cjelokupan je rad proveden u simulaciji,
+pa se zaključci odnose na model, a ograničenja koja iz toga slijede navedena su uz pojedine
+dijelove sustava i sažeta u poglavlju \ref{ch:zakljucak}.
 
 \section{Struktura rada}
 \label{sec:struktura}
